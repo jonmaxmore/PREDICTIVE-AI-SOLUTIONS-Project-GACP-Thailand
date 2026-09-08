@@ -1,0 +1,29 @@
+{
+  "name": "@gacp/domain",
+  "version": "0.0.0",
+  "private": true,
+  "description": "กติกาของโดเมน: state machine เส้นงาน, สูตรเงิน, interface ของ PaymentGateway (TypeScript บริสุทธิ์ ไม่มี framework)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@gacp/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "vitest": "^5.0.0"
+  }
+}
