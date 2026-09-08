@@ -1,0 +1,20 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 12 ปิด lifecycle script ทั้งหมดโดยค่าเริ่มต้น อนุญาตเฉพาะที่ต้องมี build step จริง
+allowBuilds:
+  '@prisma/engines': true
+  prisma: true
+  esbuild: true
+  sharp: true
+  playwright: true
+  embedded-postgres: true
+  '@embedded-postgres/windows-x64': true
+  '@embedded-postgres/linux-x64': true
+  '@embedded-postgres/linux-arm64': true
+  '@embedded-postgres/darwin-arm64': true
+  '@embedded-postgres/darwin-x64': true
+
+# supply-chain guard: ไม่ติดตั้งเวอร์ชันที่เผยแพร่มาไม่ถึงหนึ่งวัน
+minimumReleaseAge: 1440

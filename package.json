@@ -1,0 +1,31 @@
+{
+  "name": "gacp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ระบบรับรองมาตรฐาน GACP กัญชา (DTAM) รุ่นที่ 2",
+  "type": "module",
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "glossary": "node scripts/check-glossary.ts",
+    "check": "pnpm typecheck && pnpm lint && pnpm glossary",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
+    "e2e": "turbo run e2e",
+    "db:generate": "pnpm --filter @gacp/db generate",
+    "db:migrate": "pnpm --filter @gacp/db migrate:deploy",
+    "db:migrate:dev": "pnpm --filter @gacp/db migrate:dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.12",
+    "turbo": "^2.10.12",
+    "typescript": "^5.9.0"
+  }
+}

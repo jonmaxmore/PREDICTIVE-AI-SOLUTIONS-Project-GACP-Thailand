@@ -1,0 +1,10 @@
+# เก็บไฟล์ข้อความเป็น LF ใน repo เสมอ (พัฒนาบน Windows, CI และ server เป็น Linux)
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

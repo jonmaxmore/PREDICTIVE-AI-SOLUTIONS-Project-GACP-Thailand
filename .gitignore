@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+.next/
+dist/
+.turbo/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# generated
+packages/db/generated/
+
+# environment and secrets (templates *.example are tracked)
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# local tooling
+supabase/.temp/
+.supabase/
+.DS_Store
+Thumbs.db
+.pgdata/
