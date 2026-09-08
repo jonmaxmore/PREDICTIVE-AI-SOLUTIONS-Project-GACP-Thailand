@@ -1,0 +1,19 @@
+// Prisma 7: connection string อยู่ใน prisma.config.ts (อ่านจาก GACP_DATABASE_DIRECT_URL)
+// schema แยกไฟล์ตาม aggregate ในโฟลเดอร์นี้ ทุกตารางเป็น snake_case พหูพจน์ผ่าน @@map
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ผู้กระทำใน transition/audit
+enum ActorKind {
+  USER
+  SYSTEM
+
+  @@map("actor_kind")
+}

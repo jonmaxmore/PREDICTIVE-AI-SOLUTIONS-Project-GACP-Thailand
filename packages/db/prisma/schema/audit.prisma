@@ -1,0 +1,38 @@
+enum DocumentAccessKind {
+  VIEW
+  DOWNLOAD
+
+  @@map("document_access_kind")
+}
+
+// append-only ไม่มี update/delete จากแอป
+model AuditLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  actorKind   ActorKind @map("actor_kind")
+  actorUserId String?   @map("actor_user_id") @db.Uuid
+  actorRole   UserRole? @map("actor_role")
+  action      String
+  targetType  String    @map("target_type")
+  targetId    String    @map("target_id")
+  diff        Json?
+  occurredAt  DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  @@index([targetType, targetId, occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@map("audit_logs")
+}
+
+// PDPA ม.39: ทุกครั้งที่เจ้าหน้าที่เปิดดูหรือดาวน์โหลดเอกสารของผู้ขอรับรอง
+model DocumentAccessLog {
+  id            String             @id @default(uuid()) @db.Uuid
+  userId        String             @map("user_id") @db.Uuid
+  role          UserRole
+  documentId    String             @map("document_id") @db.Uuid
+  applicationId String?            @map("application_id") @db.Uuid
+  accessKind    DocumentAccessKind @map("access_kind")
+  occurredAt    DateTime           @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  @@index([documentId, occurredAt])
+  @@index([userId, occurredAt])
+  @@map("document_access_logs")
+}

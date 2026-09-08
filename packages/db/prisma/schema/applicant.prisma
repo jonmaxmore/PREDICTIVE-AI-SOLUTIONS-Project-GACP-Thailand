@@ -1,0 +1,100 @@
+enum ApplicantType {
+  INDIVIDUAL
+  JURISTIC_PERSON
+  COMMUNITY_ENTERPRISE
+
+  @@map("applicant_type")
+}
+
+enum ApplicantMemberRole {
+  OWNER
+  MEMBER
+
+  @@map("applicant_member_role")
+}
+
+// ผู้ขอรับรอง = นิติฐานะผู้ถือใบรับรอง (กทล.1 ส่วนที่ ๑) ชื่อที่นี่คือชื่อที่พิมพ์บน กทล.1 ใบเสร็จ และใบรับรอง
+model Applicant {
+  id                  String        @id @default(uuid()) @db.Uuid
+  type                ApplicantType
+  legalName           String        @map("legal_name")
+  registrationNumber  String?       @map("registration_number") // เลขทะเบียนนิติบุคคล หรือรหัสทะเบียน สวช.01
+  representativeName  String?       @map("representative_name") // ผู้มีอำนาจลงนาม หรือประธานวิสาหกิจ
+  nationality         String?
+  nationalIdEncrypted String?       @map("national_id_encrypted") // เลขบัตรของบุคคล/ประธาน เข้ารหัสไว้ ถอดเฉพาะตอนพิมพ์ กทล.1
+  nationalIdHmac      String?       @map("national_id_hmac")
+  houseRegistrationNo String?       @map("house_registration_no") // เลขรหัสประจำบ้าน (วิสาหกิจชุมชน)
+  addressLine         String        @map("address_line")
+  subdistrict         String
+  district            String
+  province            String
+  postalCode          String        @map("postal_code")
+  mobilePhone         String        @map("mobile_phone")
+  email               String?
+  lineId              String?       @map("line_id")
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  members      ApplicantMember[]
+  sites        Site[]
+  applications Application[]
+
+  @@index([nationalIdHmac])
+  @@map("applicants")
+}
+
+model ApplicantMember {
+  id          String              @id @default(uuid()) @db.Uuid
+  applicantId String              @map("applicant_id") @db.Uuid
+  userId      String              @map("user_id") @db.Uuid
+  role        ApplicantMemberRole
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  applicant Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([applicantId, userId])
+  @@map("applicant_members")
+}
+
+// สถานที่ปลูก/แปรรูป (กทล.1 ส่วนที่ ๒ ข้อ ๑) เป็นของผู้ขอรับรองรายเดียว ชื่อต้องตรงกันทุกเอกสาร
+model Site {
+  id          String   @id @default(uuid()) @db.Uuid
+  applicantId String   @map("applicant_id") @db.Uuid
+  name        String
+  addressLine String   @map("address_line")
+  subdistrict String
+  district    String
+  province    String
+  postalCode  String   @map("postal_code")
+  phone       String?
+  latitude    Decimal? @db.Decimal(9, 6)
+  longitude   Decimal? @db.Decimal(9, 6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  applicant    Applicant     @relation(fields: [applicantId], references: [id])
+  landParcels  LandParcel[]
+  applications Application[]
+
+  @@index([applicantId])
+  @@map("sites")
+}
+
+// ที่ดินและเอกสารสิทธิ์ (กทล.1 ส่วนที่ ๒ ข้อ ๒)
+model LandParcel {
+  id               String   @id @default(uuid()) @db.Uuid
+  siteId           String   @map("site_id") @db.Uuid
+  documentType     String   @map("document_type") // ประเภทเอกสารสิทธิ์ตามที่ผู้ยื่นกรอก เช่น โฉนดที่ดิน น.ส.3 ก.
+  documentNumber   String   @map("document_number")
+  volume           String?
+  page             String?
+  issuedBy         String?  @map("issued_by")
+  areaSquareMetres Decimal? @map("area_square_metres") @db.Decimal(12, 2)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("land_parcels")
+}

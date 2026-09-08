@@ -1,0 +1,167 @@
+enum RequestType {
+  NEW
+  RENEWAL
+  REPLACEMENT
+
+  @@map("request_type")
+}
+
+enum CertificationScope {
+  CULTIVATION
+  PROCESSING
+
+  @@map("certification_scope")
+}
+
+enum Purpose {
+  MEDICAL
+  EXPORT
+
+  @@map("purpose")
+}
+
+enum AreaType {
+  OUTDOOR
+  INDOOR
+  GREENHOUSE
+  OTHER
+
+  @@map("area_type")
+}
+
+enum LandTenure {
+  OWNED
+  STATE_PERMITTED
+  RENTED
+  OWNER_PERMITTED
+
+  @@map("land_tenure")
+}
+
+// เส้นงานชุดเดียว (docs/glossary.md §3) เปลี่ยนผ่าน ApplicationWorkflow.transition() เท่านั้น
+enum ApplicationStatus {
+  DRAFT
+  AWAITING_DOCUMENT_REVIEW_FEE
+  SUBMITTED
+  UNDER_DOCUMENT_REVIEW
+  REVISION_REQUESTED
+  DOCUMENTS_ACCEPTED
+  AWAITING_INSPECTION_FEE
+  AWAITING_INSPECTION
+  INSPECTION_SCHEDULED
+  UNDER_INSPECTION
+  AWAITING_APPROVAL
+  CERTIFIED
+  REJECTED
+  NOT_CERTIFIED
+  WITHDRAWN
+  REVOKED
+  EXPIRED
+
+  @@map("application_status")
+}
+
+enum PlantMaterialKind {
+  SEED
+  OTHER_PART
+  PROCESSING_PART
+
+  @@map("plant_material_kind")
+}
+
+enum MaterialOrigin {
+  DOMESTIC
+  IMPORTED
+
+  @@map("material_origin")
+}
+
+model Application {
+  id                        String             @id @default(uuid()) @db.Uuid
+  referenceNumber           String             @unique @map("reference_number") // APP-2569-000042
+  applicantId               String             @map("applicant_id") @db.Uuid
+  siteId                    String?            @map("site_id") @db.Uuid
+  plantCode                 String             @map("plant_code")
+  requestType               RequestType        @map("request_type")
+  certificationScope        CertificationScope @map("certification_scope")
+  purposes                  Purpose[]
+  areaTypes                 AreaType[]         @map("area_types")
+  areaTypeOther             String?            @map("area_type_other")
+  landTenure                LandTenure?        @map("land_tenure")
+  landlordName              String?            @map("landlord_name")
+  plantsPerCycle            Int?               @map("plants_per_cycle")
+  cyclesPerYear             Int?               @map("cycles_per_year")
+  isAttorneyInFact          Boolean            @default(false) @map("is_attorney_in_fact") // ผู้ยื่นเป็นผู้รับมอบอำนาจ (เอกสารแนบ ไม่ใช่ฟีเจอร์)
+  previousCertificateNumber String?            @map("previous_certificate_number")
+  status                    ApplicationStatus  @default(DRAFT)
+  ruleSnapshot              Json?              @map("rule_snapshot") // ชุดกฎที่ใช้ตัดสิน ณ วันยื่น คงที่ตลอดอายุคำขอ
+  submittedAt               DateTime?          @map("submitted_at") @db.Timestamptz(6)
+  declarationsAcceptedAt    DateTime?          @map("declarations_accepted_at") @db.Timestamptz(6)
+  declarationsAcceptedById  String?            @map("declarations_accepted_by_id") @db.Uuid
+  createdById               String             @map("created_by_id") @db.Uuid
+  createdAt                 DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  applicant         Applicant                     @relation(fields: [applicantId], references: [id])
+  site              Site?                         @relation(fields: [siteId], references: [id])
+  plant             Plant                         @relation(fields: [plantCode], references: [code])
+  statusTransitions ApplicationStatusTransition[]
+  declarations      ApplicationDeclaration[]
+  plantMaterials    ApplicationPlantMaterial[]
+
+  @@index([applicantId, status])
+  @@index([status, submittedAt])
+  @@map("applications")
+}
+
+// ประวัติทุกครั้งที่สถานะเปลี่ยน ผู้ยื่นและเจ้าหน้าที่เห็นชุดเดียวกัน
+model ApplicationStatusTransition {
+  id            String             @id @default(uuid()) @db.Uuid
+  applicationId String             @map("application_id") @db.Uuid
+  fromStatus    ApplicationStatus? @map("from_status")
+  toStatus      ApplicationStatus  @map("to_status")
+  event         String
+  actorKind     ActorKind          @map("actor_kind")
+  actorUserId   String?            @map("actor_user_id") @db.Uuid
+  actorRole     UserRole?          @map("actor_role")
+  reasonTh      String?            @map("reason_th")
+  occurredAt    DateTime           @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, occurredAt])
+  @@map("application_status_transitions")
+}
+
+// คำรับรอง ๕ ข้อ + ยินยอมเปิดเผยข้อมูล (กทล.1 ส่วนที่ ๔) แถวละข้อ ประทับเวลาฝั่ง server
+model ApplicationDeclaration {
+  id            String   @id @default(uuid()) @db.Uuid
+  applicationId String   @map("application_id") @db.Uuid
+  clauseCode    String   @map("clause_code") // DECLARATION_1 .. DECLARATION_5, DISCLOSURE_CONSENT
+  acceptedAt    DateTime @default(now()) @map("accepted_at") @db.Timestamptz(6)
+  acceptedById  String   @map("accepted_by_id") @db.Uuid
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, clauseCode])
+  @@map("application_declarations")
+}
+
+// พันธุ์และส่วนของพืช (กทล.1 ส่วนที่ ๒ ข้อ ๓) เกิน 2 รายการ ระบบสร้างภาคผนวกให้เอง
+model ApplicationPlantMaterial {
+  id            String            @id @default(uuid()) @db.Uuid
+  applicationId String            @map("application_id") @db.Uuid
+  kind          PlantMaterialKind
+  varietyName   String            @map("variety_name")
+  origin        MaterialOrigin?
+  originCountry String?           @map("origin_country")
+  source        String
+  quantity      Decimal?          @db.Decimal(12, 2)
+  unit          String?
+  sortOrder     Int               @default(0) @map("sort_order")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("application_plant_materials")
+}

@@ -1,0 +1,9 @@
+// หน่วยรับรอง (กรมการแพทย์แผนไทยและการแพทย์ทางเลือก) มีแถวเดียวในปัจจุบัน แยกจากผู้ขอรับรองเสมอ
+model CertificationBody {
+  code      String   @id
+  nameTh    String   @map("name_th")
+  nameEn    String?  @map("name_en")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("certification_bodies")
+}

@@ -1,0 +1,14 @@
+// การแจ้งเตือนในระบบเท่านั้น ไม่มี email/SMS
+model Notification {
+  id              String    @id @default(uuid()) @db.Uuid
+  recipientUserId String    @map("recipient_user_id") @db.Uuid
+  kind            String
+  titleTh         String    @map("title_th")
+  bodyTh          String    @map("body_th")
+  linkPath        String?   @map("link_path")
+  readAt          DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([recipientUserId, readAt, createdAt])
+  @@map("notifications")
+}
