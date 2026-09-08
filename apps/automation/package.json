@@ -1,0 +1,27 @@
+{
+  "name": "@gacp/automation",
+  "version": "0.0.0",
+  "private": true,
+  "description": "งานอัตโนมัติของระบบบน pg-boss: หมดอายุใบเสนอราคา กระทบยอด Stripe ธง overdue render PDF",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@gacp/contracts": "workspace:*",
+    "@gacp/db": "workspace:*",
+    "@gacp/domain": "workspace:*",
+    "dotenv": "^17.4.2",
+    "pg-boss": "^12.30.0",
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "vitest": "^5.0.0"
+  }
+}
