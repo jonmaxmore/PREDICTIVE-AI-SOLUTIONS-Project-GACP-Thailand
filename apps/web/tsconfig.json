@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "ES2023"],
+    "jsx": "preserve",
+    "noEmit": true,
+    "rewriteRelativeImportExtensions": false,
+    "incremental": true,
+    "declaration": false,
+    "sourceMap": false,
+    "types": ["node"],
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "next.config.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".next"]
+}

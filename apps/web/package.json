@@ -1,0 +1,44 @@
+{
+  "name": "@gacp/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "หน้าจอทุกบทบาท + Server Actions + Route Handlers (Next.js)",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "e2e": "playwright test",
+    "clean": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@gacp/contracts": "workspace:*",
+    "@gacp/db": "workspace:*",
+    "@gacp/domain": "workspace:*",
+    "@gacp/ui": "workspace:*",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.4.2",
+    "jose": "^6.2.12",
+    "lucide-react": "^1.42.0",
+    "next": "^16.3.4",
+    "openid-client": "^6.8.8",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
+    "vitest": "^5.0.0"
+  }
+}

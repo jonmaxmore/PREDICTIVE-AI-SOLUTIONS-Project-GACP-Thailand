@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/* ผูก token ของ The Official Green Register (packages/ui/src/tokens.css) เข้ากับ utility ของ Tailwind */
+@theme inline {
+  --color-forest-green: var(--gacp-color-forest-green);
+  --color-forest-green-pressed: var(--gacp-color-forest-green-pressed);
+  --color-forest-mist: var(--gacp-color-forest-mist);
+  --color-leaf: var(--gacp-color-leaf);
+  --color-leaf-hover: var(--gacp-color-leaf-hover);
+  --color-leaf-tint: var(--gacp-color-leaf-tint);
+  --color-gold: var(--gacp-color-civil-service-gold);
+  --color-navy: var(--gacp-color-navy);
+  --color-paper: var(--gacp-color-paper);
+  --color-canvas: var(--gacp-color-canvas);
+  --color-surface: var(--gacp-color-surface);
+  --color-ink: var(--gacp-color-ink);
+  --color-ink-soft: var(--gacp-color-ink-soft);
+  --color-muted: var(--gacp-color-muted);
+  --color-quiet: var(--gacp-color-quiet);
+  --color-border: var(--gacp-color-border);
+  --color-border-soft: var(--gacp-color-border-soft);
+  --color-officer: var(--gacp-color-officer);
+  --color-officer-tint: var(--gacp-color-officer-tint);
+  --color-success: var(--gacp-color-status-success);
+  --color-warning: var(--gacp-color-status-warning);
+  --color-warning-tint: var(--gacp-color-status-warning-tint);
+  --color-danger: var(--gacp-color-status-danger);
+  --color-danger-tint: var(--gacp-color-status-danger-tint);
+  --color-info: var(--gacp-color-status-info);
+
+  --radius-sm: var(--gacp-radius-sm);
+  --radius-md: var(--gacp-radius-md);
+  --radius-lg: var(--gacp-radius-lg);
+  --radius-xl: var(--gacp-radius-xl);
+
+  --shadow-card: var(--gacp-shadow-card);
+  --shadow-button: var(--gacp-shadow-button);
+
+  --font-sans: var(--font-sarabun), var(--gacp-font-sans);
+}
+
+body {
+  background: var(--gacp-color-canvas);
+  color: var(--gacp-color-ink);
+  font-family: var(--font-sarabun), var(--gacp-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 3px solid var(--gacp-color-leaf);
+  outline-offset: 2px;
+}
