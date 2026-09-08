@@ -1,0 +1,38 @@
+/* The Official Green Register: design tokens (DESIGN.md ของระบบ) ใช้ผ่าน Tailwind @theme ใน apps/web */
+:root {
+  --gacp-color-forest-green: #006633;
+  --gacp-color-forest-green-pressed: #004d27;
+  --gacp-color-forest-mist: #e6f5ec;
+  --gacp-color-leaf: #18803f;
+  --gacp-color-leaf-hover: #146333;
+  --gacp-color-leaf-tint: #eaf9f0;
+  --gacp-color-civil-service-gold: #c0a359;
+  --gacp-color-navy: #0b1f3a;
+  --gacp-color-paper: #f4f6f5;
+  --gacp-color-canvas: #f2f4f2;
+  --gacp-color-surface: #ffffff;
+  --gacp-color-ink: #0e1b14;
+  --gacp-color-ink-soft: #33473a;
+  --gacp-color-muted: #4f5b54;
+  --gacp-color-quiet: #8a939b;
+  --gacp-color-border: #d6ddd8;
+  --gacp-color-border-soft: #e6ebe7;
+  --gacp-color-officer: #0f5f6b;
+  --gacp-color-officer-tint: #e6f2f4;
+  --gacp-color-status-success: #18803f;
+  --gacp-color-status-warning: #8a6d1f;
+  --gacp-color-status-warning-tint: #fdeec9;
+  --gacp-color-status-danger: #b32d2d;
+  --gacp-color-status-danger-tint: #fdf1f1;
+  --gacp-color-status-info: #1f5fa8;
+
+  --gacp-radius-sm: 0.5rem;
+  --gacp-radius-md: 0.75rem;
+  --gacp-radius-lg: 1rem;
+  --gacp-radius-xl: 1.5rem;
+
+  --gacp-shadow-card: 0 12px 32px -20px rgba(20, 60, 35, 0.18);
+  --gacp-shadow-button: 0 8px 18px -8px rgba(24, 128, 63, 0.45);
+
+  --gacp-font-sans: "Sarabun", "Noto Sans Thai", Tahoma, sans-serif;
+}
