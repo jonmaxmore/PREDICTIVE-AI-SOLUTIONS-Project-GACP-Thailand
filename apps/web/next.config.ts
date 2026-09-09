@@ -17,7 +17,18 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // เอกสารสำหรับ AI agent อยู่ที่ docs/ ของ repo ไม่ให้ Next สร้าง AGENTS.md/CLAUDE.md ซ้อน
   agentRules: false,
-  headers: async () => [{ source: '/(.*)', headers: securityHeaders }],
+  headers: async () => [
+    // ทุกหน้าห้ามถูกฝังใน frame ยกเว้นเอกสารของผู้ใช้ที่เปิดดูในหน้า (viewer ของเราเอง origin เดียวกัน)
+    { source: '/((?!applicant/documents/).*)', headers: securityHeaders },
+    {
+      source: '/applicant/documents/:documentId/content',
+      headers: [
+        ...securityHeaders.filter((header) => header.key !== 'X-Frame-Options'),
+        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+      ],
+    },
+  ],
 };
 
 export default nextConfig;

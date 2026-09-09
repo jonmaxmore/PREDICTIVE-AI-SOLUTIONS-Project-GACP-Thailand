@@ -16,6 +16,16 @@ const postgresUrl = z
   .string()
   .regex(/^postgres(ql)?:\/\//, 'ต้องเป็น connection string ของ PostgreSQL');
 
+// กุญแจ 32 ไบต์เป็นฐานสิบหก 64 ตัวอักษร (สร้างด้วย node -e "console.log(crypto.randomBytes(32).toString('hex'))")
+const hexKey32 = z.string().regex(/^[0-9a-f]{64}$/i, 'ต้องเป็นฐานสิบหก 64 ตัวอักษร (32 ไบต์)');
+
+// ที่เก็บไฟล์: local = ดิสก์ในเครื่อง (dev/test) · s3 = Supabase Storage ผ่าน S3 protocol (demo/staging/production)
+export const FileStorageDriver = {
+  LOCAL: 'local',
+  S3: 's3',
+} as const;
+export type FileStorageDriver = (typeof FileStorageDriver)[keyof typeof FileStorageDriver];
+
 // ทุกตัวแปรขึ้นต้นด้วย GACP_ และประกาศที่นี่ที่เดียว แอปห้ามอ่าน process.env ตรง ๆ
 export const envSchema = z
   .object({
@@ -23,6 +33,16 @@ export const envSchema = z
     GACP_DATABASE_URL: postgresUrl,
     GACP_DATABASE_DIRECT_URL: postgresUrl,
     GACP_SESSION_SECRET: z.string().min(32, 'ต้องยาวอย่างน้อย 32 ตัวอักษร'),
+    // เข้ารหัสและทำ HMAC ข้อมูลส่วนบุคคลที่อ่อนไหว (เลขบัตรประชาชน, subject ของผู้ให้บริการยืนยันตัวตน)
+    GACP_DATA_ENCRYPTION_KEY: hexKey32,
+    GACP_DATA_HMAC_KEY: hexKey32,
+    GACP_STORAGE_DRIVER: z.enum(enumValues(FileStorageDriver)).default(FileStorageDriver.LOCAL),
+    GACP_STORAGE_LOCAL_DIR: z.string().min(1).default('.storage'),
+    GACP_STORAGE_S3_ENDPOINT: z.url().optional(),
+    GACP_STORAGE_S3_REGION: z.string().min(1).optional(),
+    GACP_STORAGE_S3_BUCKET: z.string().min(1).optional(),
+    GACP_STORAGE_S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+    GACP_STORAGE_S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
     GACP_AUTH_DEV_LOGIN_ENABLED: booleanFromText.default(false),
     GACP_THAID_ISSUER_URL: z.url().optional(),
     GACP_THAID_CLIENT_ID: z.string().min(1).optional(),
@@ -36,6 +56,31 @@ export const envSchema = z
         code: 'custom',
         path: ['GACP_AUTH_DEV_LOGIN_ENABLED'],
         message: 'ห้ามเปิด login แบบ dev ใน production (หลักการข้อ 5: ThaID + หมอพร้อม เท่านั้น)',
+      });
+    }
+    if (env.GACP_STORAGE_DRIVER === FileStorageDriver.S3) {
+      const missing = (
+        [
+          'GACP_STORAGE_S3_ENDPOINT',
+          'GACP_STORAGE_S3_REGION',
+          'GACP_STORAGE_S3_BUCKET',
+          'GACP_STORAGE_S3_ACCESS_KEY_ID',
+          'GACP_STORAGE_S3_SECRET_ACCESS_KEY',
+        ] as const
+      ).filter((key) => env[key] === undefined);
+      for (const key of missing) {
+        context.addIssue({ code: 'custom', path: [key], message: 'ต้องกำหนดเมื่อใช้ที่เก็บไฟล์แบบ s3' });
+      }
+    }
+    if (
+      env.GACP_ENV !== RuntimeEnvironment.DEVELOPMENT &&
+      env.GACP_ENV !== RuntimeEnvironment.TEST &&
+      env.GACP_STORAGE_DRIVER === FileStorageDriver.LOCAL
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['GACP_STORAGE_DRIVER'],
+        message: 'demo/staging/production ต้องใช้ที่เก็บไฟล์แบบ s3 (bucket ส่วนตัว) ไม่ใช่ดิสก์ในเครื่อง',
       });
     }
     if (

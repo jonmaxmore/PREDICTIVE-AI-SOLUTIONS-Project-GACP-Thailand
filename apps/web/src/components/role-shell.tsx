@@ -17,13 +17,13 @@ export async function RoleShell({ role, children }: RoleShellProps) {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
           <div className="flex items-center gap-3">
             <span className="text-lg font-bold text-forest-green">{messages.appName}</span>
-            <span className="rounded-full bg-leaf-tint px-3 py-1 text-sm font-bold text-leaf">
+            <span className="whitespace-nowrap rounded-full bg-leaf-tint px-3 py-1 text-sm font-bold text-leaf">
               {roleLabels[role]}
             </span>
           </div>
           <div className="flex items-center gap-4 text-sm">
             {session ? (
-              <span className="text-muted">
+              <span className="hidden text-muted sm:inline">
                 {messages.shell.signedInAs}{' '}
                 <span className="font-semibold text-ink">{session.displayName}</span>
               </span>
@@ -31,7 +31,7 @@ export async function RoleShell({ role, children }: RoleShellProps) {
             <form action="/auth/logout" method="post">
               <button
                 type="submit"
-                className="h-10 rounded-md border border-border px-4 font-semibold text-ink-soft hover:bg-paper"
+                className="h-10 whitespace-nowrap rounded-md border border-border px-4 font-semibold text-ink-soft hover:bg-paper"
               >
                 {messages.shell.logout}
               </button>

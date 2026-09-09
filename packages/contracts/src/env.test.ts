@@ -6,6 +6,8 @@ const validEnv = {
   GACP_DATABASE_URL: 'postgresql://gacp:gacp@127.0.0.1:54329/gacp',
   GACP_DATABASE_DIRECT_URL: 'postgresql://gacp:gacp@127.0.0.1:54329/gacp',
   GACP_SESSION_SECRET: 'a'.repeat(64),
+  GACP_DATA_ENCRYPTION_KEY: '0'.repeat(64),
+  GACP_DATA_HMAC_KEY: 'f'.repeat(64),
   GACP_AUTH_DEV_LOGIN_ENABLED: 'true',
 };
 
@@ -34,6 +36,36 @@ describe('parseEnv', () => {
         GACP_STRIPE_SECRET_KEY: 'sk_test_123',
       }),
     ).toThrow(EnvValidationError);
+  });
+
+  it('ที่เก็บไฟล์: ค่าเริ่มต้นเป็น local ใน development, s3 ต้องมีค่าครบ, นอก dev/test ห้าม local', () => {
+    expect(parseEnv(validEnv).GACP_STORAGE_DRIVER).toBe('local');
+    expect(() => parseEnv({ ...validEnv, GACP_STORAGE_DRIVER: 's3' })).toThrow(EnvValidationError);
+    expect(() =>
+      parseEnv({
+        ...validEnv,
+        GACP_ENV: 'demo',
+        GACP_AUTH_DEV_LOGIN_ENABLED: 'false',
+      }),
+    ).toThrow(EnvValidationError);
+    const demo = parseEnv({
+      ...validEnv,
+      GACP_ENV: 'demo',
+      GACP_AUTH_DEV_LOGIN_ENABLED: 'false',
+      GACP_STORAGE_DRIVER: 's3',
+      GACP_STORAGE_S3_ENDPOINT: 'https://example.supabase.co/storage/v1/s3',
+      GACP_STORAGE_S3_REGION: 'ap-southeast-1',
+      GACP_STORAGE_S3_BUCKET: 'gacp-documents',
+      GACP_STORAGE_S3_ACCESS_KEY_ID: 'key',
+      GACP_STORAGE_S3_SECRET_ACCESS_KEY: 'secret',
+    });
+    expect(demo.GACP_STORAGE_DRIVER).toBe('s3');
+  });
+
+  it('กุญแจเข้ารหัสข้อมูลต้องเป็นฐานสิบหก 64 ตัวอักษร', () => {
+    expect(() => parseEnv({ ...validEnv, GACP_DATA_ENCRYPTION_KEY: 'short' })).toThrow(
+      EnvValidationError,
+    );
   });
 
   it('ปฏิเสธ connection string ที่ไม่ใช่ PostgreSQL และ secret ที่สั้น', () => {

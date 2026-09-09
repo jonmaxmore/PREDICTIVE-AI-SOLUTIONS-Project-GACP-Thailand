@@ -92,6 +92,8 @@ model Application {
   plantsPerCycle            Int?               @map("plants_per_cycle")
   cyclesPerYear             Int?               @map("cycles_per_year")
   isAttorneyInFact          Boolean            @default(false) @map("is_attorney_in_fact") // ผู้ยื่นเป็นผู้รับมอบอำนาจ (เอกสารแนบ ไม่ใช่ฟีเจอร์)
+  attorneyPositionTh        String?            @map("attorney_position_th") // ตำแหน่งหรือความเกี่ยวข้องของผู้รับมอบอำนาจ
+  leaseEndsOn               DateTime?          @map("lease_ends_on") @db.Date
   previousCertificateNumber String?            @map("previous_certificate_number")
   status                    ApplicationStatus  @default(DRAFT)
   ruleSnapshot              Json?              @map("rule_snapshot") // ชุดกฎที่ใช้ตัดสิน ณ วันยื่น คงที่ตลอดอายุคำขอ
@@ -102,12 +104,14 @@ model Application {
   createdAt                 DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  applicant         Applicant                     @relation(fields: [applicantId], references: [id])
-  site              Site?                         @relation(fields: [siteId], references: [id])
-  plant             Plant                         @relation(fields: [plantCode], references: [code])
-  statusTransitions ApplicationStatusTransition[]
-  declarations      ApplicationDeclaration[]
-  plantMaterials    ApplicationPlantMaterial[]
+  applicant           Applicant                     @relation(fields: [applicantId], references: [id])
+  site                Site?                         @relation(fields: [siteId], references: [id])
+  plant               Plant                         @relation(fields: [plantCode], references: [code])
+  statusTransitions   ApplicationStatusTransition[]
+  declarations        ApplicationDeclaration[]
+  plantMaterials      ApplicationPlantMaterial[]
+  documents           ApplicationDocument[]
+  licenseDeclarations LicenseStatusDeclaration[]
 
   @@index([applicantId, status])
   @@index([status, submittedAt])

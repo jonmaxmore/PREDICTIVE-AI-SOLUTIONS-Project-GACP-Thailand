@@ -20,6 +20,14 @@ export {
   toHolidayCalendar,
 } from './business-days.ts';
 export {
+  DetectedFileKind,
+  detectFileKind,
+  type UploadCandidate,
+  UploadRejectionCode,
+  type UploadValidation,
+  validateUpload,
+} from './document-files.ts';
+export {
   isRuleActiveOn,
   missingRequiredSlots,
   type RequirementContext,
@@ -30,6 +38,13 @@ export {
   resolveDocumentRequirements,
   ruleMatches,
 } from './document-requirements.ts';
+export {
+  type AttachedDocumentSummary,
+  type LicenseDeclarationSummary,
+  LicenseSlotState,
+  licenseSlotState,
+  satisfiedSlotCodes,
+} from './document-satisfaction.ts';
 export {
   applyRateBasisPoints,
   bahtToSatang,

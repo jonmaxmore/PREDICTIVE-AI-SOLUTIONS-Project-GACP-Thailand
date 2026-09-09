@@ -43,6 +43,11 @@
 | ประเภทคำขอ | `requestType`: `NEW`, `RENEWAL`, `REPLACEMENT` | service type, RENEW |
 | ขอบข่ายการรับรอง | `certificationScope`: `CULTIVATION`, `PROCESSING` | cert scope, PLANTING |
 | วัตถุประสงค์ | `purposes` (set): `MEDICAL`, `EXPORT` | RESEARCH, COMMERCIAL |
+| ไฟล์ที่แนบเข้าช่องเอกสาร (หนึ่งช่องรับได้หลายไฟล์ ลบแล้วคงแถวเป็นประวัติ) | `ApplicationDocument` (`fileKey`, `sha256`, `issuedOn`, `removedAt`) | attachment, upload record, file entry |
+| สถานะใบอนุญาตที่ผู้ยื่นแจ้งต่อช่อง และผลตัดสินของช่อง | `LicenseStatusDeclaration` (`LicenseDeclarationStatus`: `HAVE` `APPLIED` `NONE`) · `LicenseSlotState` (`ATTACHED` `PENDING_DECISION` `NOT_FILED` `UNDECLARED`) | license flag, permit status |
+| ที่เก็บไฟล์ (สลับ adapter ได้) | `FileStorage` (`LocalDiskStorage`, `S3CompatibleStorage`, `GACP_STORAGE_DRIVER`) | bucket service, uploader, blob store |
+| เหตุที่ปฏิเสธไฟล์ที่อัปโหลด (ตรวจเนื้อไฟล์จริง) | `UploadRejectionCode` (`validateUpload`, `detectFileKind`) | upload error, mime error |
+| ฟอร์มบันทึกร่างอัตโนมัติ | `AutosaveForm` (Server Action ต่อขั้น `saveStep1..3`, `savePurposes`, `saveLicenseDeclaration`) | draft saver, wizard form |
 
 ## 2. บทบาท (`UserRole`)
 
