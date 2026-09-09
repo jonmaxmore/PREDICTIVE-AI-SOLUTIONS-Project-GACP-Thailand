@@ -107,7 +107,7 @@ describe('เส้นงานคำขอ', () => {
   });
 
   it('การเงินไม่มีสิทธิ์เปลี่ยนสถานะคำขอเลย', () => {
-    const finance = asRole(UserRole.FINANCE_OFFICER);
+    const finance = asRole(UserRole.PLATFORM_OPERATOR_FINANCE_OFFICER);
     const attempt = transition(
       ApplicationStatus.AWAITING_DOCUMENT_REVIEW_FEE,
       ApplicationStatus.SUBMITTED,
@@ -118,7 +118,7 @@ describe('เส้นงานคำขอ', () => {
   });
 
   it('เงินเข้าเปลี่ยนสถานะได้เฉพาะระบบ ไม่ใช่คน', () => {
-    const admin = asRole(UserRole.SYSTEM_ADMIN);
+    const admin = asRole(UserRole.PLATFORM_OPERATOR_ADMIN);
     const attempt = transition(
       ApplicationStatus.AWAITING_INSPECTION_FEE,
       ApplicationStatus.AWAITING_INSPECTION,
