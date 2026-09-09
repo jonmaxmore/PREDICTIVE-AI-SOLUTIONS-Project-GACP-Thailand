@@ -26,7 +26,9 @@ export function IdentityShell({ children }: { readonly children: ReactNode }) {
             />
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-bold sm:text-xl">{login.departmentName}</span>
+            <span className="text-balance text-lg font-bold sm:text-xl">
+              {login.departmentName}
+            </span>
             <span className="text-[13px] text-white/75">{login.ministryName}</span>
           </div>
         </div>
