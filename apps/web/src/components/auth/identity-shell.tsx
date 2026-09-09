@@ -14,15 +14,15 @@ export function IdentityShell({ children }: { readonly children: ReactNode }) {
 
       <header className="flex flex-col items-center gap-2 text-center text-white">
         <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-3.5 sm:text-left">
-          <div className="relative h-16 w-16 overflow-hidden rounded-full bg-white shadow-[0_8px_24px_-12px_rgba(0,0,0,0.5)]">
-            {/* ตราจากเว็บกรมเป็นภาพรวมตรา + ชื่อ จึงครอปให้เห็นเฉพาะตรา รอไฟล์ต้นฉบับความละเอียดสูงจากกรม */}
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-[0_8px_24px_-12px_rgba(0,0,0,0.5)]">
+            {/* ตราจากเว็บกรม (ครอปเฉพาะตรา) รอไฟล์ต้นฉบับความละเอียดสูงจากกรม */}
             <Image
-              src="/identity/dtam-emblem.webp"
+              src="/identity/dtam-emblem.png"
               alt={login.emblemAlt}
-              width={126}
-              height={105}
+              width={170}
+              height={170}
               priority
-              className="absolute -left-3 -top-[3px] h-auto w-[126px] max-w-none"
+              className="h-14 w-14"
             />
           </div>
           <div className="flex flex-col">
