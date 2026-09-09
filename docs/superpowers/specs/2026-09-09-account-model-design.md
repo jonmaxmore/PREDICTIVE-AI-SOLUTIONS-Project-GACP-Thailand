@@ -47,7 +47,7 @@
 | `CERTIFICATION_BODY` | `DISPATCHER` | ผู้จัดคิวงาน | มอบ/โยกเคส ดูภาระงานและ SLA | เงิน กติกา ตัดสินคำขอ |
 | `CERTIFICATION_BODY` | `FIELD_INSPECTOR` | ผู้ตรวจประเมินแปลง | นัดวัน ลงพื้นที่ checklist + หลักฐาน ส่งรายงาน (Phase 2: ติดตาม T&T) | เงิน กติกา |
 | `CERTIFICATION_BODY` | `CERTIFICATE_APPROVER` | ผู้อนุมัติออกใบรับรอง | อนุมัติ/ไม่อนุมัติ/ส่งตรวจซ้ำ เพิกถอน (Phase 2: อนุมัติ recall) | เงิน กติกา |
-| `CERTIFICATION_BODY` | `CERTIFICATION_BODY_ADMIN` | ผู้ดูแลระบบของกรม | มอบ/ถอดบทบาทฝั่งกรมให้คนที่มี `ProviderCredential` ใช้ได้ · จัดการ `AuthorizedProviderOrganization` (สังกัดที่รับเป็นเจ้าหน้าที่กรม เช่น กรมฯ, สสจ.) · ดูบันทึกการเข้าถึงเอกสารของเจ้าหน้าที่กรม · ดูแลข้อมูลกฎของกรม (ช่องเอกสาร กฎบังคับ checklist อายุใบรับรอง วันทำการ) เมื่อมีหน้าจอ (หลัง M6) | เงิน ตัดสินคำขอ คนของบริษัท |
+| `CERTIFICATION_BODY` | `CERTIFICATION_BODY_ADMIN` | ผู้ดูแลระบบของกรม | มอบ/ถอดบทบาทฝั่งกรมให้คนที่มี `ProviderCredential` ใช้ได้ · จัดการ `AuthorizedProviderAgency` (สังกัดที่รับเป็นเจ้าหน้าที่กรม เช่น กรมฯ, สสจ.) · ดูบันทึกการเข้าถึงเอกสารของเจ้าหน้าที่กรม · ดูแลข้อมูลกฎของกรม (ช่องเอกสาร กฎบังคับ checklist อายุใบรับรอง วันทำการ) เมื่อมีหน้าจอ (หลัง M6) | เงิน ตัดสินคำขอ คนของบริษัท |
 | `CERTIFICATION_BODY` | `CERTIFICATION_BODY_FINANCE_OFFICER` | เจ้าหน้าที่การเงินของกรม | เห็นค่าธรรมเนียม (ส่วนของกรม) ที่เก็บได้ต่อคำขอต่องวด · ยืนยันรับงวดนำส่งจากบริษัท · ส่งออกรายงาน (อ่านอย่างเดียว) | ออกเอกสารเงิน เปลี่ยนสถานะคำขอ |
 | `PLATFORM_OPERATOR` | `PLATFORM_OPERATOR_ADMIN` | ผู้ดูแลระบบของบริษัท | รายชื่อพนักงานบริษัท (`PlatformOperatorMembership`) · มอบ/ถอดบทบาทฝั่งบริษัท · ตั้ง/กู้คืน `CERTIFICATION_BODY_ADMIN` ให้กรม (บันทึก + แจ้งเตือนผู้ดูแลกรมทุกครั้ง) · เครื่องมือซัพพอร์ตแบบอ่านอย่างเดียว (ค้นคำขอ ดูสถานะ ส่งแจ้งเตือนซ้ำ ทุกการเปิดดูเอกสารถูกบันทึก) · ดูบันทึกทั้งระบบ | เงิน ตัดสินคำขอ มอบบทบาทเจ้าหน้าที่กรมอื่นนอกจากผู้ดูแลกรม |
 | `PLATFORM_OPERATOR` | `PLATFORM_OPERATOR_FINANCE_OFFICER` | เจ้าหน้าที่การเงินของบริษัท | ใบเสนอราคา ใบเสร็จ/ใบกำกับภาษี คืนเงิน ใบลดหนี้ กระทบยอด Stripe · บันทึกงวดนำส่งค่าธรรมเนียมให้กรม | เปลี่ยนสถานะคำขอ กติกา คน |
@@ -59,7 +59,7 @@
 | เครดิตที่ User มี | บทบาทที่ถือได้ |
 |---|---|
 | ตัวตนที่พิสูจน์แล้วอย่างใดอย่างหนึ่ง (ThaID หรือ Health ID) | `APPLICANT` |
-| `ProviderCredential` ใช้ได้ + สังกัดอยู่ใน `AuthorizedProviderOrganization` | บทบาทฝั่ง `CERTIFICATION_BODY` ทั้ง 6 |
+| `ProviderCredential` ใช้ได้ + สังกัดอยู่ใน `AuthorizedProviderAgency` | บทบาทฝั่ง `CERTIFICATION_BODY` ทั้ง 6 |
 | `PlatformOperatorMembership` ใช้ได้ | บทบาทฝั่ง `PLATFORM_OPERATOR` ทั้ง 2 |
 
 การมอบบทบาท (`StaffRoleAssignment`) ที่ขัดกติกานี้ถูกปฏิเสธที่ชั้น domain · ใครมอบได้: `CERTIFICATION_BODY_ADMIN` มอบบทบาทฝั่งกรม · `PLATFORM_OPERATOR_ADMIN` มอบบทบาทฝั่งบริษัท และมอบ `CERTIFICATION_BODY_ADMIN` ได้ (เพื่อเริ่มระบบและกู้คืน) · ระบบไม่ให้ถอดผู้ดูแลระบบคนสุดท้ายของแต่ละฝั่ง
@@ -90,7 +90,7 @@
 2. callback ตรวจ `state` ตรงกับ cookie → `POST /api/v1/token` → `access_token`, `account_id`
 3. ดึงข้อมูลผู้ใช้ Health ID ตามคู่มือ MOPH DID API (ได้หลังลงทะเบียน): อย่างน้อยชื่อสำหรับแสดง และเลขบัตรหรือ hash ของเลขบัตร (ถ้าได้ `hash_cid` ใช้เชื่อม User ถ้าไม่ได้ subject = `account_id`)
 4. upsert `UserIdentity(provider = MORPHROM_HEALTH_ID, subjectHmac = HMAC(account_id))` และเชื่อม User ด้วย `nationalIdHmac` เมื่อรู้เลขบัตร
-5. ถ้า intent เป็นเจ้าหน้าที่กรม: `POST {Provider-URL}/api/v1/services/token` ด้วย token ของ Health ID → 400 = แสดง "บัญชีนี้ไม่มี Provider ID" (ยังใช้เป็นผู้ขอรับรองได้) · 200 = `GET /api/v1/services/profile` → upsert `ProviderCredential` (provider_id, สังกัด, `lastVerifiedAt`) · ถ้าไม่มีสังกัดใดอยู่ใน `AuthorizedProviderOrganization` → บันทึกเครดิตแต่ทำเครื่องหมายว่า "สังกัดไม่ได้รับอนุญาต" และแสดงข้อความ
+5. ถ้า intent เป็นเจ้าหน้าที่กรม: `POST {Provider-URL}/api/v1/services/token` ด้วย token ของ Health ID → 400 = แสดง "บัญชีนี้ไม่มี Provider ID" (ยังใช้เป็นผู้ขอรับรองได้) · 200 = `GET /api/v1/services/profile` → upsert `ProviderCredential` (provider_id, สังกัด, `lastVerifiedAt`) · ถ้าไม่มีสังกัดใดอยู่ใน `AuthorizedProviderAgency` → บันทึกเครดิตแต่ทำเครื่องหมายว่า "สังกัดไม่ได้รับอนุญาต" และแสดงข้อความ
 6. คำนวณบทบาทมีผล → ออก session cookie (JWE เดิม) → ไปหน้าหลัก · **ไม่เก็บ access_token ของ MOPH** ไว้หลังจบ request (เราไม่เรียก PHR)
 
 **B. ThaID (ผู้ขอรับรอง หรือพนักงานบริษัท)**
@@ -104,12 +104,14 @@
 
 ## 7. โมเดลข้อมูล (Prisma, ชื่อตาม glossary)
 
+> หมายเหตุ 2026-09-09 (ตอนทำจริง): ชื่อ `AuthorizedProviderOrganization` และ field `organization*` ในร่างแรกเปลี่ยนเป็น `AuthorizedProviderAgency` / `agencyBusinessId` `agencyCode` `agencyNameTh` เพราะ glossary ห้ามคำ organization (ใช้ agency = สังกัด/หน่วยงาน) ส่วนชื่อ field ของ MOPH ยังเป็น `organization` เฉพาะใน `MorphromClient`
+
 - `enum IdentityProvider { THAID, MORPHROM_HEALTH_ID, DEV_LOCAL }` (เปลี่ยนชื่อค่า `MORPHROM` → `MORPHROM_HEALTH_ID`)
 - `enum UserRole` 9 ค่า: เปลี่ยนชื่อ `FINANCE_OFFICER → PLATFORM_OPERATOR_FINANCE_OFFICER`, `SYSTEM_ADMIN → PLATFORM_OPERATOR_ADMIN` · เพิ่ม `CERTIFICATION_BODY_ADMIN`, `CERTIFICATION_BODY_FINANCE_OFFICER`
 - `User` เพิ่ม `nationalIdHmac String? @unique` (เชื่อมตัวตนหลายทางของคนเดียว)
 - `UserIdentity` เพิ่ม `identityAssuranceLevel String?` (จาก ThaID `ial`) และ `verifiedAt`
-- ใหม่ `ProviderCredential` (`provider_credentials`): `userId @unique`, `providerId` (13 หลัก), `organizationBusinessId`, `organizationCode` (hcode), `organizationNameTh`, `position`, `positionType`, `licenseId`, `verifiedAt`, `lastVerifiedAt`, `revokedAt` (เมื่อ MOPH ตอบ 400/404 ครั้งล่าสุด), `profileHash` (sha256 ของ profile ไว้ตรวจการเปลี่ยนแปลง ไม่เก็บ profile ทั้งก้อน)
-- ใหม่ `AuthorizedProviderOrganization` (`authorized_provider_organizations`): `businessId @unique`, `organizationCode`, `nameTh`, `addedById`, `addedAt`, `revokedAt`, `revokedById`
+- ใหม่ `ProviderCredential` (`provider_credentials`): `userId @unique`, `providerId` (13 หลัก), `agencyBusinessId`, `agencyCode` (hcode), `agencyNameTh`, `position`, `positionType`, `licenseId`, `verifiedAt`, `lastVerifiedAt`, `revokedAt` (เมื่อ MOPH ตอบ 400/404 ครั้งล่าสุด), `profileHash` (sha256 ของ profile ไว้ตรวจการเปลี่ยนแปลง ไม่เก็บ profile ทั้งก้อน)
+- ใหม่ `AuthorizedProviderAgency` (`authorized_provider_agencies`): `businessId @unique`, `agencyCode`, `nameTh`, `addedById`, `addedAt`, `revokedAt`, `revokedById`
 - ใหม่ `PlatformOperatorMembership` (`platform_operator_memberships`): `nationalIdHmac @unique`, `displayName`, `userId?` (ผูกเมื่อล็อกอินครั้งแรก), `addedById?`, `addedAt`, `revokedAt`, `revokedById`
 - `StaffRoleAssignment` เหมือนเดิม · `Session` เหมือนเดิม · ทุกการเพิ่ม/ถอด membership, องค์กร, บทบาท → แถวใน `audit_logs`
 - migration: `ALTER TYPE user_role RENAME VALUE` ×2 + `ADD VALUE` ×2 · `ALTER TYPE identity_provider RENAME VALUE` · ตารางใหม่ 3 · ข้อมูลเดิมมีเฉพาะเครื่องพัฒนาและ demo
@@ -133,7 +135,7 @@
 |---|---|---|
 | หนังสือราชการขอใช้ API Health ID + Provider ID ถึงผู้อำนวยการสำนักสุขภาพดิจิทัล (แบบฟอร์มจาก id.moph.go.th ผู้บริหารสูงสุดลงนาม สำเนาบัตร) → provider.id@moph.go.th | กรม (หรือบริษัทในฐานะหน่วยงาน ถ้ากรมตกลง) | Client ID/Secret ของ Health ID และ Provider ID (UAT + PRD) + คู่มือ MOPH DID API (field ของ profile ผู้ใช้ Health ID) |
 | ลงทะเบียน Relying Party กับกรมการปกครอง (RP Admin) ระบุ callback URL ของ demo/staging/production | บริษัท | client_id, client_secret, API key ของ ThaID (sandbox `imauthsbx` และ production) |
-| รายการสังกัดที่รับเป็นเจ้าหน้าที่กรม (business_id/hcode ของกรมฯ และ สสจ. ที่เกี่ยวข้อง) และคำตอบว่าผู้ตรวจแปลงภายนอกจะได้ Provider ID ในสังกัดกรมหรือไม่ | กรม | seed ตาราง `AuthorizedProviderOrganization` |
+| รายการสังกัดที่รับเป็นเจ้าหน้าที่กรม (business_id/hcode ของกรมฯ และ สสจ. ที่เกี่ยวข้อง) และคำตอบว่าผู้ตรวจแปลงภายนอกจะได้ Provider ID ในสังกัดกรมหรือไม่ | กรม | seed ตาราง `AuthorizedProviderAgency` |
 | รายชื่อพนักงานบริษัท (ชื่อ + เลขบัตร) สำหรับผู้ดูแลระบบของบริษัทกรอกเข้าระบบ | บริษัท | membership |
 
 ## 11. ข้อที่ยังเปิด (เข้าแผน §11)
@@ -154,7 +156,7 @@
 
 ## 13. ลำดับงาน (ให้ writing-plans แตกเป็นแผน)
 
-1. contracts + db: enums, ตารางใหม่, migration, glossary §2 และคำใหม่ (`RoleSide`, `ProviderCredential`, `AuthorizedProviderOrganization`, `PlatformOperatorMembership`, `LoginIntent`, `ThaidClient`, `MorphromClient`)
+1. contracts + db: enums, ตารางใหม่, migration, glossary §2 และคำใหม่ (`RoleSide`, `ProviderCredential`, `AuthorizedProviderAgency`, `PlatformOperatorMembership`, `LoginIntent`, `ThaidClient`, `MorphromClient`)
 2. domain: `effectiveRoles`, `canAssignRole`, `roleSideOf` + tests
 3. web: จัดกลุ่มเส้นทางตามฝั่ง, `proxy.ts`, หน้าล็อกอิน 2 หน้า, `ThaidClient` / `MorphromClient` + fake, callback 2 ทาง, `currentUser()` คำนวณบทบาทมีผล, dev login จำลองเครดิต, หน้าผู้ดูแลระบบขั้นต่ำ 2 ฝั่ง, bootstrap CLI
 4. เอกสาร: ADR 0004, ADR 0001 ข้อ 5 และ 13 (ถ้อยคำ), แผน §6.5 §2 §11, memory

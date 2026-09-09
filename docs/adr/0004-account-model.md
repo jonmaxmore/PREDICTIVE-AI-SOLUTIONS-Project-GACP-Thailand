@@ -1,6 +1,6 @@
 # ADR 0004: โมเดลบัญชี 3 ฝั่ง ตามระเบียบหมอพร้อม (Health ID · Provider ID) และ ThaID
 
-สถานะ: เสนอ (รอ operator อนุมัติ spec) · วันที่: 2026-09-09 · ผู้ตัดสิน: operator
+สถานะ: ยอมรับ · operator อนุมัติ spec 2026-09-09 ("อนุมัติ") · ทำเสร็จใน branch feat/account-model 2026-09-09 · ผู้ตัดสิน: operator
 
 ## บริบท
 

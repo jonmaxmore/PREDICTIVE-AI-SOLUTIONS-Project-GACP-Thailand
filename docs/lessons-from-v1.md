@@ -24,9 +24,9 @@
 | provider/reviewer, "auditor" (ตรวจเอกสาร) | `DOCUMENT_REVIEWER` |
 | provider/audits onsite, auditor (ตรวจแปลง) | `FIELD_INSPECTOR` |
 | provider/scheduler (queue/workload/reassign), coordinator | `DISPATCHER` |
-| provider/accounting, receipts, ACCOUNT_DTAM, ACCOUNT_PLATFORM | `FINANCE_OFFICER` |
+| provider/accounting, receipts, ACCOUNT_DTAM, ACCOUNT_PLATFORM | `PLATFORM_OPERATOR_FINANCE_OFFICER` (บริษัท) / `CERTIFICATION_BODY_FINANCE_OFFICER` (กรม) — ชื่อกลาง `FINANCE_OFFICER` ที่ใช้ใน M0–M2 เลิกใช้ 2026-09-09 (ADR 0004) |
 | admin certificates / force-status | `CERTIFICATE_APPROVER` |
-| admin, superuser, operator (ในโค้ด) | `SYSTEM_ADMIN` |
+| admin, superuser, operator (ในโค้ด) | `PLATFORM_OPERATOR_ADMIN` (บริษัท) / `CERTIFICATION_BODY_ADMIN` (กรม) — ชื่อกลาง `SYSTEM_ADMIN` ที่ใช้ใน M0–M2 เลิกใช้ 2026-09-09 (ADR 0004) |
 | Entity, workspace | `Applicant` |
 | Organization, tenant | `CertificationBody` |
 | Farm, Plot, establishment | `Site`, `LandParcel` |
