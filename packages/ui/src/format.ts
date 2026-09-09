@@ -61,6 +61,27 @@ function toBangkokParts(date: Date): DateParts {
   };
 }
 
+// วันที่ปฏิทินของวันนี้ตามเวลาไทย (YYYY-MM-DD) ใช้เป็น asOf ของกฎและวันออกเอกสาร
+export function todayCalendarDateInBangkok(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: BANGKOK_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+// แสดงวันที่ปฏิทิน YYYY-MM-DD เป็น พ.ศ. โดยไม่ผ่านเขตเวลา
+export function formatCalendarDateThai(
+  calendarDate: string,
+  style: 'short' | 'long' = 'short',
+): string {
+  const [year, month, day] = calendarDate.split('-').map(Number);
+  if (!year || !month || !day) throw new RangeError(`วันที่ต้องเป็น YYYY-MM-DD ได้รับ ${calendarDate}`);
+  const monthName = style === 'long' ? THAI_MONTHS_LONG[month - 1] : THAI_MONTHS_SHORT[month - 1];
+  return `${day} ${monthName} ${year + 543}`;
+}
+
 export function formatThaiDate(date: Date, style: 'short' | 'long' = 'short'): string {
   const { day, monthIndex, buddhistYear } = toBangkokParts(date);
   const month = style === 'long' ? THAI_MONTHS_LONG[monthIndex] : THAI_MONTHS_SHORT[monthIndex];
