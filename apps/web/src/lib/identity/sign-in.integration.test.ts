@@ -7,7 +7,8 @@ import { completeSignIn, SignInOutcome } from './sign-in.ts';
 // ต่อฐานข้อมูล dev จริง (embedded PostgreSQL) แถวที่สร้างถูกลบท้าย test ทั้งหมด
 const runId = `${Date.now()}-${process.pid}`;
 const agencyBusinessId = `TEST-AGENCY-${runId}`;
-const testNationalId = '1101700230708';
+// เลขบัตรทดสอบเฉพาะของ test นี้ (checksum ถูก) คนละเลขกับตัวอย่างในคำสั่ง bootstrap เพื่อไม่ชนกัน
+const testNationalId = '1234567890121';
 const createdUserIds: string[] = [];
 
 const testAffiliation = {
@@ -28,6 +29,10 @@ const profile = {
 };
 
 beforeAll(async () => {
+  // กันแถวค้างจากรอบก่อนทำให้กรณี "ไม่อยู่ในรายชื่อ" ไม่จริง
+  await database.platformOperatorMembership.deleteMany({
+    where: { nationalIdHmac: hmacField(testNationalId) },
+  });
   await database.authorizedProviderAgency.create({
     data: { businessId: agencyBusinessId, agencyCode: '00001', nameTh: 'หน่วยทดสอบ' },
   });
