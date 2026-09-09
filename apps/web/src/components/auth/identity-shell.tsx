@@ -15,12 +15,12 @@ export function IdentityShell({ children }: { readonly children: ReactNode }) {
       <header className="flex flex-col items-center gap-2 text-center text-white">
         <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-3.5 sm:text-left">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-[0_8px_24px_-12px_rgba(0,0,0,0.5)]">
-            {/* ตราจากเว็บกรม (ครอปเฉพาะตรา) รอไฟล์ต้นฉบับความละเอียดสูงจากกรม */}
+            {/* ตรากระทรวงสาธารณสุขที่ใช้เป็นตรากรม ไฟล์จาก operator 2026-09-09 */}
             <Image
               src="/identity/dtam-emblem.png"
               alt={login.emblemAlt}
-              width={170}
-              height={170}
+              width={708}
+              height={702}
               priority
               className="h-14 w-14"
             />
