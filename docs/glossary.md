@@ -48,20 +48,29 @@
 | ที่เก็บไฟล์ (สลับ adapter ได้) | `FileStorage` (`LocalDiskStorage`, `S3CompatibleStorage`, `GACP_STORAGE_DRIVER`) | bucket service, uploader, blob store |
 | เหตุที่ปฏิเสธไฟล์ที่อัปโหลด (ตรวจเนื้อไฟล์จริง) | `UploadRejectionCode` (`validateUpload`, `detectFileKind`) | upload error, mime error |
 | ฟอร์มบันทึกร่างอัตโนมัติ | `AutosaveForm` (Server Action ต่อขั้น `saveStep1..3`, `savePurposes`, `saveLicenseDeclaration`) | draft saver, wizard form |
+| วิธีที่บุคคลพิสูจน์ตัวตน | `IdentityProvider`: `THAID` (กรมการปกครอง, OpenID Connect) · `MORPHROM_HEALTH_ID` (Health ID ของหมอพร้อม, OAuth2) · `DEV_LOCAL` | login provider, IdP (เดี่ยว), MORPHROM |
+| เครดิต "เจ้าหน้าที่ผู้ให้บริการ" จาก Provider ID ของ MOPH พร้อมสังกัด | `ProviderCredential` (`providerId`, `agencyBusinessId`, `agencyCode`, `lastVerifiedAt`, `revokedAt`) | provider account, staff badge |
+| สังกัดที่กรมรับเป็นเจ้าหน้าที่กรม | `AuthorizedProviderAgency` (`businessId`, `agencyCode`, `nameTh`) | organization (คำต้องห้าม), allowed org |
+| รายชื่อพนักงานบริษัทที่เข้าฝั่งบริษัทได้ | `PlatformOperatorMembership` (`nationalIdHmac`, `bootstrapAdmin`) | whitelist, staff list |
+| ความตั้งใจตอนกดล็อกอิน | `LoginIntent`: `APPLICANT` · `CERTIFICATION_BODY_STAFF` · `PLATFORM_OPERATOR_STAFF` | login mode, portal |
+| adapter ของผู้ให้บริการยืนยันตัวตน | `ThaidClient` (`OpenIdThaidClient`, `FakeThaidClient`) · `MorphromClient` (`HttpMorphromClient`, `FakeMorphromClient`) | auth service, SSO helper |
+| บริษัทผู้ให้บริการแพลตฟอร์ม | `PlatformOperator` (ฝั่งที่ 3 ไม่ใช่ `Applicant` และไม่ใช่ `CertificationBody`) | vendor, company (ในโค้ด), operator (เดี่ยว) |
 
-## 2. บทบาท (`UserRole`)
+## 2. บทบาท (`UserRole`) และฝั่ง (`RoleSide`)
 
-| ค่า | ไทย | ทำอะไร |
-|---|---|---|
-| `APPLICANT` | ผู้ขอรับรอง | ยื่นคำขอ แนบเอกสาร ยอมรับใบเสนอราคา ชำระ แก้ตามที่ขอเพิ่ม |
-| `FINANCE_OFFICER` | เจ้าหน้าที่การเงิน | ดูยอด กระทบยอด Stripe ออกใบเสร็จซ้ำ คืนเงิน/ใบลดหนี้ (ไม่อยู่ใน process) |
-| `DISPATCHER` | ผู้จัดคิวงาน | มอบ/โยกเคสให้ผู้ตรวจ ดูภาระงานและ SLA |
-| `DOCUMENT_REVIEWER` | ผู้ตรวจเอกสาร | รับเคส ตรวจรายช่อง ขอเอกสารเพิ่ม รับ/ไม่รับคำขอ |
-| `FIELD_INSPECTOR` | ผู้ตรวจประเมินแปลง | นัดวัน ลงพื้นที่ checklist + หลักฐาน ส่งรายงาน (Phase 2: ติดตาม T&T) |
-| `CERTIFICATE_APPROVER` | ผู้อนุมัติออกใบรับรอง | อนุมัติ/ไม่อนุมัติ/ส่งตรวจซ้ำ เพิกถอน (Phase 2: อนุมัติ recall) |
-| `SYSTEM_ADMIN` | ผู้ดูแลระบบ | ผู้ใช้/บทบาท กติกาเอกสาร ตารางค่าธรรมเนียม checklist วันทำการ (ห้ามแตะเงินและตัดสินคำขอ) |
+| ฝั่ง | ค่า | ไทย | ทำอะไร |
+|---|---|---|---|
+| `APPLICANT` | `APPLICANT` | ผู้ขอรับรอง | ยื่นคำขอ แนบเอกสาร ยอมรับใบเสนอราคา ชำระ แก้ตามที่ขอเพิ่ม |
+| `CERTIFICATION_BODY` | `DOCUMENT_REVIEWER` | ผู้ตรวจเอกสาร | รับเคส ตรวจรายช่อง ขอเอกสารเพิ่ม รับ/ไม่รับคำขอ |
+| `CERTIFICATION_BODY` | `DISPATCHER` | ผู้จัดคิวงาน | มอบ/โยกเคสให้ผู้ตรวจ ดูภาระงานและ SLA |
+| `CERTIFICATION_BODY` | `FIELD_INSPECTOR` | ผู้ตรวจประเมินแปลง | นัดวัน ลงพื้นที่ checklist + หลักฐาน ส่งรายงาน (Phase 2: ติดตาม T&T) |
+| `CERTIFICATION_BODY` | `CERTIFICATE_APPROVER` | ผู้อนุมัติออกใบรับรอง | อนุมัติ/ไม่อนุมัติ/ส่งตรวจซ้ำ เพิกถอน (Phase 2: อนุมัติ recall) |
+| `CERTIFICATION_BODY` | `CERTIFICATION_BODY_ADMIN` | ผู้ดูแลระบบของกรม | มอบ/ถอดบทบาทฝั่งกรมให้คนที่มี `ProviderCredential`, จัดการ `AuthorizedProviderAgency`, ดูบันทึกการเข้าถึงเอกสารของเจ้าหน้าที่กรม, ข้อมูลกฎของกรม (ห้ามแตะเงินและตัดสินคำขอ) |
+| `CERTIFICATION_BODY` | `CERTIFICATION_BODY_FINANCE_OFFICER` | เจ้าหน้าที่การเงินของกรม | เห็นค่าธรรมเนียมส่วนของกรมต่อคำขอต่องวด ยืนยันรับงวดนำส่งจากบริษัท ส่งออกรายงาน (อ่านอย่างเดียว) |
+| `PLATFORM_OPERATOR` | `PLATFORM_OPERATOR_ADMIN` | ผู้ดูแลระบบของบริษัท | รายชื่อพนักงานบริษัท, บทบาทฝั่งบริษัท, ตั้ง/กู้คืน `CERTIFICATION_BODY_ADMIN`, เครื่องมือซัพพอร์ตแบบอ่านอย่างเดียว (ห้ามแตะเงินและตัดสินคำขอ) |
+| `PLATFORM_OPERATOR` | `PLATFORM_OPERATOR_FINANCE_OFFICER` | เจ้าหน้าที่การเงินของบริษัท | ใบเสนอราคา ใบเสร็จ/ใบกำกับภาษี คืนเงิน ใบลดหนี้ กระทบยอด Stripe บันทึกงวดนำส่งค่าธรรมเนียมให้กรม |
 
-`SYSTEM` เป็น actor kind ใน transition/audit ไม่ใช่บทบาท · หนึ่งคนถือหลายบทบาทได้ผ่าน `staff_role_assignments` ไม่มีบทบาทผสม
+ฝั่งของบทบาทอ่านจาก `roleSideOf(role)` และ `ROLES_BY_SIDE` · บทบาทมีผล = ที่ถูกมอบ ∩ ที่เครดิตของฝั่งอนุญาต (`effectiveRoles` ใน domain) · ชื่อเดิม `FINANCE_OFFICER` และ `SYSTEM_ADMIN` เลิกใช้ (ADR 0004) · `SYSTEM` เป็น actor kind ใน transition/audit ไม่ใช่บทบาท · หนึ่งคนถือหลายบทบาทได้ผ่าน `staff_role_assignments` ไม่มีบทบาทผสม
 
 ## 3. สถานะคำขอ (`ApplicationStatus`)
 
@@ -92,7 +101,7 @@
 
 ## 6. คำต้องห้ามใน identifier / path / schema
 
-`wizard` `stepper` `farmer` `entity` `tenant` `organization` `auditor` `superuser` `chanote` `invoice` `slip` `scheduler` `cron` `coordinator` `worker` `CAN` · บรรทัดที่จำเป็นต้องมีคำเหล่านี้ (เช่น ชื่อ API ของ Stripe) ใส่คอมเมนต์ `glossary-allow` ท้ายบรรทัดพร้อมเหตุผล
+`wizard` `stepper` `farmer` `entity` `tenant` `organization` `auditor` `superuser` `chanote` `invoice` `slip` `scheduler` `cron` `coordinator` `worker` `CAN` `FINANCE_OFFICER` `SYSTEM_ADMIN` · บรรทัดที่จำเป็นต้องมีคำเหล่านี้ (เช่น ชื่อ API ของ Stripe, field `organization` ใน profile ของ Provider ID, ชื่อ claim `given_name`/`family_name` ของ OpenID Connect) ใส่คอมเมนต์ `glossary-allow` ท้ายบรรทัดพร้อมเหตุผล · migration ที่ apply แล้วอยู่นอกการตรวจคำต้องห้าม (แก้ไม่ได้เพราะ checksum)
 
 ## 7. ข้อความไทยบนหน้าจอ
 
