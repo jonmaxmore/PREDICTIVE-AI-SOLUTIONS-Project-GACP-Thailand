@@ -44,9 +44,17 @@ export const envSchema = z
     GACP_STORAGE_S3_ACCESS_KEY_ID: z.string().min(1).optional(),
     GACP_STORAGE_S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
     GACP_AUTH_DEV_LOGIN_ENABLED: booleanFromText.default(false),
+    // ผู้ให้บริการยืนยันตัวตน (spec 2026-09-09 §8) บังคับครบใน demo/staging/production
+    GACP_PUBLIC_BASE_URL: z.url().optional(),
     GACP_THAID_ISSUER_URL: z.url().optional(),
     GACP_THAID_CLIENT_ID: z.string().min(1).optional(),
     GACP_THAID_CLIENT_SECRET: z.string().min(1).optional(),
+    GACP_MORPHROM_HEALTH_ID_BASE_URL: z.url().optional(),
+    GACP_MORPHROM_HEALTH_ID_CLIENT_ID: z.string().min(1).optional(),
+    GACP_MORPHROM_HEALTH_ID_CLIENT_SECRET: z.string().min(1).optional(),
+    GACP_MORPHROM_PROVIDER_ID_BASE_URL: z.url().optional(),
+    GACP_MORPHROM_PROVIDER_ID_CLIENT_ID: z.string().min(1).optional(),
+    GACP_MORPHROM_PROVIDER_ID_SECRET_KEY: z.string().min(1).optional(),
     GACP_STRIPE_SECRET_KEY: z.string().min(1).optional(),
     GACP_STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   })
@@ -82,6 +90,33 @@ export const envSchema = z
         path: ['GACP_STORAGE_DRIVER'],
         message: 'demo/staging/production ต้องใช้ที่เก็บไฟล์แบบ s3 (bucket ส่วนตัว) ไม่ใช่ดิสก์ในเครื่อง',
       });
+    }
+    if (
+      env.GACP_ENV !== RuntimeEnvironment.DEVELOPMENT &&
+      env.GACP_ENV !== RuntimeEnvironment.TEST
+    ) {
+      const missingIdentity = (
+        [
+          'GACP_PUBLIC_BASE_URL',
+          'GACP_THAID_ISSUER_URL',
+          'GACP_THAID_CLIENT_ID',
+          'GACP_THAID_CLIENT_SECRET',
+          'GACP_MORPHROM_HEALTH_ID_BASE_URL',
+          'GACP_MORPHROM_HEALTH_ID_CLIENT_ID',
+          'GACP_MORPHROM_HEALTH_ID_CLIENT_SECRET',
+          'GACP_MORPHROM_PROVIDER_ID_BASE_URL',
+          'GACP_MORPHROM_PROVIDER_ID_CLIENT_ID',
+          'GACP_MORPHROM_PROVIDER_ID_SECRET_KEY',
+        ] as const
+      ).filter((key) => env[key] === undefined);
+      for (const key of missingIdentity) {
+        context.addIssue({
+          code: 'custom',
+          path: [key],
+          message:
+            'demo/staging/production ต้องตั้งค่าผู้ให้บริการยืนยันตัวตนให้ครบ (ThaID + Health ID + Provider ID)',
+        });
+      }
     }
     if (
       env.GACP_ENV === RuntimeEnvironment.PRODUCTION &&

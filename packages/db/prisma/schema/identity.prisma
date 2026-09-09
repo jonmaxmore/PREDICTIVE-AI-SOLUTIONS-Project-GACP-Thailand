@@ -1,46 +1,56 @@
+// บทบาท 9 แบบ 3 ฝั่ง (docs/glossary.md §2, ADR 0004) ลำดับตรงกับ contracts
 enum UserRole {
   APPLICANT
-  FINANCE_OFFICER
-  DISPATCHER
   DOCUMENT_REVIEWER
+  DISPATCHER
   FIELD_INSPECTOR
   CERTIFICATE_APPROVER
-  SYSTEM_ADMIN
+  CERTIFICATION_BODY_ADMIN
+  CERTIFICATION_BODY_FINANCE_OFFICER
+  PLATFORM_OPERATOR_ADMIN
+  PLATFORM_OPERATOR_FINANCE_OFFICER
 
   @@map("user_role")
 }
 
+// วิธีพิสูจน์ตัวตน: ThaID · Health ID ของหมอพร้อม · dev (Provider ID เป็นเครดิตใน provider_credentials ไม่ใช่ provider)
 enum IdentityProvider {
   THAID
-  MORPHROM
+  MORPHROM_HEALTH_ID
   DEV_LOCAL
 
   @@map("identity_provider")
 }
 
+// บุคคลธรรมดาหนึ่งคน = User หนึ่งแถว มีตัวตนได้หลายทาง เชื่อมด้วย HMAC ของเลขบัตร (spec 2026-09-09 §3)
 model User {
-  id          String    @id @default(uuid()) @db.Uuid
-  displayName String    @map("display_name")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  disabledAt  DateTime? @map("disabled_at") @db.Timestamptz(6)
+  id             String    @id @default(uuid()) @db.Uuid
+  displayName    String    @map("display_name")
+  nationalIdHmac String?   @unique @map("national_id_hmac") // HMAC เลขบัตร เชื่อมตัวตนหลายทางของคนเดียว ไม่มี plaintext
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  disabledAt     DateTime? @map("disabled_at") @db.Timestamptz(6)
 
-  identities           UserIdentity[]
-  sessions             Session[]
-  staffRoleAssignments StaffRoleAssignment[]
-  applicantMembers     ApplicantMember[]
+  identities                 UserIdentity[]
+  sessions                   Session[]
+  staffRoleAssignments       StaffRoleAssignment[]
+  applicantMembers           ApplicantMember[]
+  providerCredential         ProviderCredential?
+  platformOperatorMembership PlatformOperatorMembership?
 
   @@map("users")
 }
 
 // ตัวตนจากผู้ให้บริการยืนยันตัวตน เก็บเฉพาะ HMAC ของ subject/เลขบัตร ไม่เก็บ plaintext
 model UserIdentity {
-  id          String           @id @default(uuid()) @db.Uuid
-  userId      String           @map("user_id") @db.Uuid
-  provider    IdentityProvider
-  subjectHmac String           @map("subject_hmac")
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  lastLoginAt DateTime?        @map("last_login_at") @db.Timestamptz(6)
+  id                     String           @id @default(uuid()) @db.Uuid
+  userId                 String           @map("user_id") @db.Uuid
+  provider               IdentityProvider
+  subjectHmac            String           @map("subject_hmac")
+  identityAssuranceLevel String?          @map("identity_assurance_level") // ial จาก ThaID เช่น 2.3
+  verifiedAt             DateTime?        @map("verified_at") @db.Timestamptz(6)
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastLoginAt            DateTime?        @map("last_login_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -77,4 +87,57 @@ model StaffRoleAssignment {
 
   @@index([userId, role])
   @@map("staff_role_assignments")
+}
+
+// เครดิต "เจ้าหน้าที่ผู้ให้บริการ" จาก Provider ID ของ MOPH ตรวจซ้ำทุกครั้งที่ล็อกอิน (spec 2026-09-09 §7)
+model ProviderCredential {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @unique @map("user_id") @db.Uuid
+  providerId       String    @map("provider_id") // 13 หลักจาก MOPH
+  agencyBusinessId String?   @map("agency_business_id")
+  agencyCode       String?   @map("agency_code") // hcode
+  agencyNameTh     String?   @map("agency_name_th")
+  position         String?
+  positionType     String?   @map("position_type")
+  licenseId        String?   @map("license_id")
+  profileHash      String    @map("profile_hash") // sha256 ของ profile ที่ normalize แล้ว ไว้ตรวจการเปลี่ยนแปลง
+  verifiedAt       DateTime  @default(now()) @map("verified_at") @db.Timestamptz(6)
+  lastVerifiedAt   DateTime  @default(now()) @map("last_verified_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6) // MOPH ตอบว่าไม่มี Provider ID แล้ว
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([agencyBusinessId])
+  @@map("provider_credentials")
+}
+
+// สังกัดที่กรมรับเป็นเจ้าหน้าที่กรม (กรมฯ, สสจ.) จัดการโดย CERTIFICATION_BODY_ADMIN
+model AuthorizedProviderAgency {
+  id          String    @id @default(uuid()) @db.Uuid
+  businessId  String    @unique @map("business_id")
+  agencyCode  String?   @map("agency_code")
+  nameTh      String    @map("name_th")
+  addedById   String?   @map("added_by_id") @db.Uuid
+  addedAt     DateTime  @default(now()) @map("added_at") @db.Timestamptz(6)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedById String?   @map("revoked_by_id") @db.Uuid
+
+  @@map("authorized_provider_agencies")
+}
+
+// รายชื่อพนักงานบริษัทที่เข้าฝั่ง PlatformOperator ได้ (ThaID + เลขบัตรตรง) จัดการโดย PLATFORM_OPERATOR_ADMIN
+model PlatformOperatorMembership {
+  id             String    @id @default(uuid()) @db.Uuid
+  nationalIdHmac String    @unique @map("national_id_hmac")
+  displayName    String    @map("display_name")
+  userId         String?   @unique @map("user_id") @db.Uuid // ผูกเมื่อล็อกอินครั้งแรก
+  bootstrapAdmin Boolean   @default(false) @map("bootstrap_admin") // คนแรกจากคำสั่ง bootstrap ได้ PLATFORM_OPERATOR_ADMIN ทันที
+  addedById      String?   @map("added_by_id") @db.Uuid
+  addedAt        DateTime  @default(now()) @map("added_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedById    String?   @map("revoked_by_id") @db.Uuid
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("platform_operator_memberships")
 }

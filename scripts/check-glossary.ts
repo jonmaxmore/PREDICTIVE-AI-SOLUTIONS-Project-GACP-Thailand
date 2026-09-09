@@ -29,6 +29,8 @@ const SKIPPED_DIRECTORIES = new Set([
 ]);
 // lockfile มีชื่อแพ็กเกจของคนอื่น ไม่ใช่ชื่อที่เราตั้ง
 const SKIPPED_FILES = new Set(['scripts/check-glossary.ts', 'pnpm-lock.yaml']);
+// migration ที่ apply แล้วแก้ไม่ได้ (Prisma ตรวจ checksum) คำต้องห้ามในนั้นเป็นประวัติ ไม่ใช่ชื่อที่ยังใช้
+const SKIPPED_PATH_PREFIXES = ['packages/db/prisma/migrations/'];
 const ALLOW_MARKER = 'glossary-allow';
 
 type ForbiddenTerm = { readonly pattern: RegExp; readonly useInstead: string };
@@ -41,7 +43,13 @@ const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
   { pattern: /\btenant\b/i, useInstead: 'CertificationBody' },
   { pattern: /\borganization\b/i, useInstead: 'CertificationBody' },
   { pattern: /\bauditor\b/i, useInstead: 'DOCUMENT_REVIEWER / FIELD_INSPECTOR' },
-  { pattern: /\bsuperuser\b/i, useInstead: 'SYSTEM_ADMIN' },
+  { pattern: /\bsuperuser\b/i, useInstead: 'PLATFORM_OPERATOR_ADMIN / CERTIFICATION_BODY_ADMIN' },
+  // ชื่อบทบาทเดิมของ M0 ที่กำกวมว่าเป็นของกรมหรือของบริษัท (ADR 0004)
+  {
+    pattern: /\bFINANCE_OFFICER\b/,
+    useInstead: 'PLATFORM_OPERATOR_FINANCE_OFFICER / CERTIFICATION_BODY_FINANCE_OFFICER',
+  },
+  { pattern: /\bSYSTEM_ADMIN\b/, useInstead: 'PLATFORM_OPERATOR_ADMIN / CERTIFICATION_BODY_ADMIN' },
   { pattern: /\bchanote\b/i, useInstead: 'LandParcel / LAND_RIGHTS_DOCUMENT' },
   { pattern: /\binvoice\b/i, useInstead: 'Quotation / Receipt' },
   { pattern: /\bslip\b/i, useInstead: 'Payment' },
@@ -176,7 +184,9 @@ function main(): void {
     const repoPath = toRepoPath(fullPath);
     if (SKIPPED_FILES.has(repoPath)) continue;
     const lines = readFileSync(fullPath, 'utf8').split(/\r?\n/);
-    checkForbiddenTerms(repoPath, lines, violations);
+    if (!SKIPPED_PATH_PREFIXES.some((prefix) => repoPath.startsWith(prefix))) {
+      checkForbiddenTerms(repoPath, lines, violations);
+    }
     if (repoPath.endsWith('.prisma')) checkPrismaConventions(repoPath, lines, violations);
   }
 

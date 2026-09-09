@@ -1,18 +1,62 @@
 import { z } from 'zod';
 import { enumValues } from './enum-values.ts';
 
-// บทบาทผู้ใช้ 7 แบบ (docs/glossary.md §2) หนึ่งคนถือได้หลายบทบาท ไม่มีบทบาทผสม
+// บทบาทผู้ใช้ 9 แบบ 3 ฝั่ง (docs/glossary.md §2) หนึ่งคนถือได้หลายบทบาท ไม่มีบทบาทผสม
+// ลำดับต้องตรงกับ enum user_role ในฐานข้อมูล (ทดสอบใน packages/db)
 export const UserRole = {
   APPLICANT: 'APPLICANT',
-  FINANCE_OFFICER: 'FINANCE_OFFICER',
-  DISPATCHER: 'DISPATCHER',
   DOCUMENT_REVIEWER: 'DOCUMENT_REVIEWER',
+  DISPATCHER: 'DISPATCHER',
   FIELD_INSPECTOR: 'FIELD_INSPECTOR',
   CERTIFICATE_APPROVER: 'CERTIFICATE_APPROVER',
-  SYSTEM_ADMIN: 'SYSTEM_ADMIN',
+  CERTIFICATION_BODY_ADMIN: 'CERTIFICATION_BODY_ADMIN',
+  CERTIFICATION_BODY_FINANCE_OFFICER: 'CERTIFICATION_BODY_FINANCE_OFFICER',
+  PLATFORM_OPERATOR_ADMIN: 'PLATFORM_OPERATOR_ADMIN',
+  PLATFORM_OPERATOR_FINANCE_OFFICER: 'PLATFORM_OPERATOR_FINANCE_OFFICER',
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 export const userRoleSchema = z.enum(enumValues(UserRole));
+
+// ฝั่งของบทบาท: ผู้รับบริการ · เจ้าหน้าที่กรม (CertificationBody) · บริษัทผู้ให้บริการแพลตฟอร์ม (PlatformOperator)
+export const RoleSide = {
+  APPLICANT: 'APPLICANT',
+  CERTIFICATION_BODY: 'CERTIFICATION_BODY',
+  PLATFORM_OPERATOR: 'PLATFORM_OPERATOR',
+} as const;
+export type RoleSide = (typeof RoleSide)[keyof typeof RoleSide];
+export const roleSideSchema = z.enum(enumValues(RoleSide));
+
+export const ROLES_BY_SIDE: Readonly<Record<RoleSide, readonly UserRole[]>> = {
+  [RoleSide.APPLICANT]: [UserRole.APPLICANT],
+  [RoleSide.CERTIFICATION_BODY]: [
+    UserRole.DOCUMENT_REVIEWER,
+    UserRole.DISPATCHER,
+    UserRole.FIELD_INSPECTOR,
+    UserRole.CERTIFICATE_APPROVER,
+    UserRole.CERTIFICATION_BODY_ADMIN,
+    UserRole.CERTIFICATION_BODY_FINANCE_OFFICER,
+  ],
+  [RoleSide.PLATFORM_OPERATOR]: [
+    UserRole.PLATFORM_OPERATOR_ADMIN,
+    UserRole.PLATFORM_OPERATOR_FINANCE_OFFICER,
+  ],
+};
+
+export function roleSideOf(role: UserRole): RoleSide {
+  for (const [side, roles] of Object.entries(ROLES_BY_SIDE) as [RoleSide, readonly UserRole[]][]) {
+    if (roles.includes(role)) return side;
+  }
+  throw new RangeError(`ไม่รู้ฝั่งของบทบาท ${role}`);
+}
+
+// ความตั้งใจตอนกดล็อกอิน กำหนดว่าหลังพิสูจน์ตัวตนแล้วต้องตรวจเครดิตของฝั่งไหนต่อ
+export const LoginIntent = {
+  APPLICANT: 'APPLICANT',
+  CERTIFICATION_BODY_STAFF: 'CERTIFICATION_BODY_STAFF',
+  PLATFORM_OPERATOR_STAFF: 'PLATFORM_OPERATOR_STAFF',
+} as const;
+export type LoginIntent = (typeof LoginIntent)[keyof typeof LoginIntent];
+export const loginIntentSchema = z.enum(enumValues(LoginIntent));
 
 // ผู้กระทำใน transition/audit: คน (มีบทบาท) หรือระบบ (webhook, Automation)
 export const ActorKind = {
@@ -110,9 +154,12 @@ export const TERMINAL_APPLICATION_STATUSES: ReadonlySet<ApplicationStatus> = new
   ApplicationStatus.EXPIRED,
 ]);
 
+// วิธีที่บุคคลพิสูจน์ตัวตน: ThaID (กรมการปกครอง) · Health ID ของหมอพร้อม (MOPH) · dev เท่านั้น
+// Provider ID ไม่ใช่ provider แยก แต่เป็นเครดิต (ProviderCredential) ที่ต่อจาก Health ID
 export const IdentityProvider = {
   THAID: 'THAID',
-  MORPHROM: 'MORPHROM',
+  MORPHROM_HEALTH_ID: 'MORPHROM_HEALTH_ID',
   DEV_LOCAL: 'DEV_LOCAL',
 } as const;
 export type IdentityProvider = (typeof IdentityProvider)[keyof typeof IdentityProvider];
+export const identityProviderSchema = z.enum(enumValues(IdentityProvider));

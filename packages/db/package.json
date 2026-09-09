@@ -22,6 +22,7 @@
     "migrate:diff": "prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema --shadow-database-url \"$GACP_DATABASE_DIRECT_URL\" --exit-code",
     "db:dev": "node scripts/dev-db.ts",
     "seed:law": "node scripts/seed-law.ts",
+    "platform-operator:bootstrap": "node scripts/platform-operator-bootstrap.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",

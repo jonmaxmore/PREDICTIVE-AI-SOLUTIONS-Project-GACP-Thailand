@@ -1,4 +1,13 @@
 export {
+  type AccountCredentials,
+  canAssignRole,
+  canRevokeRole,
+  effectiveRoles,
+  permittedRolesFor,
+  type RoleAssignmentDecision,
+  RoleAssignmentRejection,
+} from './account-access.ts';
+export {
   type Actor,
   ApplicationEvent,
   allowedTransitionsFrom,

@@ -78,6 +78,28 @@ describe('ฐานข้อมูลหลัง migrate', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('มีตารางเครดิตของฝั่งและรายชื่อบริษัท พร้อม unique ที่ถูกต้อง', async () => {
+    // Prisma สร้าง unique เป็น index ไม่ใช่ constraint จึงอ่านจาก pg_indexes
+    const rows = await database.$queryRaw<Array<{ indexName: string }>>`
+      SELECT indexname AS "indexName"
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename IN ('provider_credentials', 'authorized_provider_agencies', 'platform_operator_memberships', 'users')
+        AND indexdef LIKE 'CREATE UNIQUE INDEX%'
+        AND indexname NOT LIKE '%_pkey'
+    `;
+    const names = rows.map((row) => row.indexName).sort();
+    expect(names).toEqual(
+      [
+        'authorized_provider_agencies_business_id_key',
+        'platform_operator_memberships_national_id_hmac_key',
+        'platform_operator_memberships_user_id_key',
+        'provider_credentials_user_id_key',
+        'users_national_id_hmac_key',
+      ].sort(),
+    );
+  });
+
   it('ตารางผู้ขอรับรองไม่มีคอลัมน์เลขบัตรประชาชนแบบ plaintext (PDPA)', async () => {
     const columns = await database.$queryRaw<Array<{ columnName: string }>>`
       SELECT column_name AS "columnName"
