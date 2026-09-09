@@ -8,8 +8,9 @@ import {
   roleSideOf,
   UserRole,
 } from '@gacp/contracts';
-import { type AccountCredentials, effectiveRoles } from '@gacp/domain';
+import { effectiveRoles } from '@gacp/domain';
 import { database } from '@/lib/database.ts';
+import { accountCredentialsOf } from '@/lib/identity/account-credentials.ts';
 import { hmacField } from '@/lib/protected-fields.ts';
 import { sideOfIntent } from '@/lib/roles.ts';
 import { SESSION_TTL_SECONDS, sealSession } from '@/lib/session.ts';
@@ -137,31 +138,6 @@ async function recordProviderLookup(
     update: row,
   });
   return chosen !== null && authorizedIds.has(chosen.businessId);
-}
-
-// เครดิตของฝั่งที่ผู้ใช้ถืออยู่ตอนนี้ (อ่านจากฐานข้อมูล ไม่ใช่จาก session)
-export async function accountCredentialsOf(
-  userId: string,
-  nationalIdHmac: string | null,
-): Promise<AccountCredentials> {
-  const [credential, membership] = await Promise.all([
-    database.providerCredential.findUnique({ where: { userId } }),
-    nationalIdHmac
-      ? database.platformOperatorMembership.findUnique({ where: { nationalIdHmac } })
-      : null,
-  ]);
-  let providerAgencyAuthorized = false;
-  if (credential?.agencyBusinessId && !credential.revokedAt) {
-    providerAgencyAuthorized =
-      (await database.authorizedProviderAgency.count({
-        where: { businessId: credential.agencyBusinessId, revokedAt: null },
-      })) > 0;
-  }
-  return {
-    providerCredentialActive: credential !== null && credential.revokedAt === null,
-    providerAgencyAuthorized,
-    platformOperatorMembershipActive: membership !== null && membership.revokedAt === null,
-  };
 }
 
 // ผูก membership ของบริษัทกับ user ครั้งแรกที่พบ และมอบ PLATFORM_OPERATOR_ADMIN ให้คนที่ตั้งจากคำสั่ง bootstrap
