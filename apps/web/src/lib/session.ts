@@ -1,4 +1,4 @@
-import { readEnv, userRoleSchema } from '@gacp/contracts';
+import { identityProviderSchema, readEnv, userRoleSchema } from '@gacp/contracts';
 import { EncryptJWT, jwtDecrypt } from 'jose';
 import { z } from 'zod';
 
@@ -7,10 +7,13 @@ import { z } from 'zod';
 export const SESSION_COOKIE_NAME = 'gacp_session';
 export const SESSION_TTL_SECONDS = 12 * 60 * 60;
 
+// sub = HMAC ของ subject จากผู้ให้บริการยืนยันตัวตน (ค่าเดียวกับ user_identities.subject_hmac)
+// identityProvider บอกว่า sub นั้นมาจากทางไหน (ThaID / Health ID / dev)
 const sessionPayloadSchema = z.object({
   sub: z.string().min(1),
   displayName: z.string().min(1),
   roles: z.array(userRoleSchema).min(1),
+  identityProvider: identityProviderSchema,
 });
 export type SessionPayload = z.infer<typeof sessionPayloadSchema>;
 

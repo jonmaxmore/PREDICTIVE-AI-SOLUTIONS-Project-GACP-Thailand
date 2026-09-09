@@ -1,9 +1,8 @@
 import 'server-only';
-import { IdentityProvider, type UserRole } from '@gacp/contracts';
+import type { UserRole } from '@gacp/contracts';
 import { redirect } from 'next/navigation';
 import { currentSession } from './current-session.ts';
 import { database } from './database.ts';
-import { hmacField } from './protected-fields.ts';
 import { loginPathForPathname } from './roles.ts';
 import type { SessionPayload } from './session.ts';
 
@@ -14,19 +13,14 @@ export type CurrentUser = {
   readonly session: SessionPayload;
 };
 
-// subject ใน session มีรูป "<provider>:<id>" เก็บลงฐานข้อมูลเป็น HMAC เท่านั้น
-function providerOf(subject: string): IdentityProvider {
-  if (subject.startsWith('thaid:')) return IdentityProvider.THAID;
-  if (subject.startsWith('morphrom_health_id:')) return IdentityProvider.MORPHROM_HEALTH_ID;
-  return IdentityProvider.DEV_LOCAL;
-}
-
-// แปลง session เป็นแถว users (สร้างครั้งแรกที่พบ) ทุกหน้าที่แตะข้อมูลของผู้ใช้เรียกผ่านฟังก์ชันนี้
+// แปลง session เป็นแถว users ทุกหน้าที่แตะข้อมูลของผู้ใช้เรียกผ่านฟังก์ชันนี้
+// session.sub คือ HMAC ของ subject อยู่แล้ว (ค่าเดียวกับ user_identities.subject_hmac) จึงค้นได้ตรง ๆ
+// การล็อกอินจริงสร้างแถวไว้ก่อนใน completeSignIn ส่วน dev login สร้างใน devLogin; ที่นี่สร้างเฉพาะกรณีตกหล่น
 export async function currentUser(): Promise<CurrentUser | undefined> {
   const session = await currentSession();
   if (!session) return undefined;
-  const provider = providerOf(session.sub);
-  const subjectHmac = hmacField(session.sub);
+  const provider = session.identityProvider;
+  const subjectHmac = session.sub;
   const identity = await database.userIdentity.findUnique({
     // biome-ignore lint/style/useNamingConvention: ชื่อ compound unique key ที่ Prisma สร้างจาก @@unique([provider, subjectHmac])
     where: { provider_subjectHmac: { provider, subjectHmac } },
@@ -54,7 +48,7 @@ export async function currentUser(): Promise<CurrentUser | undefined> {
   return { id: user.id, displayName: session.displayName, roles: session.roles, session };
 }
 
-// ใช้ในหน้าและ Server Action ของบทบาทนั้น: ไม่มี session → ไปหน้า login, บทบาทไม่ตรง → /forbidden
+// ใช้ในหน้าและ Server Action ของบทบาทนั้น: ไม่มี session → ไปหน้าเข้าสู่ระบบของฝั่งนั้น, บทบาทไม่ตรง → /forbidden
 export async function requireUserWithRole(role: UserRole, nextPath: string): Promise<CurrentUser> {
   const user = await currentUser();
   if (!user) redirect(`${loginPathForPathname(nextPath)}?next=${encodeURIComponent(nextPath)}`);
