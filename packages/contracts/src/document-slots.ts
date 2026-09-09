@@ -59,7 +59,7 @@ export type DocumentSlotGroup = (typeof DocumentSlotGroup)[keyof typeof Document
 export const documentSlotGroupSchema = z.enum(enumValues(DocumentSlotGroup));
 
 // ขั้นของฟอร์มที่ช่องนี้ปรากฏ (ApplicationFormStep 1..6) ช่องระบบสร้างอยู่ขั้นที่ 6
-export const applicationFormStepSchema = z.number().int().min(1).max(6);
+const formStepSchema = z.number().int().min(1).max(6);
 
 // สถานะที่ผู้ยื่นแจ้งสำหรับช่องใบอนุญาตสมุนไพรควบคุม (แนบใบอนุญาตแล้ว / ยื่นคำขอแล้วรอผล / ยังไม่ได้ยื่น)
 export const LicenseDeclarationStatus = {
@@ -100,7 +100,7 @@ export const ACCEPTED_DOCUMENT_MIME_TYPES = {
 export const documentSlotDefinitionSchema = z.object({
   code: documentSlotCodeSchema,
   group: documentSlotGroupSchema,
-  formStep: applicationFormStepSchema,
+  formStep: formStepSchema,
   sortOrder: z.number().int().min(0),
   labelTh: z.string().min(1),
   whatIsItTh: z.string().min(1),
