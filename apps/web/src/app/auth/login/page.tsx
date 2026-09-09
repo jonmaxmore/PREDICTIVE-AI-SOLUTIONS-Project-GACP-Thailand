@@ -1,14 +1,30 @@
 import { LoginIntent, RoleSide, readEnv, UserRole } from '@gacp/contracts';
 import { redirect } from 'next/navigation';
+import {
+  HealthIdButton,
+  OrDivider,
+  ProviderIdButton,
+  ThaidButton,
+} from '@/components/auth/identity-buttons.tsx';
+import {
+  IdentityCard,
+  IdentityFootnote,
+  IdentityShell,
+} from '@/components/auth/identity-shell.tsx';
 import { DevLoginForm } from '@/components/dev-login-form.tsx';
-import { IdentityProviderButton } from '@/components/identity-provider-button.tsx';
 import { currentSession } from '@/lib/current-session.ts';
 import { identityProvidersConfigured } from '@/lib/identity/identity-clients.ts';
-import { roleHomePath } from '@/lib/roles.ts';
+import { PUBLIC_LOGIN_PATH, roleHomePath } from '@/lib/roles.ts';
 import { messages } from '@/messages/th.ts';
 
+type LoginTab = 'applicant' | 'staff';
+
 type LoginPageProps = {
-  readonly searchParams: Promise<{ readonly next?: string; readonly error?: string }>;
+  readonly searchParams: Promise<{
+    readonly next?: string;
+    readonly error?: string;
+    readonly tab?: string;
+  }>;
 };
 
 function safeNext(next: string | undefined): string | undefined {
@@ -22,80 +38,127 @@ function startPath(provider: 'thaid' | 'morphrom', intent: LoginIntent, next: st
   return `/auth/${provider}/start?${query.toString()}`;
 }
 
-// หน้าเข้าสู่ระบบสาธารณะ: ผู้ขอรับรอง (Health ID หรือ ThaID) และเจ้าหน้าที่กรม (Health ID ที่มี Provider ID)
+function tabPath(tab: LoginTab, next: string | undefined) {
+  const query = new URLSearchParams({ tab });
+  if (next) query.set('next', next);
+  return `${PUBLIC_LOGIN_PATH}?${query.toString()}`;
+}
+
+// หน้าเข้าสู่ระบบสาธารณะ (แบบ ข. ที่ operator เลือก): แท็บ ผู้ขอรับรอง (Health ID หรือ ThaID) / เจ้าหน้าที่กรม (Provider ID)
 // พนักงานบริษัทมีหน้าของตัวเองที่ /platform-operator/login
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const session = await currentSession();
   const firstRole = session?.roles[0];
   if (firstRole) redirect(roleHomePath(firstRole));
 
-  const { next, error } = await searchParams;
+  const { next, error, tab } = await searchParams;
   const nextPath = safeNext(next);
+  const activeTab: LoginTab = tab === 'staff' ? 'staff' : 'applicant';
   const devLoginEnabled = readEnv().GACP_AUTH_DEV_LOGIN_ENABLED;
   const providersConfigured = identityProvidersConfigured();
+  const login = messages.login;
   const errorMessage =
     error === 'displayName'
-      ? messages.login.displayNameRequired
+      ? login.displayNameRequired
       : error === 'role'
-        ? messages.login.roleRequired
+        ? login.roleRequired
         : undefined;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6 py-12">
-      <header className="space-y-1">
-        <p className="inline-flex rounded-full bg-leaf-tint px-3 py-1 text-sm font-bold text-leaf">
-          {messages.appName}
-        </p>
-        <h1 className="text-2xl font-bold text-forest-green">{messages.login.title}</h1>
-        <p className="text-sm text-muted">{messages.appTagline}</p>
-      </header>
-
-      <section className="rounded-xl border border-border bg-surface p-5 shadow-card">
-        <h2 className="text-lg font-bold text-ink">{messages.login.applicantTitle}</h2>
-        <p className="mt-1 text-sm leading-relaxed text-muted">{messages.login.applicantLead}</p>
-        <div className="mt-4 flex flex-col gap-3">
-          <IdentityProviderButton
-            href={startPath('morphrom', LoginIntent.APPLICANT, nextPath)}
-            label={messages.login.healthId}
-            enabled={providersConfigured}
-            tone="primary"
-          />
-          <IdentityProviderButton
-            href={startPath('thaid', LoginIntent.APPLICANT, nextPath)}
-            label={messages.login.thaid}
-            enabled={providersConfigured}
-            tone="secondary"
-          />
+    <IdentityShell>
+      <IdentityCard>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold text-forest-green">{login.title}</h1>
+          <p className="text-sm text-muted">{login.chooseRole}</p>
         </div>
-      </section>
 
-      <section className="rounded-xl border border-officer-tint bg-surface p-5 shadow-card">
-        <h2 className="text-lg font-bold text-officer">{messages.login.staffTitle}</h2>
-        <p className="mt-1 text-sm leading-relaxed text-muted">{messages.login.staffLead}</p>
-        <div className="mt-4">
-          <IdentityProviderButton
-            href={startPath('morphrom', LoginIntent.CERTIFICATION_BODY_STAFF, nextPath)}
-            label={messages.login.providerId}
-            enabled={providersConfigured}
-            tone="secondary"
-          />
-        </div>
-      </section>
+        <nav aria-label={login.tabsLabel} className="grid grid-cols-2 border-b border-border">
+          <TabLink href={tabPath('applicant', nextPath)} active={activeTab === 'applicant'}>
+            {login.tabApplicant}
+          </TabLink>
+          <TabLink href={tabPath('staff', nextPath)} active={activeTab === 'staff'}>
+            {login.tabStaff}
+          </TabLink>
+        </nav>
+
+        {activeTab === 'applicant' ? (
+          <div className="flex flex-col gap-3.5">
+            <p className="text-[13px] leading-relaxed text-muted">{login.applicantLead}</p>
+            <HealthIdButton
+              href={startPath('morphrom', LoginIntent.APPLICANT, nextPath)}
+              enabled={providersConfigured}
+            />
+            <OrDivider />
+            <ThaidButton
+              href={startPath('thaid', LoginIntent.APPLICANT, nextPath)}
+              enabled={providersConfigured}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <p className="text-[13px] leading-relaxed text-muted">{login.staffLead}</p>
+            <ProviderIdButton
+              href={startPath('morphrom', LoginIntent.CERTIFICATION_BODY_STAFF, nextPath)}
+              enabled={providersConfigured}
+            />
+            <div className="flex flex-col gap-3 rounded-md bg-paper px-5 py-4">
+              <p className="text-sm font-bold text-ink">{login.providerIdStepsTitle}</p>
+              <ol className="flex flex-col gap-3">
+                {login.providerIdSteps.map((step, index) => (
+                  <li key={step} className="flex items-start gap-3">
+                    <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-health-id text-xs font-bold text-white">
+                      {index + 1}
+                    </span>
+                    <span className="text-[13px] leading-relaxed text-ink-soft">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        )}
+      </IdentityCard>
 
       {providersConfigured ? null : (
-        <p role="status" className="text-sm leading-relaxed text-quiet">
-          {messages.login.notConfigured}
-        </p>
+        <IdentityFootnote>
+          <span role="status">{login.notConfigured}</span>
+        </IdentityFootnote>
       )}
+      <IdentityFootnote>{login.noPasswordNote}</IdentityFootnote>
 
       {devLoginEnabled ? (
-        <DevLoginForm
-          sides={[RoleSide.APPLICANT, RoleSide.CERTIFICATION_BODY, RoleSide.PLATFORM_OPERATOR]}
-          defaultRole={UserRole.APPLICANT}
-          next={nextPath}
-          errorMessage={errorMessage}
-        />
+        <div className="w-full max-w-[560px]">
+          <DevLoginForm
+            sides={[RoleSide.APPLICANT, RoleSide.CERTIFICATION_BODY, RoleSide.PLATFORM_OPERATOR]}
+            defaultRole={UserRole.APPLICANT}
+            next={nextPath}
+            errorMessage={errorMessage}
+          />
+        </div>
       ) : null}
-    </main>
+    </IdentityShell>
+  );
+}
+
+function TabLink({
+  href,
+  active,
+  children,
+}: {
+  readonly href: string;
+  readonly active: boolean;
+  readonly children: string;
+}) {
+  return (
+    <a
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      className={
+        active
+          ? '-mb-px flex h-11 items-center justify-center border-b-[3px] border-health-id text-[15px] font-bold text-health-id'
+          : 'flex h-11 items-center justify-center text-[15px] font-semibold text-muted hover:text-ink'
+      }
+    >
+      {children}
+    </a>
   );
 }

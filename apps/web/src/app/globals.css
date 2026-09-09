@@ -28,6 +28,11 @@
   --color-danger-tint: var(--gacp-color-status-danger-tint);
   --color-info: var(--gacp-color-status-info);
 
+  /* สีประจำของผู้ให้บริการยืนยันตัวตน ใช้เฉพาะปุ่มเข้าสู่ระบบ (อ่านจากหน้า moph.id.th และ provider.id.th) */
+  --color-health-id: #127b5c;
+  --color-thaid: #030650;
+  --color-provider-id: #00985a;
+
   --radius-sm: var(--gacp-radius-sm);
   --radius-md: var(--gacp-radius-md);
   --radius-lg: var(--gacp-radius-lg);
@@ -49,4 +54,26 @@ body {
 :focus-visible {
   outline: 3px solid var(--gacp-color-leaf);
   outline-offset: 2px;
+}
+
+/* หน้าเข้าสู่ระบบ: พื้นหลังไล่เขียวและลายเส้นทแยงจางตามหน้าตาของ MOPH ID (moph.id.th) */
+.identity-backdrop {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(180deg, #2b7a5b 0%, #215d47 55%, #1c3a33 100%);
+}
+
+.identity-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 0, 0, 0),
+    rgba(0, 0, 0, 0) 40px,
+    rgba(255, 255, 255, 0.08) 40px,
+    rgba(255, 255, 255, 0.08) 41px
+  );
 }

@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { buttonOutlineClassName } from '@/components/application-form/primitives.tsx';
+import { IdentityCard, IdentityShell } from '@/components/auth/identity-shell.tsx';
 import { PLATFORM_OPERATOR_LOGIN_PATH, PUBLIC_LOGIN_PATH } from '@/lib/roles.ts';
 import { messages } from '@/messages/th.ts';
 
@@ -28,20 +30,14 @@ export default async function SignInOutcomePage({ searchParams }: OutcomePagePro
   const loginPath = outcome === 'NOT_MEMBER' ? PLATFORM_OPERATOR_LOGIN_PATH : PUBLIC_LOGIN_PATH;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6 py-12">
-      <p className="inline-flex self-start rounded-full bg-leaf-tint px-3 py-1 text-sm font-bold text-leaf">
-        {messages.appName}
-      </p>
-      <section className="rounded-xl border border-border bg-surface p-6 shadow-card">
+    <IdentityShell>
+      <IdentityCard>
         <h1 className="text-xl font-bold text-ink">{copy.title}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-muted">{copy.body}</p>
-        <Link
-          href={loginPath}
-          className="mt-6 inline-flex h-11 items-center justify-center rounded-md border border-border px-5 font-semibold text-ink hover:bg-paper"
-        >
+        <p className="text-sm leading-relaxed text-muted">{copy.body}</p>
+        <Link href={loginPath} className={`${buttonOutlineClassName} h-11 self-start`}>
           {messages.signInOutcome.backToLogin}
         </Link>
-      </section>
-    </main>
+      </IdentityCard>
+    </IdentityShell>
   );
 }
