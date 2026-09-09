@@ -1,8 +1,13 @@
 import { LoginIntent, RoleSide, readEnv, roleSideOf, UserRole } from '@gacp/contracts';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { ThaidButton } from '@/components/auth/identity-buttons.tsx';
+import {
+  IdentityCard,
+  IdentityFootnote,
+  IdentityShell,
+} from '@/components/auth/identity-shell.tsx';
 import { DevLoginForm } from '@/components/dev-login-form.tsx';
-import { IdentityProviderButton } from '@/components/identity-provider-button.tsx';
 import { currentSession } from '@/lib/current-session.ts';
 import { identityProvidersConfigured } from '@/lib/identity/identity-clients.ts';
 import { homePathForIntent, PUBLIC_LOGIN_PATH } from '@/lib/roles.ts';
@@ -12,7 +17,7 @@ type PlatformOperatorLoginPageProps = {
   readonly searchParams: Promise<{ readonly next?: string; readonly error?: string }>;
 };
 
-// หน้าเข้าสู่ระบบของบริษัทผู้ให้บริการแพลตฟอร์ม: แยกจากผู้ขอรับรองและเจ้าหน้าที่กรม เข้าด้วย ThaID อย่างเดียว
+// หน้าเข้าสู่ระบบของบริษัทผู้ให้บริการแพลตฟอร์ม: โครงเดียวกับหน้าสาธารณะ แต่มีทางเข้าเดียวคือ ThaID
 // (คนของบริษัทไม่ใช่ผู้รับบริการและไม่ใช่เจ้าหน้าที่สาธารณสุข จึงไม่ใช้ Health ID / Provider ID)
 export default async function PlatformOperatorLoginPage({
   searchParams,
@@ -28,52 +33,47 @@ export default async function PlatformOperatorLoginPage({
   const providersConfigured = identityProvidersConfigured();
   const query = new URLSearchParams({ intent: LoginIntent.PLATFORM_OPERATOR_STAFF });
   if (nextPath) query.set('next', nextPath);
+  const login = messages.login;
   const errorMessage =
     error === 'displayName'
-      ? messages.login.displayNameRequired
+      ? login.displayNameRequired
       : error === 'role'
-        ? messages.login.roleRequired
+        ? login.roleRequired
         : undefined;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6 py-12">
-      <header className="space-y-1">
-        <p className="inline-flex rounded-full bg-navy px-3 py-1 text-sm font-bold text-white">
-          {messages.appName}
+    <IdentityShell>
+      <IdentityCard>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold text-navy">{login.platformOperatorTitle}</h1>
+          <p className="text-sm leading-relaxed text-muted">{login.platformOperatorLead}</p>
+        </div>
+        <ThaidButton href={`/auth/thaid/start?${query.toString()}`} enabled={providersConfigured} />
+        <p className="text-center text-[13px] text-muted">
+          {login.platformOperatorNotYou}{' '}
+          <Link href={PUBLIC_LOGIN_PATH} className="font-semibold text-leaf underline">
+            {login.title}
+          </Link>
         </p>
-        <h1 className="text-2xl font-bold text-navy">{messages.login.platformOperatorTitle}</h1>
-        <p className="text-sm leading-relaxed text-muted">{messages.login.platformOperatorLead}</p>
-      </header>
+      </IdentityCard>
 
-      <section className="rounded-xl border border-border bg-surface p-5 shadow-card">
-        <IdentityProviderButton
-          href={`/auth/thaid/start?${query.toString()}`}
-          label={messages.login.thaid}
-          enabled={providersConfigured}
-          tone="primary"
-        />
-        {providersConfigured ? null : (
-          <p role="status" className="mt-3 text-sm leading-relaxed text-quiet">
-            {messages.login.notConfigured}
-          </p>
-        )}
-      </section>
-
-      <p className="text-sm text-muted">
-        {messages.login.platformOperatorNotYou}{' '}
-        <Link href={PUBLIC_LOGIN_PATH} className="font-semibold text-leaf underline">
-          {messages.login.title}
-        </Link>
-      </p>
+      {providersConfigured ? null : (
+        <IdentityFootnote>
+          <span role="status">{login.notConfigured}</span>
+        </IdentityFootnote>
+      )}
+      <IdentityFootnote>{login.noPasswordNote}</IdentityFootnote>
 
       {devLoginEnabled ? (
-        <DevLoginForm
-          sides={[RoleSide.PLATFORM_OPERATOR]}
-          defaultRole={UserRole.PLATFORM_OPERATOR_ADMIN}
-          next={nextPath}
-          errorMessage={errorMessage}
-        />
+        <div className="w-full max-w-[560px]">
+          <DevLoginForm
+            sides={[RoleSide.PLATFORM_OPERATOR]}
+            defaultRole={UserRole.PLATFORM_OPERATOR_ADMIN}
+            next={nextPath}
+            errorMessage={errorMessage}
+          />
+        </div>
       ) : null}
-    </main>
+    </IdentityShell>
   );
 }
