@@ -31,6 +31,10 @@ jobs:
       GACP_ENV: test
       GACP_DATABASE_URL: postgresql://gacp:gacp@localhost:5432/gacp_test
       GACP_DATABASE_DIRECT_URL: postgresql://gacp:gacp@localhost:5432/gacp_test
+      GACP_SESSION_SECRET: ci-only-session-secret-not-used-outside-github-actions
+      GACP_DATA_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      GACP_DATA_HMAC_KEY: ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+      GACP_STORAGE_DRIVER: local
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
