@@ -14,15 +14,15 @@ const BASE_CLASS_NAME =
   'flex h-[50px] w-full items-center justify-center gap-3 rounded-md px-5 text-[15px] font-bold transition-opacity';
 
 // ปุ่มพาไปผู้ให้บริการยืนยันตัวตน: สีและโลโก้ตามเจ้าของบัญชี (Health ID, ThaID, Provider ID)
-// เมื่อยังไม่ตั้งค่า client แสดงเป็นปุ่มปิด (ไม่ใช่ลิงก์) พร้อมคำอธิบายจากหน้าที่เรียก
+// เมื่อยังไม่ตั้งค่า client แสดงเป็นปุ่มปิด (ไม่ใช่ลิงก์ สีเดิมแต่จาง) พร้อมคำอธิบายจากหน้าที่เรียก
 function IdentityButton({ href, label, enabled, brandClassName, logo }: IdentityButtonProps) {
   if (!enabled) {
     return (
       <span
         aria-disabled="true"
-        className={`${BASE_CLASS_NAME} cursor-not-allowed border border-border-soft bg-paper text-quiet`}
+        className={`${BASE_CLASS_NAME} cursor-not-allowed text-white opacity-50 ${brandClassName}`}
       >
-        <span className="opacity-40 grayscale">{logo}</span>
+        {logo}
         <span>{label}</span>
       </span>
     );
@@ -92,7 +92,7 @@ export function ProviderIdButton({ href, enabled }: ProviderButtonProps) {
           alt=""
           width={64}
           height={28}
-          className={`h-7 w-auto ${enabled ? 'brightness-0 invert' : ''}`}
+          className="h-7 w-auto brightness-0 invert"
         />
       }
     />
