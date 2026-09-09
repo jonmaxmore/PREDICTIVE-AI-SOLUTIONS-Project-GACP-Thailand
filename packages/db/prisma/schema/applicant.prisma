@@ -15,21 +15,22 @@ enum ApplicantMemberRole {
 
 // ผู้ขอรับรอง = นิติฐานะผู้ถือใบรับรอง (กทล.1 ส่วนที่ ๑) ชื่อที่นี่คือชื่อที่พิมพ์บน กทล.1 ใบเสร็จ และใบรับรอง
 model Applicant {
+  // ร่างคำขอสร้าง Applicant ก่อนกรอกครบ ช่องจึงว่างได้ ความครบถ้วนตัดสินที่ขั้นที่ 6 ด้วย requiredApplicantFields()
   id                  String        @id @default(uuid()) @db.Uuid
   type                ApplicantType
-  legalName           String        @map("legal_name")
+  legalName           String?       @map("legal_name")
   registrationNumber  String?       @map("registration_number") // เลขทะเบียนนิติบุคคล หรือรหัสทะเบียน สวช.01
   representativeName  String?       @map("representative_name") // ผู้มีอำนาจลงนาม หรือประธานวิสาหกิจ
   nationality         String?
   nationalIdEncrypted String?       @map("national_id_encrypted") // เลขบัตรของบุคคล/ประธาน เข้ารหัสไว้ ถอดเฉพาะตอนพิมพ์ กทล.1
   nationalIdHmac      String?       @map("national_id_hmac")
   houseRegistrationNo String?       @map("house_registration_no") // เลขรหัสประจำบ้าน (วิสาหกิจชุมชน)
-  addressLine         String        @map("address_line")
-  subdistrict         String
-  district            String
-  province            String
-  postalCode          String        @map("postal_code")
-  mobilePhone         String        @map("mobile_phone")
+  addressLine         String?       @map("address_line")
+  subdistrict         String?
+  district            String?
+  province            String?
+  postalCode          String?       @map("postal_code")
+  mobilePhone         String?       @map("mobile_phone")
   email               String?
   lineId              String?       @map("line_id")
   createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -61,12 +62,12 @@ model ApplicantMember {
 model Site {
   id          String   @id @default(uuid()) @db.Uuid
   applicantId String   @map("applicant_id") @db.Uuid
-  name        String
-  addressLine String   @map("address_line")
-  subdistrict String
-  district    String
-  province    String
-  postalCode  String   @map("postal_code")
+  name        String? // = Applicant.legalName เสมอ (หลักการข้อ 4) เติมเมื่อผู้ขอรับรองกรอกชื่อ
+  addressLine String?  @map("address_line")
+  subdistrict String?
+  district    String?
+  province    String?
+  postalCode  String?  @map("postal_code")
   phone       String?
   latitude    Decimal? @db.Decimal(9, 6)
   longitude   Decimal? @db.Decimal(9, 6)
@@ -85,8 +86,8 @@ model Site {
 model LandParcel {
   id               String   @id @default(uuid()) @db.Uuid
   siteId           String   @map("site_id") @db.Uuid
-  documentType     String   @map("document_type") // ประเภทเอกสารสิทธิ์ตามที่ผู้ยื่นกรอก เช่น โฉนดที่ดิน น.ส.3 ก.
-  documentNumber   String   @map("document_number")
+  documentType     String?  @map("document_type") // ประเภทเอกสารสิทธิ์ตามที่ผู้ยื่นกรอก เช่น โฉนดที่ดิน น.ส.3 ก.
+  documentNumber   String?  @map("document_number")
   volume           String?
   page             String?
   issuedBy         String?  @map("issued_by")

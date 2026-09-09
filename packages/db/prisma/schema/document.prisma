@@ -1,0 +1,54 @@
+// เอกสารแนบของคำขอ หนึ่งช่องรับได้หลายไฟล์ตาม DocumentSlot.maxFiles ไฟล์ที่ถูกลบคงแถวไว้เป็นประวัติ (removed_at)
+
+enum LicenseDeclarationStatus {
+  HAVE
+  APPLIED
+  NONE
+
+  @@map("license_declaration_status")
+}
+
+model ApplicationDocument {
+  id            String           @id @default(uuid()) @db.Uuid
+  applicationId String           @map("application_id") @db.Uuid
+  slotCode      DocumentSlotCode @map("slot_code")
+  version       Int // เลขลำดับต่อช่อง เพิ่มทุกครั้งที่อัปโหลดเข้าช่องนี้
+  fileKey       String           @unique @map("file_key") // key สุ่มในที่เก็บไฟล์ ไม่ใช่ชื่อไฟล์ของผู้ใช้
+  fileName      String           @map("file_name")
+  mimeType      String           @map("mime_type") // ชนิดที่ตรวจจากเนื้อไฟล์จริง
+  byteSize      Int              @map("byte_size")
+  sha256        String
+  issuedOn      DateTime?        @map("issued_on") @db.Date
+  uploadedById  String           @map("uploaded_by_id") @db.Uuid
+  uploadedAt    DateTime         @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  removedAt     DateTime?        @map("removed_at") @db.Timestamptz(6)
+  removedById   String?          @map("removed_by_id") @db.Uuid
+
+  application Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  slot        DocumentSlot @relation(fields: [slotCode], references: [code])
+
+  @@index([applicationId, slotCode])
+  @@map("application_documents")
+}
+
+// สถานะใบอนุญาตสมุนไพรควบคุมที่ผู้ยื่นแจ้งต่อช่อง: แนบใบอนุญาตแล้ว / ยื่นคำขอแล้วรอผล / ยังไม่ได้ยื่น
+model LicenseStatusDeclaration {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  applicationId      String                   @map("application_id") @db.Uuid
+  slotCode           DocumentSlotCode         @map("slot_code")
+  status             LicenseDeclarationStatus
+  licenseNumber      String?                  @map("license_number")
+  issuedOn           DateTime?                @map("issued_on") @db.Date
+  expiresOn          DateTime?                @map("expires_on") @db.Date
+  receiptNumber      String?                  @map("receipt_number") // เลขรับคำขอจากหน่วยงาน
+  filedWithTh        String?                  @map("filed_with_th") // หน่วยงานที่ยื่น เช่น สสจ.เชียงใหม่
+  filedOn            DateTime?                @map("filed_on") @db.Date
+  expectedDecisionOn DateTime?                @map("expected_decision_on") @db.Date
+  updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  application Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  slot        DocumentSlot @relation(fields: [slotCode], references: [code])
+
+  @@unique([applicationId, slotCode])
+  @@map("license_status_declarations")
+}

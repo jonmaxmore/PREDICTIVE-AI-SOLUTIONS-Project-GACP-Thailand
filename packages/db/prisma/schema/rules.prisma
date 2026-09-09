@@ -132,7 +132,9 @@ model DocumentSlot {
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  requirementRules DocumentRequirementRule[]
+  requirementRules    DocumentRequirementRule[]
+  documents           ApplicationDocument[]
+  licenseDeclarations LicenseStatusDeclaration[]
 
   @@map("document_slots")
 }
