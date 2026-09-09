@@ -228,7 +228,7 @@ model CertificateTerm {
   @@map("certificate_terms")
 }
 
-// วันหยุดราชการ ใช้คำนวณวันทำการ (กำหนดส่งเอกสารเพิ่ม) SYSTEM_ADMIN ดูแลรายปี
+// วันหยุดราชการ ใช้คำนวณวันทำการ (กำหนดส่งเอกสารเพิ่ม) CERTIFICATION_BODY_ADMIN ดูแลรายปี
 model PublicHoliday {
   date   DateTime @id @db.Date
   nameTh String   @map("name_th")

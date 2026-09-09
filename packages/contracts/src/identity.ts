@@ -17,7 +17,7 @@ export const thaidIdentityClaimsSchema = z.object({
 });
 export type ThaidIdentityClaims = z.infer<typeof thaidIdentityClaimsSchema>;
 
-// สังกัดหนึ่งรายการจาก profile ของ Provider ID (MOPH เรียกหน่วยงานว่า organization เราเรียก agency ตาม glossary)
+// สังกัดหนึ่งรายการจาก profile ของ Provider ID (MOPH เรียกหน่วยงานว่า organization เราเรียก agency ตาม glossary) glossary-allow ชื่อ field ของ MOPH
 export const providerAffiliationSchema = z.object({
   businessId: z.string().min(1),
   agencyCode: z.string().min(1).nullable(),

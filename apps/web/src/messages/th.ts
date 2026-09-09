@@ -11,6 +11,7 @@ import {
   PlantMaterialKind,
   Purpose,
   RequestType,
+  RoleSide,
   SopSubItemCode,
   UserRole,
 } from '@gacp/contracts';
@@ -162,22 +163,36 @@ export const uploadRejectionMessages: Record<UploadRejectionCode, string> = {
 
 export const roleLabels: Record<UserRole, string> = {
   [UserRole.APPLICANT]: 'ผู้ขอรับรอง',
-  [UserRole.FINANCE_OFFICER]: 'เจ้าหน้าที่การเงิน',
-  [UserRole.DISPATCHER]: 'ผู้จัดคิวงาน',
   [UserRole.DOCUMENT_REVIEWER]: 'ผู้ตรวจเอกสาร',
+  [UserRole.DISPATCHER]: 'ผู้จัดคิวงาน',
   [UserRole.FIELD_INSPECTOR]: 'ผู้ตรวจประเมินแปลง',
   [UserRole.CERTIFICATE_APPROVER]: 'ผู้อนุมัติออกใบรับรอง',
-  [UserRole.SYSTEM_ADMIN]: 'ผู้ดูแลระบบ',
+  [UserRole.CERTIFICATION_BODY_ADMIN]: 'ผู้ดูแลระบบของกรม',
+  [UserRole.CERTIFICATION_BODY_FINANCE_OFFICER]: 'เจ้าหน้าที่การเงินของกรม',
+  [UserRole.PLATFORM_OPERATOR_ADMIN]: 'ผู้ดูแลระบบของบริษัท',
+  [UserRole.PLATFORM_OPERATOR_FINANCE_OFFICER]: 'เจ้าหน้าที่การเงินของบริษัท',
+};
+
+export const roleSideLabels: Record<RoleSide, string> = {
+  [RoleSide.APPLICANT]: 'ผู้ขอรับรอง',
+  [RoleSide.CERTIFICATION_BODY]: 'เจ้าหน้าที่กรม',
+  [RoleSide.PLATFORM_OPERATOR]: 'บริษัทผู้ให้บริการแพลตฟอร์ม',
 };
 
 export const roleHomeIntro: Record<UserRole, string> = {
   [UserRole.APPLICANT]: 'คำขอรับรอง GACP ของคุณและการชำระเงินจะอยู่ที่นี่',
-  [UserRole.FINANCE_OFFICER]: 'ยอดรับชำระ ใบเสร็จ และการคืนเงิน ดูยอดเท่านั้น ไม่มีปุ่มเปลี่ยนสถานะคำขอ',
-  [UserRole.DISPATCHER]: 'คิวคำขอที่รอมอบให้ผู้ตรวจเอกสารและผู้ตรวจประเมินแปลง',
   [UserRole.DOCUMENT_REVIEWER]: 'เคสที่ได้รับมอบให้ตรวจเอกสารตามแบบ กทล.1 รายช่อง',
+  [UserRole.DISPATCHER]: 'คิวคำขอที่รอมอบให้ผู้ตรวจเอกสารและผู้ตรวจประเมินแปลง',
   [UserRole.FIELD_INSPECTOR]: 'นัดตรวจและบันทึกหลักฐาน ณ แปลงปลูก',
   [UserRole.CERTIFICATE_APPROVER]: 'รายงานตรวจที่รอการอนุมัติออกใบรับรอง',
-  [UserRole.SYSTEM_ADMIN]: 'ผู้ใช้ บทบาท และกติกาที่เป็นข้อมูล (ไม่มีสิทธิ์เงินและการตัดสินคำขอ)',
+  [UserRole.CERTIFICATION_BODY_ADMIN]:
+    'บทบาทเจ้าหน้าที่กรม สังกัดที่รับเป็นเจ้าหน้าที่ และบันทึกการเข้าถึงเอกสาร (ไม่มีสิทธิ์เงินและการตัดสินคำขอ)',
+  [UserRole.CERTIFICATION_BODY_FINANCE_OFFICER]:
+    'ค่าธรรมเนียมส่วนของกรมที่เก็บได้ และการยืนยันรับงวดนำส่ง ดูอย่างเดียว',
+  [UserRole.PLATFORM_OPERATOR_ADMIN]:
+    'รายชื่อพนักงานบริษัท บทบาทฝั่งบริษัท และการตั้งผู้ดูแลระบบให้กรม (ไม่มีสิทธิ์เงินและการตัดสินคำขอ)',
+  [UserRole.PLATFORM_OPERATOR_FINANCE_OFFICER]:
+    'ยอดรับชำระ ใบเสร็จ การคืนเงิน และงวดนำส่งค่าธรรมเนียมให้กรม ไม่มีปุ่มเปลี่ยนสถานะคำขอ',
 };
 
 export const messages = {
@@ -185,16 +200,50 @@ export const messages = {
   appTagline: 'ระบบรับรองมาตรฐานแหล่งผลิต เก็บเกี่ยว และแปรรูปพืชกัญชา',
   login: {
     title: 'เข้าสู่ระบบ',
-    thaidNotReady:
-      'การเข้าสู่ระบบด้วย ThaID และหมอพร้อมยังไม่เปิดใช้ ระบบรอการเชื่อมต่อจากหน่วยงานผู้ให้บริการยืนยันตัวตน',
+    applicantTitle: 'ผู้ขอรับรอง',
+    applicantLead: 'ใช้บัญชี Health ID ของหมอพร้อม หรือ ThaID ของกรมการปกครอง ระบบไม่เก็บรหัสผ่านของคุณ',
+    healthId: 'เข้าสู่ระบบด้วย Health ID',
+    thaid: 'เข้าสู่ระบบด้วย ThaID',
+    staffTitle: 'สำหรับเจ้าหน้าที่กรม',
+    staffLead: 'ใช้บัญชี Health ID ที่มี Provider ID ในสังกัดที่กรมอนุญาต',
+    providerId: 'เข้าด้วย Provider ID',
+    notConfigured:
+      'ยังไม่ได้เชื่อมต่อผู้ให้บริการยืนยันตัวตนบนเครื่องนี้ (รอ client จากสำนักสุขภาพดิจิทัลและกรมการปกครอง)',
+    platformOperatorTitle: 'บริษัทผู้ให้บริการแพลตฟอร์ม',
+    platformOperatorLead: 'สำหรับพนักงานบริษัทที่อยู่ในรายชื่อเท่านั้น เข้าสู่ระบบด้วย ThaID',
+    platformOperatorNotYou: 'ผู้ขอรับรองและเจ้าหน้าที่กรมเข้าสู่ระบบที่หน้าเข้าสู่ระบบหลัก',
     devTitle: 'เข้าสู่ระบบแบบทดสอบ (เฉพาะเครื่องพัฒนา)',
-    devDescription: 'เลือกบทบาทเพื่อดูหน้าจอของบทบาทนั้น ไม่มีการตรวจสอบตัวตนจริง และเปิดใช้ไม่ได้ใน production',
+    devDescription:
+      'เลือกบทบาทเพื่อดูหน้าจอของบทบาทนั้น ระบบสร้างเครดิตของฝั่งนั้นให้ ไม่มีการตรวจสอบตัวตนจริง และเปิดใช้ไม่ได้ใน production',
     displayNameLabel: 'ชื่อที่จะแสดง',
     displayNamePlaceholder: 'เช่น สมพร ตัวอย่างดี',
     roleLabel: 'บทบาท',
     submit: 'เข้าสู่ระบบ',
     displayNameRequired: 'กรุณากรอกชื่อที่จะแสดง แล้วลองอีกครั้ง',
     roleRequired: 'กรุณาเลือกบทบาท แล้วลองอีกครั้ง',
+  },
+  signInOutcome: {
+    NOT_PROVIDER: {
+      title: 'บัญชีนี้ไม่มี Provider ID',
+      body: 'บัญชี Health ID ของคุณยังไม่ได้รับ Provider ID จากหน่วยงาน สมัครที่ provider.id.th โดยให้หน่วยงานรับรอง แล้วกลับมาเข้าใหม่ ระหว่างนี้คุณใช้ระบบในฐานะผู้ขอรับรองได้',
+    },
+    AGENCY_NOT_AUTHORIZED: {
+      title: 'สังกัดของคุณยังไม่อยู่ในรายการของกรม',
+      body: 'Provider ID ของคุณใช้ได้ แต่สังกัดยังไม่ได้รับอนุญาตให้เป็นเจ้าหน้าที่กรมในระบบนี้ ติดต่อผู้ดูแลระบบของกรมเพื่อเพิ่มสังกัด',
+    },
+    NOT_MEMBER: {
+      title: 'คุณไม่อยู่ในรายชื่อพนักงานบริษัท',
+      body: 'เข้าฝั่งบริษัทได้เฉพาะคนที่ผู้ดูแลระบบของบริษัทเพิ่มไว้ ติดต่อผู้ดูแลระบบของบริษัท',
+    },
+    NO_ROLE_YET: {
+      title: 'ยืนยันตัวตนสำเร็จ รอการมอบบทบาท',
+      body: 'ระบบรู้จักคุณแล้ว แต่ผู้ดูแลระบบยังไม่ได้มอบบทบาท เมื่อได้รับบทบาทแล้วให้เข้าสู่ระบบอีกครั้ง',
+    },
+    STATE_MISMATCH: {
+      title: 'การเข้าสู่ระบบไม่สมบูรณ์',
+      body: 'ลิงก์หมดอายุหรือถูกเปิดจากอุปกรณ์อื่น กรุณาเริ่มเข้าสู่ระบบใหม่',
+    },
+    backToLogin: 'กลับหน้าเข้าสู่ระบบ',
   },
   shell: {
     signedInAs: 'เข้าสู่ระบบในนาม',

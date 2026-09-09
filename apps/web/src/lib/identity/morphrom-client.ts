@@ -165,13 +165,13 @@ export class HttpMorphromClient implements MorphromClient {
       throw new MorphromRequestError('provider profile', profileResponse.status);
     }
     const raw = rawProfileSchema.parse(await profileResponse.json()).data;
+    const rawAffiliations = raw.organization; // glossary-allow field ของ MOPH
     const profile = morphromProviderProfileSchema.parse({
       accountId: raw.account_id,
       hashCid: raw.hash_cid ?? null,
       providerId: raw.provider_id,
       nameTh: raw.name_th ?? null,
-      affiliations: raw.organization.map((entry) => ({
-        // glossary-allow field ของ MOPH
+      affiliations: rawAffiliations.map((entry) => ({
         businessId: entry.business_id,
         agencyCode: entry.hcode ?? null,
         agencyNameTh: entry.hname_th ?? null,

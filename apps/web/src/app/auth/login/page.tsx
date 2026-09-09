@@ -1,21 +1,38 @@
-import { readEnv, UserRole } from '@gacp/contracts';
+import { LoginIntent, RoleSide, readEnv, UserRole } from '@gacp/contracts';
 import { redirect } from 'next/navigation';
+import { DevLoginForm } from '@/components/dev-login-form.tsx';
+import { IdentityProviderButton } from '@/components/identity-provider-button.tsx';
 import { currentSession } from '@/lib/current-session.ts';
+import { identityProvidersConfigured } from '@/lib/identity/identity-clients.ts';
 import { roleHomePath } from '@/lib/roles.ts';
-import { messages, roleLabels } from '@/messages/th.ts';
-import { devLogin } from './actions.ts';
+import { messages } from '@/messages/th.ts';
 
 type LoginPageProps = {
   readonly searchParams: Promise<{ readonly next?: string; readonly error?: string }>;
 };
 
+function safeNext(next: string | undefined): string | undefined {
+  return next?.startsWith('/') && !next.startsWith('//') ? next : undefined;
+}
+
+// URL เริ่มล็อกอินกับผู้ให้บริการยืนยันตัวตน: บอกฝั่งที่ตั้งใจเข้า (intent) และหน้าที่จะกลับไป (next)
+function startPath(provider: 'thaid' | 'morphrom', intent: LoginIntent, next: string | undefined) {
+  const query = new URLSearchParams({ intent });
+  if (next) query.set('next', next);
+  return `/auth/${provider}/start?${query.toString()}`;
+}
+
+// หน้าเข้าสู่ระบบสาธารณะ: ผู้ขอรับรอง (Health ID หรือ ThaID) และเจ้าหน้าที่กรม (Health ID ที่มี Provider ID)
+// พนักงานบริษัทมีหน้าของตัวเองที่ /platform-operator/login
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const session = await currentSession();
   const firstRole = session?.roles[0];
   if (firstRole) redirect(roleHomePath(firstRole));
 
   const { next, error } = await searchParams;
+  const nextPath = safeNext(next);
   const devLoginEnabled = readEnv().GACP_AUTH_DEV_LOGIN_ENABLED;
+  const providersConfigured = identityProvidersConfigured();
   const errorMessage =
     error === 'displayName'
       ? messages.login.displayNameRequired
@@ -34,57 +51,50 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       </header>
 
       <section className="rounded-xl border border-border bg-surface p-5 shadow-card">
-        <p className="text-sm leading-relaxed text-ink-soft">{messages.login.thaidNotReady}</p>
+        <h2 className="text-lg font-bold text-ink">{messages.login.applicantTitle}</h2>
+        <p className="mt-1 text-sm leading-relaxed text-muted">{messages.login.applicantLead}</p>
+        <div className="mt-4 flex flex-col gap-3">
+          <IdentityProviderButton
+            href={startPath('morphrom', LoginIntent.APPLICANT, nextPath)}
+            label={messages.login.healthId}
+            enabled={providersConfigured}
+            tone="primary"
+          />
+          <IdentityProviderButton
+            href={startPath('thaid', LoginIntent.APPLICANT, nextPath)}
+            label={messages.login.thaid}
+            enabled={providersConfigured}
+            tone="secondary"
+          />
+        </div>
       </section>
 
+      <section className="rounded-xl border border-officer-tint bg-surface p-5 shadow-card">
+        <h2 className="text-lg font-bold text-officer">{messages.login.staffTitle}</h2>
+        <p className="mt-1 text-sm leading-relaxed text-muted">{messages.login.staffLead}</p>
+        <div className="mt-4">
+          <IdentityProviderButton
+            href={startPath('morphrom', LoginIntent.CERTIFICATION_BODY_STAFF, nextPath)}
+            label={messages.login.providerId}
+            enabled={providersConfigured}
+            tone="secondary"
+          />
+        </div>
+      </section>
+
+      {providersConfigured ? null : (
+        <p role="status" className="text-sm leading-relaxed text-quiet">
+          {messages.login.notConfigured}
+        </p>
+      )}
+
       {devLoginEnabled ? (
-        <section className="rounded-xl border border-warning-tint bg-surface p-5 shadow-card">
-          <h2 className="text-base font-bold text-warning">{messages.login.devTitle}</h2>
-          <p className="mt-1 text-sm text-muted">{messages.login.devDescription}</p>
-          <form action={devLogin} className="mt-4 flex flex-col gap-4">
-            <input type="hidden" name="next" value={next ?? ''} />
-            <label className="flex flex-col gap-1 text-sm font-semibold">
-              {messages.login.displayNameLabel}
-              <input
-                name="displayName"
-                required
-                minLength={1}
-                maxLength={120}
-                placeholder={messages.login.displayNamePlaceholder}
-                className="h-11 rounded-md border border-border bg-surface px-3 font-normal"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-semibold">
-              {messages.login.roleLabel}
-              <select
-                name="role"
-                required
-                defaultValue={UserRole.APPLICANT}
-                className="h-11 rounded-md border border-border bg-surface px-3 font-normal"
-              >
-                {Object.values(UserRole).map((role) => (
-                  <option key={role} value={role}>
-                    {roleLabels[role]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {errorMessage ? (
-              <p
-                role="alert"
-                className="rounded-md bg-danger-tint px-3 py-2 text-sm font-semibold text-danger"
-              >
-                {errorMessage}
-              </p>
-            ) : null}
-            <button
-              type="submit"
-              className="h-12 rounded-md bg-leaf px-6 font-bold text-white shadow-button transition-colors hover:bg-leaf-hover"
-            >
-              {messages.login.submit}
-            </button>
-          </form>
-        </section>
+        <DevLoginForm
+          sides={[RoleSide.APPLICANT, RoleSide.CERTIFICATION_BODY, RoleSide.PLATFORM_OPERATOR]}
+          defaultRole={UserRole.APPLICANT}
+          next={nextPath}
+          errorMessage={errorMessage}
+        />
       ) : null}
     </main>
   );

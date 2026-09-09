@@ -14,7 +14,7 @@ export const certificateTermSeeds: readonly CertificateTerm[] = [
   },
 ];
 
-// วันหยุดราชการ พ.ศ. 2569 ฉบับร่างตามประกาศทั่วไป SYSTEM_ADMIN ปรับตามประกาศคณะรัฐมนตรีประจำปี
+// วันหยุดราชการ พ.ศ. 2569 ฉบับร่างตามประกาศทั่วไป CERTIFICATION_BODY_ADMIN ปรับตามประกาศคณะรัฐมนตรีประจำปี
 // วันหยุดที่ตกเสาร์อาทิตย์ ระบบชดเชยให้เองผ่าน substituteHolidays()
 export const publicHolidaySeeds: readonly PublicHoliday[] = [
   { date: '2026-01-01', nameTh: 'วันขึ้นปีใหม่' },

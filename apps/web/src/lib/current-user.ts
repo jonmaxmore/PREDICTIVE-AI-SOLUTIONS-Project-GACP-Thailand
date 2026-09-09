@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { currentSession } from './current-session.ts';
 import { database } from './database.ts';
 import { hmacField } from './protected-fields.ts';
+import { loginPathForPathname } from './roles.ts';
 import type { SessionPayload } from './session.ts';
 
 export type CurrentUser = {
@@ -16,7 +17,7 @@ export type CurrentUser = {
 // subject ใน session มีรูป "<provider>:<id>" เก็บลงฐานข้อมูลเป็น HMAC เท่านั้น
 function providerOf(subject: string): IdentityProvider {
   if (subject.startsWith('thaid:')) return IdentityProvider.THAID;
-  if (subject.startsWith('morphrom:')) return IdentityProvider.MORPHROM;
+  if (subject.startsWith('morphrom_health_id:')) return IdentityProvider.MORPHROM_HEALTH_ID;
   return IdentityProvider.DEV_LOCAL;
 }
 
@@ -56,7 +57,7 @@ export async function currentUser(): Promise<CurrentUser | undefined> {
 // ใช้ในหน้าและ Server Action ของบทบาทนั้น: ไม่มี session → ไปหน้า login, บทบาทไม่ตรง → /forbidden
 export async function requireUserWithRole(role: UserRole, nextPath: string): Promise<CurrentUser> {
   const user = await currentUser();
-  if (!user) redirect(`/auth/login?next=${encodeURIComponent(nextPath)}`);
+  if (!user) redirect(`${loginPathForPathname(nextPath)}?next=${encodeURIComponent(nextPath)}`);
   if (!user.roles.includes(role)) redirect('/forbidden');
   return user;
 }

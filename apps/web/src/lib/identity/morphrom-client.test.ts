@@ -2,6 +2,16 @@
 import { describe, expect, it } from 'vitest';
 import { HttpMorphromClient } from './morphrom-client.ts';
 
+// สังกัดตัวอย่างในรูปที่ MOPH ส่งกลับ
+const mophAffiliation = {
+  business_id: '9876',
+  hcode: '12345',
+  hname_th: 'กรมการแพทย์แผนไทยและการแพทย์ทางเลือก',
+  position: 'นักวิชาการ',
+  position_type: 'นักวิชาการ',
+  license_id: null,
+};
+
 const options = {
   healthIdBaseUrl: 'https://uat-moph.id.th',
   healthIdClientId: 'health-client',
@@ -100,17 +110,7 @@ describe('HttpMorphromClient', () => {
               hash_cid: 'abc',
               provider_id: '0111111111X21',
               name_th: 'หมอพร้อม สงบสุข',
-              // glossary-allow field ของ MOPH
-              organization: [
-                {
-                  business_id: '9876',
-                  hcode: '12345',
-                  hname_th: 'กรมการแพทย์แผนไทยและการแพทย์ทางเลือก',
-                  position: 'นักวิชาการ',
-                  position_type: 'นักวิชาการ',
-                  license_id: null,
-                },
-              ],
+              organization: [mophAffiliation], // glossary-allow field ของ MOPH
             },
           }),
       }),
