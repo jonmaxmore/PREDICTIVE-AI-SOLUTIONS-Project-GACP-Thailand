@@ -1,0 +1,235 @@
+// กฎเป็นข้อมูล (แผน §1.2 ข้อ 3): ช่องเอกสาร กฎเอกสารบังคับ ตารางอัตรา รายการตรวจแปลง อายุใบรับรอง วันหยุดราชการ
+// ทุกตารางที่มีผลทางกติกามีวันมีผล (effective_from/effective_to) และ append-only ไม่แก้แถวเดิม
+
+enum DocumentSlotCode {
+  NATIONAL_ID_COPY
+  HOUSE_REGISTRATION_COPY
+  COMMUNITY_ENTERPRISE_REGISTRATION
+  COMMUNITY_MEMBER_LIST
+  COMMUNITY_ASSIGNMENT_LETTER
+  PRODUCER_SUPERVISION_LETTER
+  JURISTIC_REGISTRATION
+  JURISTIC_DIRECTOR_LIST
+  JURISTIC_AUTHORITY_LETTER
+  POWER_OF_ATTORNEY
+  POA_GRANTOR_ID_COPY
+  LAND_RIGHTS_DOCUMENT
+  LANDLORD_CONSENT_LETTER
+  SITE_MAP_WITH_COORDINATES
+  BUILDING_PLAN_AND_PHOTOS
+  FIELD_AND_SURROUNDINGS_PHOTOS
+  PRODUCTION_SITE_PHOTOS
+  PRODUCTION_AND_UTILISATION_PLAN
+  SECURITY_MEASURES_PLAN
+  RESIDUE_UTILISATION_PLAN
+  SOP_MANUAL
+  CONTROLLED_HERB_LICENSE_RESEARCH
+  CONTROLLED_HERB_LICENSE_EXPORT
+  CONTROLLED_HERB_LICENSE_COMMERCIAL
+  PREVIOUS_CERTIFICATE_ORIGINAL
+  RENEWAL_CULTIVATION_PLAN
+  RENEWAL_UTILISATION_PLAN
+  OPERATION_SUMMARY_REPORT
+  POLICE_REPORT
+  DAMAGED_CERTIFICATE
+  WATER_TEST_RESULT
+  SOIL_TEST_RESULT
+  LAB_CERTIFICATE
+  ADDITIONAL_DOCUMENTS
+  KATORLOR1_GENERATED
+
+  @@map("document_slot_code")
+}
+
+enum DocumentSlotGroup {
+  IDENTITY
+  QUALIFICATION
+  POWER_OF_ATTORNEY
+  LAND_AND_SITE
+  PLANS
+  CONTROLLED_HERB_LICENSE
+  RENEWAL
+  REPLACEMENT
+  OPTIONAL
+  GENERATED
+
+  @@map("document_slot_group")
+}
+
+enum SopSubItemCode {
+  SITE_PREPARATION
+  PLANTING
+  CROP_CARE
+  PEST_MANAGEMENT
+  FERTILISER_AND_SOIL_AMENDMENT
+  HARVEST
+  STORAGE
+  PRIMARY_PROCESSING
+  PERSONNEL_HYGIENE
+  TRACEABILITY
+  SITE_SANITATION
+
+  @@map("sop_sub_item_code")
+}
+
+enum RequirementLevel {
+  REQUIRED
+  OPTIONAL
+
+  @@map("requirement_level")
+}
+
+enum FeeStage {
+  DOCUMENT_REVIEW
+  ONSITE_INSPECTION
+
+  @@map("fee_stage")
+}
+
+enum FeeBasis {
+  PER_CULTIVATION_FORMAT
+  PER_APPLICATION
+
+  @@map("fee_basis")
+}
+
+enum InspectionChecklistCategory {
+  SITE_AND_ENVIRONMENT
+  WATER
+  PLANTING_MATERIAL
+  CULTIVATION_PRACTICE
+  FERTILISER_AND_SOIL
+  PLANT_PROTECTION
+  HARVEST
+  POST_HARVEST_AND_PRIMARY_PROCESSING
+  PACKAGING_AND_LABELLING
+  STORAGE_AND_TRANSPORT
+  PERSONNEL_HYGIENE
+  FACILITIES_AND_EQUIPMENT
+  DOCUMENTATION_AND_TRACEABILITY
+  SECURITY_AND_ACCESS_CONTROL
+
+  @@map("inspection_checklist_category")
+}
+
+// นิยามช่องเอกสาร หนึ่งช่อง = หนึ่งเอกสารที่กรมติ๊ก พร้อมคำอธิบายและวิธีขอ
+model DocumentSlot {
+  code               DocumentSlotCode  @id
+  group              DocumentSlotGroup
+  formStep           Int               @map("form_step")
+  sortOrder          Int               @map("sort_order")
+  labelTh            String            @map("label_th")
+  whatIsItTh         String            @map("what_is_it_th")
+  howToObtainTh      String?           @map("how_to_obtain_th")
+  acceptedMimeTypes  String[]          @map("accepted_mime_types")
+  maxFiles           Int               @map("max_files")
+  maxFileBytes       Int               @map("max_file_bytes")
+  requiresIssuedDate Boolean           @map("requires_issued_date")
+  issuedWithinDays   Int?              @map("issued_within_days")
+  isLicense          Boolean           @map("is_license")
+  subItemCodes       SopSubItemCode[]  @map("sub_item_codes")
+  isSystemGenerated  Boolean           @map("is_system_generated")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  requirementRules DocumentRequirementRule[]
+
+  @@map("document_slots")
+}
+
+// กฎเอกสารบังคับ มิติที่เป็น list ว่าง = ใช้กับทุกค่า (ตรงกับ null ใน contracts) attorney_in_fact null = ทุกกรณี
+model DocumentRequirementRule {
+  code                 String               @id
+  plantCode            String               @map("plant_code")
+  slotCode             DocumentSlotCode     @map("slot_code")
+  requirementLevel     RequirementLevel     @map("requirement_level")
+  applicantTypes       ApplicantType[]      @map("applicant_types")
+  requestTypes         RequestType[]        @map("request_types")
+  certificationScopes  CertificationScope[] @map("certification_scopes")
+  purposes             Purpose[]
+  areaTypes            AreaType[]           @map("area_types")
+  landTenures          LandTenure[]         @map("land_tenures")
+  attorneyInFact       Boolean?             @map("attorney_in_fact")
+  alternativeGroupCode String?              @map("alternative_group_code")
+  reasonTh             String               @map("reason_th")
+  sourceTh             String               @map("source_th")
+  effectiveFrom        DateTime             @map("effective_from") @db.Date
+  effectiveTo          DateTime?            @map("effective_to") @db.Date
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  slot  DocumentSlot @relation(fields: [slotCode], references: [code])
+  plant Plant        @relation(fields: [plantCode], references: [code])
+
+  @@index([plantCode, effectiveFrom])
+  @@map("document_requirement_rules")
+}
+
+// ตารางอัตรา เงินเป็นสตางค์ VAT เป็น basis points ไม่มีตัวเลขในโค้ด
+model FeeSchedule {
+  code               String        @id
+  plantCode          String        @map("plant_code")
+  feeStage           FeeStage      @map("fee_stage")
+  requestTypes       RequestType[] @map("request_types")
+  feeBasis           FeeBasis      @map("fee_basis")
+  lineTitleTh        String        @map("line_title_th")
+  stateFeeSatang     Int           @map("state_fee_satang")
+  serviceFeeSatang   Int           @map("service_fee_satang")
+  vatRateBasisPoints Int           @map("vat_rate_basis_points")
+  quotationValidDays Int           @map("quotation_valid_days")
+  sourceTh           String        @map("source_th")
+  effectiveFrom      DateTime      @map("effective_from") @db.Date
+  effectiveTo        DateTime?     @map("effective_to") @db.Date
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  plant Plant @relation(fields: [plantCode], references: [code])
+
+  @@index([plantCode, feeStage, effectiveFrom])
+  @@map("fee_schedules")
+}
+
+// รายการตรวจ ณ แปลง ข้อ critical ตกข้อเดียว = ผลรวมไม่ผ่าน
+model InspectionChecklistItem {
+  code                  String                      @id
+  plantCode             String                      @map("plant_code")
+  category              InspectionChecklistCategory
+  sortOrder             Int                         @map("sort_order")
+  textTh                String                      @map("text_th")
+  guidanceTh            String?                     @map("guidance_th")
+  isCritical            Boolean                     @map("is_critical")
+  requiresPhotoEvidence Boolean                     @map("requires_photo_evidence")
+  sourceTh              String                      @map("source_th")
+  effectiveFrom         DateTime                    @map("effective_from") @db.Date
+  effectiveTo           DateTime?                   @map("effective_to") @db.Date
+  createdAt             DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  plant Plant @relation(fields: [plantCode], references: [code])
+
+  @@index([plantCode, effectiveFrom])
+  @@map("inspection_checklist_items")
+}
+
+// อายุใบรับรอง (เดือน) ยืนยันกับกรมก่อนเปิดใช้จริง
+model CertificateTerm {
+  code                String               @id
+  plantCode           String               @map("plant_code")
+  certificationScopes CertificationScope[] @map("certification_scopes")
+  requestTypes        RequestType[]        @map("request_types")
+  validityMonths      Int                  @map("validity_months")
+  sourceTh            String               @map("source_th")
+  effectiveFrom       DateTime             @map("effective_from") @db.Date
+  effectiveTo         DateTime?            @map("effective_to") @db.Date
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  plant Plant @relation(fields: [plantCode], references: [code])
+
+  @@index([plantCode, effectiveFrom])
+  @@map("certificate_terms")
+}
+
+// วันหยุดราชการ ใช้คำนวณวันทำการ (กำหนดส่งเอกสารเพิ่ม) SYSTEM_ADMIN ดูแลรายปี
+model PublicHoliday {
+  date   DateTime @id @db.Date
+  nameTh String   @map("name_th")
+
+  @@map("public_holidays")
+}

@@ -7,7 +7,11 @@ model Plant {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  applications Application[]
+  applications             Application[]
+  documentRequirementRules DocumentRequirementRule[]
+  feeSchedules             FeeSchedule[]
+  inspectionChecklistItems InspectionChecklistItem[]
+  certificateTerms         CertificateTerm[]
 
   @@map("plants")
 }

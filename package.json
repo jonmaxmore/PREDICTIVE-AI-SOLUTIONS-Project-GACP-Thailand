@@ -21,7 +21,8 @@
     "e2e": "turbo run e2e",
     "db:generate": "pnpm --filter @gacp/db generate",
     "db:migrate": "pnpm --filter @gacp/db migrate:deploy",
-    "db:migrate:dev": "pnpm --filter @gacp/db migrate:dev"
+    "db:migrate:dev": "pnpm --filter @gacp/db migrate:dev",
+    "db:seed:law": "pnpm --filter @gacp/db seed:law"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.12",

@@ -13,8 +13,15 @@
 | ที่ดินและเอกสารสิทธิ์ (ข้อ ๒) | `LandParcel` | chanote, deed |
 | หน่วยรับรอง (กรม) | `CertificationBody` | organization, tenant, org |
 | พืช / กัญชา | `Plant` / `cannabis` (เต็มคำ) | CAN, cnb, herb |
-| ช่องเอกสารแนบ | `DocumentSlot` (`slotCode`) | document type, attachment kind, upload key |
-| กฎเอกสารบังคับ (มีวันมีผล) | `DocumentRequirementRule` | requirement rule, doc rule |
+| ช่องเอกสารแนบ | `DocumentSlot` (`slotCode`, กลุ่ม `DocumentSlotGroup`, ขั้นของฟอร์ม `formStep`) | document type, attachment kind, upload key |
+| กฎเอกสารบังคับ (มีวันมีผล) | `DocumentRequirementRule` (`requirementLevel`: `REQUIRED`, `OPTIONAL` · กลุ่มทางเลือก `alternativeGroupCode` · code ขึ้นต้น `RULE_`) | requirement rule, doc rule, mandatory flag |
+| สถานะที่ผู้ยื่นแจ้งสำหรับช่องใบอนุญาต | `LicenseDeclarationStatus`: `HAVE`, `APPLIED`, `NONE` | license state, pending flag |
+| หัวข้อย่อยที่เจ้าหน้าที่ติ๊กใน SOP | `SopSubItemCode` (11 หัวข้อ) | sop section, checklist item (สำหรับ SOP) |
+| ฐานคิดค่าธรรมเนียม | `FeeBasis`: `PER_CULTIVATION_FORMAT`, `PER_APPLICATION` (`FeeSchedule.code` ขึ้นต้น `FEE_`) | multiplier, unit price |
+| หมวดรายการตรวจ ณ แปลง | `InspectionChecklistCategory` (14 หมวด) · `InspectionChecklistItem.code` ขึ้นต้น `CHECK_` | audit section |
+| อายุใบรับรอง (มีวันมีผล) | `CertificateTerm` (`validityMonths`, code ขึ้นต้น `TERM_`) | validity config, expiry days |
+| วันหยุดราชการ / วันทำการ | `PublicHoliday` · `addBusinessDays()` · วันที่ปฏิทินเป็น `CalendarDate` (`YYYY-MM-DD`) | holiday table, working day |
+| ชุดข้อมูลกฎทั้งหมดที่ seed | `LawData` (`seedLawData()`, `packages/db/seeds/`) | fixtures, constants, config |
 | ใบอนุญาตสมุนไพรควบคุม | `ControlledHerbLicense` (`_RESEARCH`, `_EXPORT`, `_COMMERCIAL`) | ภท. เป็นชื่อแบบคำขอ ไม่ใช่ชื่อช่อง |
 | แบบ กทล.1 ที่ระบบประกอบ | `Katorlor1Form`, `Katorlor1Renderer` | reg form, template |
 | การตรวจเอกสารรายช่อง | `DocumentReview` (`verdict`: `ACCEPTED`, `MORE_REQUESTED`) | document check, audit |

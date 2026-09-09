@@ -10,6 +10,27 @@ export {
   transition,
 } from './application-workflow.ts';
 export {
+  addBusinessDays,
+  addCalendarDays,
+  compareCalendarDates,
+  type HolidayCalendar,
+  isBusinessDay,
+  isWeekend,
+  substituteHolidays,
+  toHolidayCalendar,
+} from './business-days.ts';
+export {
+  isRuleActiveOn,
+  missingRequiredSlots,
+  type RequirementContext,
+  type RequirementResolution,
+  RequirementResolutionErrorCode,
+  type ResolvedRequirement,
+  requiredSlotCodes,
+  resolveDocumentRequirements,
+  ruleMatches,
+} from './document-requirements.ts';
+export {
   applyRateBasisPoints,
   bahtToSatang,
   calculateQuotationTotals,
@@ -27,3 +48,13 @@ export {
   type RefundInput,
   type RefundResult,
 } from './payment-gateway.ts';
+export {
+  type BuildQuotationInput,
+  buildQuotation,
+  type FeeScheduleQuery,
+  type FeeScheduleResolution,
+  FeeScheduleResolutionErrorCode,
+  type QuotationDraft,
+  type QuotationLine,
+  resolveFeeSchedule,
+} from './quotation.ts';

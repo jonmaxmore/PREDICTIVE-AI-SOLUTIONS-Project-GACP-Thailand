@@ -65,13 +65,13 @@ model Session {
 
 // หนึ่งคนถือได้หลายบทบาท ไม่มีบทบาทผสม บทบาทที่เพิกถอนแล้วคงแถวไว้เป็นประวัติ
 model StaffRoleAssignment {
-  id             String    @id @default(uuid()) @db.Uuid
-  userId         String    @map("user_id") @db.Uuid
-  role           UserRole
-  assignedById   String?   @map("assigned_by_id") @db.Uuid
-  assignedAt     DateTime  @default(now()) @map("assigned_at") @db.Timestamptz(6)
-  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
-  revokedById    String?   @map("revoked_by_id") @db.Uuid
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  role         UserRole
+  assignedById String?   @map("assigned_by_id") @db.Uuid
+  assignedAt   DateTime  @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedById  String?   @map("revoked_by_id") @db.Uuid
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
