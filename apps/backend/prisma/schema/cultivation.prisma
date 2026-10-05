@@ -1,0 +1,226 @@
+// Domain: Cultivation & Planting (Core)
+// Split from original 28KB file (R11)
+// See also: harvest.prisma, gacp-compliance.prisma
+
+model PlantingCycle {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // รหัสรอบ
+  cycleName   String // "รอบที่ 1/2569", "Winter 2026"
+  cycleNumber Int    @default(1) // 1, 2, 3...
+
+  // ความสัมพันธ์กับฟาร์มและใบรับรอง
+  farmId        String
+  farm          Farm         @relation(fields: [farmId], references: [id])
+  certificateId String?
+  certificate   Certificate? @relation(fields: [certificateId], references: [id])
+
+  // ข้อมูลพืช
+  plantSpeciesId String
+  plantSpecies   PlantSpecies @relation(fields: [plantSpeciesId], references: [id])
+  varietyName    String? // พันธุ์ (ถ้ามี)
+
+  // ข้อมูลแปลง (Relation to Plot)
+  plotId     String?
+  plot       Plot?               @relation(fields: [plotId], references: [id])
+  cyclePlots PlantingCyclePlot[]
+
+  // Legacy Fields (Deprecated)
+  plotName String? // @deprecated Use relation to Plot table instead
+  plotArea Float? // @deprecated Use relation to Plot table instead
+  areaUnit String  @default("sqm")
+
+  // วันที่
+  startDate           DateTime // วันเริ่มปลูก
+  expectedHarvestDate DateTime? // กำหนดเก็บเกี่ยว
+  actualHarvestDate   DateTime? // วันเก็บจริง
+
+  // ข้อมูลการปลูก
+  seedSource      String? // แหล่งเมล็ดพันธุ์
+  seedQuantity    Float? // ปริมาณเมล็ด (กก.)
+  cultivationType String  @default("SELF_GROWN") // ปลูกเอง
+  soilType        String? // ประเภทดิน
+  irrigationType  String? // ระบบน้ำ
+
+  // ผลผลิต (Internal Estimation)
+  estimatedYield      Float? // @deprecated Use estimatedPlantCount instead
+  actualYield         Float? // ผลผลิตจริง (กก.)
+  estimatedPlantCount Int?   @default(0) // Internal calculation (Area * Spacing)
+
+  // สถานะ
+  status String @default("PLANNING")
+  // PLANNING → PLANTED → GROWING → READY_HARVEST → HARVESTED → COMPLETED
+
+  // หมายเหตุ
+  notes String?
+
+  // ความสัมพันธ์
+  batches         HarvestBatch[]
+  cultivationLogs CultivationLog[]
+  careLogs        CareLog[]
+
+  // GACP Thai Requirements
+  growingMedia      GrowingMedium[]
+  seedSources       SeedSource[]
+  fertilizerRecords FertilizerRecord[]
+  dryingProcesses   DryingProcess[]
+
+  // Soft Delete
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([farmId])
+  @@index([certificateId])
+  @@index([status])
+  @@index([isDeleted])
+  @@index([organizationId])
+  // DB-06: index FK columns
+  @@index([plantSpeciesId])
+  @@index([plotId])
+  @@map("planting_cycles")
+}
+
+model PlantingCyclePlot {
+  id                String   @id @default(uuid())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  cycleId           String
+  plotId            String
+  allocatedAreaSqm  Float
+  plannedPlantCount Int
+
+  cycle      PlantingCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  plot       Plot          @relation(fields: [plotId], references: [id], onDelete: Cascade)
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([cycleId, plotId])
+  @@index([cycleId])
+  @@index([plotId])
+  @@index([organizationId])
+  @@map("planting_cycle_plots")
+}
+
+// PLANT UNIT MODEL (รายต้น/หน่วยย่อย) - For Tree-by-Tree Tracking
+// Lifecycle: DRAFT → PLANTED → GROWING → HARVESTED → SOLD
+
+// PLANT UNIT EDIT HISTORY (ประวัติการแก้ไข - Audit Trail)
+
+// CARE LOG MODEL (บันทึกการดูแลรายต้น)
+
+model CareLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Where a care record attaches from now on: the planting cycle.
+  //
+  // Granularity ends at the plot and the cycle (spec R8) — a plot of 100 plants
+  // carries one code, not 100 — so recording a watering against an individual
+  // plant has nowhere to live in the design any more. The contract step ran on
+  // 2026-09-10: plantUnitId and the PlantUnit models are gone from the schema.
+  // cycleId stays nullable for the rows written before it existed.
+  cycleId String?
+  cycle   PlantingCycle? @relation(fields: [cycleId], references: [id])
+
+
+  // Log Type
+  logType String // WATERING, FERTILIZING, SPRAYING, PRUNING, INSPECTION, OTHER
+
+  // Date of activity
+  logDate DateTime @default(now())
+
+  // Details
+  notes      String?
+  photoUrl   String?
+  recordedBy String? // userId who recorded
+
+  // Growth Metrics (optional)
+  height      Float? // cm
+  leafCount   Int?
+  healthScore Int? // 1-5 scale
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([cycleId])
+  @@index([logType])
+  @@index([logDate])
+  @@index([organizationId])
+  @@map("care_logs")
+}
+
+// CULTIVATION LOG MODEL (บันทึกการปลูก - GACP หมวด 3)
+
+model CultivationLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to Planting Cycle
+  cycleId String
+  cycle   PlantingCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  // Log Details
+  logDate     DateTime @default(now())
+  scope       String   @default("CYCLE")
+  logType     String // IRRIGATION, FERTILIZER, PESTICIDE, OBSERVATION, WEEDING, OTHER
+  plotId      String?
+
+  // Activity Details
+  productName String? // ชื่อปุ๋ย/สารเคมี/ฯลฯ
+  quantity    Float? // ปริมาณ
+  unit        String? // หน่วย (ลิตร, กก., ml)
+  method      String? // วิธีการใส่ (หยอด, ฉีดพ่น, รดน้ำ)
+  area        Float? // พื้นที่ที่ใส่ (ไร่)
+
+  // Weather (Optional)
+  temperature Float? // อุณหภูมิ (C)
+  humidity    Float? // ความชื้น (%)
+  weather     String? // SUNNY, CLOUDY, RAINY
+
+  // Notes & Evidence
+  notes         String?
+  photoUrl      String? // รูปภาพหลักฐาน
+  attachmentIds Json?
+
+  // Recorder
+  recordedBy String? // User ID ผู้บันทึก (คนที่กดบันทึก — ไม่ใช่คนที่ลงมือทำงาน)
+
+  /// ชื่อผู้ปฏิบัติงานจริง — คนที่ลงมือทำกิจกรรมนั้นด้วยตัวเอง
+  ///
+  /// operator 2026-09-07 เลือกแบบ ก. (ช่องข้อความ ไม่บังคับกรอก): แรงงานรายวันในฟาร์ม
+  /// ส่วนใหญ่ไม่มีบัญชีในระบบ การบังคับให้เลือกจากสมาชิกพื้นที่ทำงานจึงแปลว่าบันทึกไม่ได้เลย
+  ///
+  /// ทำไมต้องแยกจาก recordedBy: recordedBy คือคนที่ล็อกอินแล้วกดปุ่ม · ฟาร์มที่จ้างแรงงาน
+  /// สองคนนี้คนละคน — ลุงพ่นสารวันจันทร์ ลูกสาวกรอกให้วันพุธ ⇒ ระบบเคยตอบผู้ตรวจได้แค่
+  /// ชื่อลูกสาว · GACP ให้ความสำคัญกับสุขอนามัยและการอบรมของผู้สัมผัสผลผลิตจริง
+  ///
+  /// **ข้อมูลภายใน ห้ามขึ้นหน้าสแกนสาธารณะ** — เป็นชื่อบุคคล กติกาเดียวกับที่ถอดชื่อแปลง
+  /// ออกจากหน้าสาธารณะเพราะ "ชื่อแปลงพาชื่อคนมาได้" (มติ 2026-09-05)
+  performedBy String?
+
+  plot      Plot?      @relation(fields: [plotId], references: [id], onDelete: SetNull)
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([cycleId])
+  @@index([logDate])
+  @@index([logType])
+  @@index([scope])
+  @@index([plotId])
+  @@index([organizationId])
+  @@map("cultivation_logs")
+}

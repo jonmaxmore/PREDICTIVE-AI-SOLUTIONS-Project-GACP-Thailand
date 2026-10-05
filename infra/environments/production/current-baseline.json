@@ -1,0 +1,67 @@
+{
+  "environment": "production",
+  "state": "approved_current_baseline",
+  "provider": "digitalocean",
+  "deploymentModel": "single_host_docker",
+  "topology": "cloud_firewall_to_host_nginx_to_docker_nginx",
+  "ingressChain": [
+    "do_cloud_firewall",
+    "host_nginx",
+    "docker_nginx",
+    "frontend_backend"
+  ],
+  "cloudFirewall": {
+    "provider": "digitalocean",
+    "name": "gacp-production",
+    "inboundRules": [
+      { "port": 80, "protocol": "tcp", "sources": "all" },
+      { "port": 443, "protocol": "tcp", "sources": "all" },
+      { "port": 22, "protocol": "tcp", "sources": "operator_ip_only" },
+      { "port": 2222, "protocol": "tcp", "sources": "operator_ip_only" }
+    ],
+    "outboundRules": "allow_all"
+  },
+  "sshAccess": {
+    "externalPort": 2222,
+    "note": "Port 22 is restricted at cloud firewall level to operator IP only. Port 2222 is the standard external SSH entry point."
+  },
+  "publicEdge": {
+    "type": "host_nginx",
+    "tlsTermination": true,
+    "publicPorts": [
+      80,
+      443
+    ],
+    "upstream": "127.0.0.1:8080"
+  },
+  "internalRuntime": {
+    "containerIngress": "nginx",
+    "frontendEndpoint": "frontend:3000",
+    "backendEndpoint": "backend:8000"
+  },
+  "statefulDependencies": {
+    "postgres": {
+      "mode": "container_on_same_host",
+      "ha": false
+    },
+    "redis": {
+      "mode": "container_on_same_host",
+      "ha": false
+    },
+    "objectStorage": {
+      "mode": "minio_on_same_host",
+      "ha": false
+    }
+  },
+  "constraints": {
+    "failureDomains": 1,
+    "automaticFailover": false
+  },
+  "requiredEvidence": [
+    "docker-compose.production.yml",
+    "deploy/nginx/gacp-platform.conf",
+    "nginx/gacp.production.conf",
+    "docs/architecture/network-diagram.md",
+    "docs/standards/production-infrastructure-standard.md"
+  ]
+}

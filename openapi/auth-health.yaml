@@ -1,0 +1,331 @@
+openapi: 3.0.3
+info:
+  title: Botanical Audit Framework - Authentication API
+  version: 2.0.0
+  description: |
+    Health-user authentication endpoints for GACP platform.
+    Handles registration, login, email verification, and password management.
+  contact:
+    name: API Support
+    email: support@gacp-botanical.com
+
+servers:
+  - url: http://localhost:5000
+    description: Local development
+  - url: https://api.gacp-botanical.com
+    description: Production
+
+tags:
+  - name: Authentication
+    description: Health user authentication operations
+
+paths:
+  /api/auth/health/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register new health account
+      description: |
+        Creates a new health user account with email verification required.
+        Password must meet security requirements (min 8 chars, uppercase, lowercase, number, special char).
+      operationId: registerHealth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              validRegistration:
+                summary: Valid registration
+                value:
+                  email: health@example.com
+                  password: SecureP@ssw0rd123
+                  firstName: John
+                  lastName: Doe
+                  idCard: '1234567890123'
+                  phoneNumber: '0812345678'
+                  province: Bangkok
+      responses:
+        '201':
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                weakPassword:
+                  summary: Weak password
+                  value:
+                    success: false
+                    error: 'Password does not meet requirements: must contain uppercase, lowercase, number, and special character'
+                    code: VALIDATION_ERROR
+                    field: password
+        '409':
+          description: Conflict - email or ID card already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                emailExists:
+                  summary: Email already registered
+                  value:
+                    success: false
+                    error: 'Email health@example.com is already registered'
+                    code: CONFLICT_ERROR
+                    resource: email
+
+  /api/auth/health/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login health user
+      description: Authenticates health user and returns JWT token
+      operationId: loginHealth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Account locked or not verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # No password reset path of any kind: no self-service request (operator
+  # 2026-09-16, nothing is sent by email or SMS) and no staff-issued token
+  # redemption (operator 2026-09-17, there is no account recovery).
+
+  /api/auth/health/profile:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user profile
+      description: Returns authenticated health user's profile
+      operationId: getProfile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Unauthorized - invalid or missing token
+
+    put:
+      tags:
+        - Authentication
+      summary: Update user profile
+      description: Updates health user profile information
+      operationId: updateProfile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - firstName
+        - lastName
+        - idCard
+      properties:
+        email:
+          type: string
+          format: email
+          example: health@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: SecureP@ssw0rd123
+        firstName:
+          type: string
+          example: John
+        lastName:
+          type: string
+          example: Doe
+        idCard:
+          type: string
+          pattern: '^\d{13}$'
+          example: '1234567890123'
+        phoneNumber:
+          type: string
+          example: '0812345678'
+        address:
+          type: string
+          example: '123 Farm Road'
+        province:
+          type: string
+          example: Bangkok
+        district:
+          type: string
+        subDistrict:
+          type: string
+        postalCode:
+          type: string
+
+    RegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Registration successful. Please verify your email.
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/UserProfile'
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              description: JWT access token
+            refreshToken:
+              type: string
+              description: JWT refresh token
+            user:
+              $ref: '#/components/schemas/UserProfile'
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phoneNumber:
+          type: string
+        address:
+          type: string
+        province:
+          type: string
+        district:
+          type: string
+        subDistrict:
+          type: string
+        postalCode:
+          type: string
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phoneNumber:
+          type: string
+        idCard:
+          type: string
+        province:
+          type: string
+        role:
+          type: string
+          enum: [HEALTH, INSPECTOR, ADMIN]
+        status:
+          type: string
+          enum: [PENDING_VERIFICATION, ACTIVE, SUSPENDED, INACTIVE]
+        isEmailVerified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: Validation error
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        field:
+          type: string
+          description: Field that caused the error (for validation errors)
+        resource:
+          type: string
+          description: Resource that caused the error (for conflict errors)

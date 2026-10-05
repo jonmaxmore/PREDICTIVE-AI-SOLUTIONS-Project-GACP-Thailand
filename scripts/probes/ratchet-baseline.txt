@@ -1,0 +1,6 @@
+# Ratchet baselines read by scripts/probes/_lib.sh baseline(). Lower a number when the count drops; never raise one.
+- `hardcode`: 36
+- `todo`: 56
+- `env-direct`: 122
+- `dup-source`: 2
+- `suite-tests`: 6872

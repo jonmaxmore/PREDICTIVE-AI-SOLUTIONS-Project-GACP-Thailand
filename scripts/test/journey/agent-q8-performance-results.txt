@@ -1,0 +1,16 @@
+Agent Q8 — Performance Results
+Date: 2026-03-16T11:24:38.931Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | API response time | 191ms (< 500ms ✅)
+PASS | Homepage load time | 146ms, 18KB
+PASS | Login page load | 159ms, 26KB
+PASS | Large source files | 29 files >20KB (consider code splitting)
+PASS |   Large file | app\health\applications\new-legacy\steps\documents-step-config.tsx (25KB)
+PASS |   Large file | app\health\applications\new-legacy\steps\documents-step.tsx (22KB)
+PASS |   Large file | app\health\applications\new-legacy\steps\farm-info-step.tsx (22KB)
+PASS |   Large file | app\health\applications\new-legacy\steps\general-step-applicant-sections.tsx (30KB)
+PASS |   Large file | app\health\applications\new-legacy\steps\plant-selection-config-panels.tsx (26KB)
+PASS | Lazy loading | 1 React.lazy, 1 dynamic imports
+PASS | Image optimization | 5 next/image, 16 <img> tags
+PASS | Memoization usage | 272 useMemo/useCallback/React.memo

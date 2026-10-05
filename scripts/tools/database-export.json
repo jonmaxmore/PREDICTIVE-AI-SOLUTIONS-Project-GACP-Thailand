@@ -1,0 +1,250 @@
+{
+  "users": [
+    {
+      "_id": "68e71b47f53832f9742b2b7f",
+      "userId": "USER001",
+      "email": "Applicant1@gacp.co.th",
+      "farmId": "FARM001",
+      "profile": {
+        "firstName": "สมชาย",
+        "lastName": "เกษตรกร",
+        "firstNameEN": "Somchai",
+        "lastNameEN": "Applicant",
+        "phone": "+66812345678",
+        "idCard": "1234567890123"
+      },
+      "role": "Applicant",
+      "status": "active",
+      "emailVerified": true,
+      "createdAt": "2025-10-09T02:17:43.297Z",
+      "lastLogin": "2025-10-09T02:17:43.297Z"
+    },
+    {
+      "_id": "68e71b47f53832f9742b2b80",
+      "userId": "USER002",
+      "email": "medical.Applicant@gacp.co.th",
+      "farmId": "FARM002",
+      "profile": {
+        "firstName": "นพ. วิชัย",
+        "lastName": "กัญชาการแพทย์",
+        "firstNameEN": "Dr. Wichai",
+        "lastNameEN": "Medical Cannabis",
+        "phone": "+66812345679",
+        "idCard": "9876543210987"
+      },
+      "role": "medical_Applicant",
+      "medicalLicense": "MED-DOC-2025-001",
+      "status": "active",
+      "emailVerified": true,
+      "createdAt": "2025-10-09T02:17:43.297Z",
+      "lastLogin": "2025-10-09T02:17:43.297Z"
+    },
+    {
+      "_id": "68e71b47f53832f9742b2b81",
+      "userId": "USER003",
+      "email": "inspector@gacp.co.th",
+      "profile": {
+        "firstName": "สุรีย์",
+        "lastName": "ผู้ตรวจสอบ",
+        "firstNameEN": "Suree",
+        "lastNameEN": "Inspector",
+        "phone": "+66812345680",
+        "idCard": "5555555555555"
+      },
+      "role": "inspector",
+      "department": "DTAM",
+      "certificationLevel": "senior",
+      "status": "active",
+      "emailVerified": true,
+      "createdAt": "2025-10-09T02:17:43.297Z",
+      "lastLogin": "2025-10-09T02:17:43.297Z"
+    }
+  ],
+  "farms": [
+    {
+      "_id": "68e71b47f53832f9742b2b7d",
+      "farmId": "FARM001",
+      "farmName": "ฟาร์มสมุนไพรเขียว",
+      "farmNameEN": "Green Herbal Farm",
+      "ownerId": "USER001",
+      "location": {
+        "type": "Point",
+        "coordinates": [100.5018, 13.7563]
+      },
+      "address": {
+        "district": "บางรัก",
+        "province": "กรุงเทพมหานคร",
+        "postalCode": "10500",
+        "coordinates": [100.5018, 13.7563]
+      },
+      "farmSize": 50.5,
+      "cropTypes": ["herbal_medicine", "vegetable"],
+      "organicCertified": true,
+      "status": "active",
+      "createdAt": "2025-10-09T02:17:43.297Z",
+      "updatedAt": "2025-10-09T02:17:43.297Z"
+    },
+    {
+      "_id": "68e71b47f53832f9742b2b7e",
+      "farmId": "FARM002",
+      "farmName": "สวนกัญชาการแพทย์เชียงใหม่",
+      "farmNameEN": "Chiang Mai Medical Cannabis Garden",
+      "ownerId": "USER002",
+      "location": {
+        "type": "Point",
+        "coordinates": [98.9817, 18.7883]
+      },
+      "address": {
+        "district": "เมืองเชียงใหม่",
+        "province": "เชียงใหม่",
+        "postalCode": "50000",
+        "coordinates": [98.9817, 18.7883]
+      },
+      "farmSize": 25,
+      "cropTypes": ["cannabis"],
+      "organicCertified": true,
+      "medicalLicense": "MED-CNB-2025-001",
+      "status": "active",
+      "createdAt": "2025-10-09T02:17:43.297Z",
+      "updatedAt": "2025-10-09T02:17:43.297Z"
+    }
+  ],
+  "applications": [
+    {
+      "_id": "68e71b47f53832f9742b2b82",
+      "applicationId": "APP001",
+      "farmId": "FARM001",
+      "applicantId": "USER001",
+      "certificationType": "GACP_BASIC",
+      "status": "submitted",
+      "submittedAt": "2025-10-09T02:17:43.297Z",
+      "documents": [
+        {
+          "type": "farm_registration",
+          "status": "approved"
+        },
+        {
+          "type": "land_ownership",
+          "status": "approved"
+        },
+        {
+          "type": "water_quality_test",
+          "status": "pending"
+        }
+      ],
+      "inspectionScheduled": false,
+      "createdAt": "2025-10-09T02:17:43.297Z",
+      "updatedAt": "2025-10-09T02:17:43.297Z"
+    }
+  ],
+  "certificates": [
+    {
+      "_id": "68e71b47f53832f9742b2b83",
+      "certificateId": "CERT001",
+      "farmId": "FARM002",
+      "healthId": "USER002",
+      "certificateType": "GACP_CANNABIS",
+      "status": "active",
+      "issueDate": "2025-10-09T02:17:43.297Z",
+      "expiryDate": "2026-10-09T02:17:43.297Z",
+      "inspectorId": "USER003",
+      "score": 95.5,
+      "standards": {
+        "soilQuality": "passed",
+        "waterQuality": "passed",
+        "pesticides": "passed",
+        "heavyMetals": "passed",
+        "microbiology": "passed"
+      },
+      "createdAt": "2025-10-09T02:17:43.297Z",
+      "updatedAt": "2025-10-09T02:17:43.297Z"
+    }
+  ],
+  "tracktraces": [
+    {
+      "_id": "68e4e5abc18624f985b14fc4",
+      "lotId": "LOT_1759831467231",
+      "unitId": "UNIT_DUPLICATE",
+      "healthId": "68e4e5abc18624f985b14fc2",
+      "applicationId": "68e4e5abc18624f985b14fc3",
+      "product": {
+        "name": "Duplicate Test",
+        "category": "herbs"
+      },
+      "stage": "seed_preparation",
+      "qrCode": {
+        "code": "QR_DUPLICATE",
+        "generatedAt": "2025-10-07T10:04:27.319Z",
+        "format": "QR_CODE"
+      },
+      "currentStatus": {
+        "condition": "good",
+        "lastUpdate": "2025-10-07T10:04:27.319Z"
+      },
+      "quality": {
+        "overallGrade": "A",
+        "certifications": [],
+        "labResults": []
+      },
+      "parentLots": [],
+      "childLots": [],
+      "compliance": {
+        "gacpCompliant": false,
+        "nonCompliances": []
+      },
+      "isActive": true,
+      "tags": [],
+      "events": [],
+      "createdAt": "2025-10-07T10:04:27.320Z",
+      "updatedAt": "2025-10-07T10:04:27.320Z",
+      "__v": 0
+    },
+    {
+      "_id": "68e71b47f53832f9742b2b84",
+      "traceId": "TRACE001",
+      "farmId": "FARM001",
+      "productType": "herbal_medicine",
+      "batchId": "BATCH001",
+      "plantingDate": "2024-01-15T00:00:00.000Z",
+      "harvestDate": "2024-04-15T00:00:00.000Z",
+      "productName": "ฟ้าทะลายโจร",
+      "productNameEN": "Andrographis paniculata",
+      "quantity": 100,
+      "unit": "kg",
+      "qualityGrade": "A",
+      "certificationStatus": "certified",
+      "status": "completed",
+      "timeline": [
+        {
+          "phase": "planting",
+          "date": "2024-01-15T00:00:00.000Z",
+          "status": "completed"
+        },
+        {
+          "phase": "growing",
+          "date": "2024-02-15T00:00:00.000Z",
+          "status": "completed"
+        },
+        {
+          "phase": "harvesting",
+          "date": "2024-04-15T00:00:00.000Z",
+          "status": "completed"
+        },
+        {
+          "phase": "processing",
+          "date": "2024-04-20T00:00:00.000Z",
+          "status": "completed"
+        },
+        {
+          "phase": "packaging",
+          "date": "2024-04-25T00:00:00.000Z",
+          "status": "completed"
+        }
+      ],
+      "createdAt": "2025-10-09T02:17:43.297Z",
+      "updatedAt": "2025-10-09T02:17:43.297Z"
+    }
+  ],
+  "auditlogs": []
+}
+

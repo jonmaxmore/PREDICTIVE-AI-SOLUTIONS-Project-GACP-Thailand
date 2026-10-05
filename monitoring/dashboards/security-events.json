@@ -1,0 +1,132 @@
+{
+  "annotations": { "list": [] },
+  "description": "GACP Security Events - Iter 29. Auth failures, JWT, PDPA, admin overrides, rate limits.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "iteration": "iter-29-2026-05-16",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Failed Auth Attempts (per minute)",
+      "datasource": "Prometheus",
+      "description": "Login attempts that returned 401/403. Spike => possible brute force.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "expr": "rate(auth_login_failed_total[1m])",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "JWT Verification Failures",
+      "datasource": "Prometheus",
+      "description": "Invalid signature / expired / malformed JWTs rejected by middleware",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "expr": "rate(jwt_verification_failed_total[1m])",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "PDPA Erasure Requests (last 30d)",
+      "datasource": "Prometheus",
+      "description": "Right-to-erasure requests filed under PDPA Section 33. Iter 27 territory.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "none" } },
+      "targets": [
+        {
+          "expr": "increase(pdpa_erasure_requests_total[30d])",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Admin Force-Status Overrides",
+      "datasource": "Prometheus",
+      "description": "Iter 28 admin tooling: cert force-revoke, status override, etc. Each call must produce AuditLog.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "expr": "rate(admin_force_status_total[5m])",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Rate Limit Hits (429s)",
+      "datasource": "Prometheus",
+      "description": "Requests blocked by express-rate-limit middleware",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "expr": "rate(rate_limit_hit_total[1m])",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Top Source IPs by Failed Auth",
+      "datasource": "Prometheus",
+      "description": "Top-10 IPs producing failed logins in last 1h",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (source_ip) (increase(auth_login_failed_total[1h])))",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "PDPA Consent Withdrawals",
+      "datasource": "Prometheus",
+      "description": "Per-purpose consent revocation rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "expr": "rate(pdpa_consent_withdrawn_total[5m])",
+          "legendFormat": "{{purpose}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["gacp", "security", "pdpa", "iter-29"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "Asia/Bangkok",
+  "title": "GACP Security Events (Iter 29)",
+  "uid": "gacp-security-events",
+  "version": 1
+}

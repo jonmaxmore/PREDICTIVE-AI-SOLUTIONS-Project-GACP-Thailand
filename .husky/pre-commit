@@ -1,0 +1,44 @@
+# ─── Pre-commit: fast feedback only (< 10s on warm cache) ─────────────────
+# Heavy gates (full lint, typecheck, tests, build) live in CI
+# (.github/workflows/ci.yml) so they run on every PR + push to main.
+#
+# Skipping reasons:
+#  - `npx tsc --noEmit` requires apps/web-app/node_modules and is multi-second.
+#    Worktrees may not have deps installed; CI runs typecheck unconditionally.
+#  - Backend tests + e2e are too slow for pre-commit; CI runs them.
+#
+# To run the full battery locally: `pnpm verify:build` (matches CI roughly).
+
+set -e
+
+echo "🏥 1/2  System integrity check..."
+node scripts/system-integrity-check.js
+
+echo "🛡️  2/2  Trust-domain lint (fast scope)..."
+# Tolerate worktrees that haven't run `pnpm install` yet — CI will catch
+# anything we miss here.
+if [ -d apps/web-app/node_modules/.bin ]; then
+    (cd apps/web-app && npm run lint:trust)
+else
+    echo "   (skipping — apps/web-app/node_modules missing; CI will run it)"
+fi
+
+# ─── 3/3  โทเคนดิบในไฟล์หลักฐาน ───────────────────────────────────────────────
+# สแกนเต็มประวัติ 2026-09-11 พบ 320 finding · 304 อยู่ใน evidence/ ทั้งหมดเป็น log ดิบ
+# ของ jest/gate ที่ commit ไว้เป็นหลักฐาน · operator ตัดสินว่าไม่ rewrite history
+# ⇒ ทุก commit ที่พก log ดิบเข้ามา เพิ่ม finding อย่างถาวรและย้อนไม่ได้
+#
+# ด่านนี้ปฏิเสธ **ก่อน** มันเข้าประวัติ — ซึ่งเป็นจุดเดียวที่ยังแก้ได้
+echo "🔐 3/3  โทเคนดิบในไฟล์หลักฐาน..."
+STAGED_EVIDENCE="$(git diff --cached --name-only --diff-filter=ACM -- 'evidence/**' 'reports/**' || true)"
+if [ -n "$STAGED_EVIDENCE" ]; then
+    # shellcheck disable=SC2086
+    if ! node scripts/redact-evidence-tokens.js --check $STAGED_EVIDENCE; then
+        echo ""
+        echo "  ไฟล์ข้างบนมีโทเคนดิบ · รันคำสั่งนี้แล้ว git add ใหม่:"
+        echo "    node scripts/redact-evidence-tokens.js $STAGED_EVIDENCE"
+        echo ""
+        echo "  (ปกปิดแล้วยังอ่านรายงานรู้เรื่อง — เก็บ 8 ตัวแรกของ JWT ไว้ให้อ้างอิงกันได้)"
+        exit 1
+    fi
+fi

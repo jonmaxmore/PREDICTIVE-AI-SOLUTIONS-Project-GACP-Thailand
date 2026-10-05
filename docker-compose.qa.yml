@@ -1,0 +1,118 @@
+﻿# Docker Compose for QA Environment
+# Usage: docker-compose -f docker-compose.qa.yml up -d
+
+name: gacp-qa
+
+services:
+  # PostgreSQL QA Database
+  postgres-qa:
+    image: postgres:15-alpine
+    container_name: gacp-qa-postgres
+    environment:
+      POSTGRES_USER: gacp_qa
+      POSTGRES_PASSWORD: qa_password_123
+      POSTGRES_DB: gacp_qa_db
+      PGDATA: /var/lib/postgresql/data/qa
+    volumes:
+      - qa_postgres_data:/var/lib/postgresql/data/qa
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gacp_qa -d gacp_qa_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gacp-qa-network
+
+  # Redis QA Cache
+  redis-qa:
+    image: redis:7-alpine
+    container_name: gacp-qa-redis
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - qa_redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - gacp-qa-network
+
+  # Backend QA API
+  backend-qa:
+    image: node:24-alpine
+    container_name: gacp-qa-backend
+    working_dir: /app
+    environment:
+      NODE_ENV: qa
+      PORT: 5001
+      DATABASE_URL: postgresql://gacp_qa:qa_password_123@postgres-qa:5432/gacp_qa_db
+      REDIS_URL: redis://redis-qa:6379
+      JWT_SECRET: qa-jwt-secret-for-testing-only
+      DTAM_JWT_SECRET: qa-dtam-jwt-secret-for-testing-only
+      Applicant_JWT_SECRET: qa-Applicant-jwt-secret-for-testing-only
+      ENCRYPTION_KEY: qa-encryption-key-32-chars-long!!
+      UPLOAD_MAX_SIZE: 10485760
+      LOG_LEVEL: debug
+    ports:
+      - "127.0.0.1:5001:5001"
+    volumes:
+      - ./apps/backend:/app
+      - qa_uploads:/app/uploads
+      - /app/node_modules
+    command: sh -c "npm install && npx prisma generate && npm run dev"
+    depends_on:
+      postgres-qa:
+        condition: service_healthy
+      redis-qa:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - gacp-qa-network
+
+  # Frontend QA (Development Mode)
+  frontend-qa:
+    image: node:24-alpine
+    container_name: gacp-qa-frontend
+    working_dir: /app
+    environment:
+      NODE_ENV: qa
+      NEXT_PUBLIC_API_URL: http://localhost:5001
+      NEXT_PUBLIC_APP_NAME: "GACP QA"
+      PORT: 3000
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./apps/web-app:/app
+      - /app/node_modules
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      - backend-qa
+    networks:
+      - gacp-qa-network
+
+  # Nginx QA Proxy
+  nginx-qa:
+    image: nginx:alpine
+    container_name: gacp-qa-nginx
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./nginx/nginx.qa.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend-qa
+      - frontend-qa
+    networks:
+      - gacp-qa-network
+
+volumes:
+  qa_postgres_data:
+  qa_redis_data:
+  qa_uploads:
+
+networks:
+  gacp-qa-network:
+    driver: bridge

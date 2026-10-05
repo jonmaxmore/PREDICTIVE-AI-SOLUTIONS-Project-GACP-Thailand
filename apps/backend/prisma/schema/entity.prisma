@@ -1,0 +1,162 @@
+// Domain: Entity (Legal Applicant) — Phase 62 / Q1 + Q2 + Q3
+//
+// Background (see docs/audit/2026-05-01-entity-schema-foundation.md
+// once it lands; planning notes in
+// the entity-model design note):
+//
+// GACP regulation recognizes three applicant types — บุคคลทั่วไป (individual),
+// บริษัท (juristic), and วิสาหกิจชุมชน (community enterprise). Before Phase 62
+// these were partially modeled on User (entityType, companyName, taxId,
+// communityName columns) but the registration handler blocked anything
+// other than INDIVIDUAL, and only one entity-shape could exist per User.
+//
+// Phase 62 promotes the legal applicant to a first-class Entity model so:
+//   1. One User (always a Thai citizen) can act for multiple Entities —
+//      e.g., a person can be both an individual farmer AND the director of
+//      a registered company AND the president of a community enterprise.
+//   2. Multiple Users can co-manage one Entity with different roles
+//      (OWNER / ADMIN / MANAGER / VIEWER) via EntityMembership.
+//   3. Service providers (agronomy experts, GACP-prep consulting companies)
+//      can be granted scoped access to Entities they don't own — handled in
+//      a Phase 2 follow-up via EntityServiceDelegation (not in this file
+//      yet; will land if/when the consulting-company use case appears).
+//
+// User.{entityType,companyName,taxId,...} fields are NOT removed here. They
+// are deprecated in Phase 5 of the rollout so existing reads keep working
+// during the migration window.
+
+model Entity {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Type discriminator
+  type        String // INDIVIDUAL | JURISTIC | COMMUNITY_ENTERPRISE
+  displayName String // shown on certificates and in entity pickers
+
+  // Wave C — URL slug for shareable workspace links
+  // (/health/workspaces/{slug}/...). Derived from displayName at create
+  // time with a numeric collision suffix (abc-co, abc-co-2, …). Hidden
+  // from API responses with no membership context — only the picker /
+  // workspaces pages consume it.
+  slug String? @unique
+
+  // Identifiers — exactly one of these is set, depending on type.
+  // INDIVIDUAL: thaiCitizenId (= the OWNER User's healthId)
+  // JURISTIC: juristicId (Thai 13-digit registration number, starts with 0)
+  // COMMUNITY_ENTERPRISE: communityRegNo (DOAE 11-digit, no checksum)
+  thaiCitizenId      String?
+  thaiCitizenIdHash  String?
+  // STAGE B2 (detokenize RFC) — keyed-HMAC lookup column mirroring the
+  // legacy raw-SHA-256 `thaiCitizenIdHash`. Populated by
+  // `computeLookupHmac(thaiCitizenId)` (same keyed HMAC as User.healthIdHmac,
+  // H-4 Phase 1). NULLABLE + additive; inert until backfilled and the
+  // AUTH_LOOKUP_USE_HMAC flag is on. The unkeyed `thaiCitizenIdHash` (+ its
+  // @@unique) is KEPT for back-compat/rollback and is dropped in B3 along
+  // with `thaiCitizenId` encryption.
+  thaiCitizenIdHmac  String?
+  juristicId         String?
+  juristicIdHash     String?
+  communityRegNo     String?
+  communityRegNoHash String?
+
+  // Optional payload for type-specific extras (juristic: company info,
+  // community: cooperative info, individual: usually empty).
+  // Schema enforced at the application layer via Zod discriminated union
+  // (apps/backend/services/applicant-validation.js, Phase 4).
+  payload Json?
+
+  status    String    @default("ACTIVE") // ACTIVE | SUSPENDED | DELETED
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?
+
+  createdBy String? // User.id who created the entity (NOT the canonical owner — see EntityMembership)
+
+  // Relations
+  members      EntityMembership[]
+  applications Application[]
+  farms        Farm[]
+
+  // Wave C — workspace-switcher audit trail. Two relations because a
+  // single row records a switch from one entity to another.
+  contextSwitchesFrom EntityContextSwitch[] @relation("ContextSwitchFrom")
+  contextSwitchesTo   EntityContextSwitch[] @relation("ContextSwitchTo")
+
+  // Wave D — membership lifecycle audit (transfer-ownership, invite,
+  // revoke, etc.).
+  membershipEvents EntityMembershipEvent[]
+
+  // Tenancy (ADR-014)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Type-scoped uniqueness — same Thai 13-digit number can legitimately
+  // be both a person's national ID (starts 1-9) AND a company registration
+  // ID (starts 0). Scoping the unique by type allows both.
+  //
+  // Detokenize STAGE B3 (RFC docs/handoffs/national-id-detokenize-rfc-2026-06-29.md):
+  // the UNKEYED `@@unique([type, thaiCitizenIdHash])` was DROPPED. Once
+  // `thaiCitizenId` is encrypted (random-IV AES-GCM) the type+plaintext-derived
+  // raw-SHA-256 hash is the dump-leak the RFC targets, and the dedup invariant
+  // is now held by the B2 keyed `@@unique([type, thaiCitizenIdHmac])`. The
+  // `thaiCitizenIdHash` COLUMN itself is KEPT for back-compat / rollback (its
+  // drop is deferred to a later cleanup) — only its UNIQUE is removed here.
+  // STAGE B2 — type-scoped uniqueness on the keyed HMAC. Postgres treats
+  // multiple NULLs as distinct, so this is safe while the column is being
+  // backfilled (un-backfilled rows are all NULL → no uniqueness pressure).
+  @@unique([type, thaiCitizenIdHmac])
+  @@unique([type, juristicIdHash])
+  @@unique([type, communityRegNoHash])
+  @@index([organizationId])
+  @@index([type])
+  @@index([status])
+  @@map("entities")
+}
+
+model EntityMembership {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  entityId String
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  // Coarse role determines default permissions; the granular permissions
+  // array adds/removes specific capabilities on top.
+  //   OWNER   — full control, can transfer ownership, can delete entity
+  //   ADMIN   — manage members, edit entity profile, submit applications
+  //   MANAGER — operational tasks (update farm, print QR, fill forms)
+  //   VIEWER  — read-only
+  role String @default("VIEWER")
+
+  // Granular permission codes layered on top of role. Examples:
+  //   APPROVE_APPLICATION, PRINT_QR, EDIT_FARM, INVITE_MEMBER, ...
+  permissions String[] @default([])
+
+  // Invitation lifecycle
+  invitedBy  String? // userId who issued the invitation
+  invitedAt  DateTime?
+  acceptedAt DateTime?
+  status     String    @default("ACTIVE") // PENDING | ACTIVE | REVOKED
+
+  // Farm-worker Wave B — per-member GRANT/REVOKE overrides on top of the
+  // role baseline + legacy permissions[] array (REVOKE wins). See
+  // entity-member-permission-grants.prisma.
+  permissionGrants EntityMemberPermissionGrant[]
+
+  // Tenancy (ADR-014)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([userId, entityId])
+  @@index([entityId])
+  @@index([userId])
+  @@index([status])
+  @@index([organizationId])
+  @@map("entity_memberships")
+}

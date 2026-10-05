@@ -1,0 +1,47 @@
+-- ============================================================================
+-- Detokenize STAGE 0 — ESCROW column `users.canonicalIdLegacy` (additive, inert)
+-- ============================================================================
+--
+-- Migration name: add_canonical_id_legacy_escrow
+-- RFC: docs/handoffs/national-id-detokenize-rfc-2026-06-29.md (STAGE 0 — PREP)
+--
+-- Adds ONE NULLABLE, non-unique column on `users` and captures a write-once
+-- snapshot of the current `canonicalId` value (== the national ID today) into
+-- it. This is the rollback escrow for the STAGE-A re-key:
+--
+--     STAGE A : UPDATE users SET "canonicalId" = COALESCE("healthIdHmac",
+--                                                          "providerIdHmac", id)
+--               (cascades to the 3 FK children via ON UPDATE CASCADE)
+--     ROLLBACK: UPDATE users SET "canonicalId" = COALESCE("canonicalIdLegacy",
+--                                                          "canonicalId")
+--
+-- Why this is SAFE / INERT:
+--   * The column is NULLABLE and has NO DEFAULT — adding it touches no row.
+--   * The single backfill UPDATE writes `canonicalIdLegacy = canonicalId` for
+--     EVERY existing row in one statement (pilot = ~13 prod rows). It copies a
+--     value the row already holds — it changes no FK, no @unique surface, no
+--     behaviour.
+--   * NO application code READS `canonicalIdLegacy`. The ONLY reader is the
+--     STAGE-A rollback function in scripts/rekey-canonicalid.js, which is run by
+--     an operator, never automatically.
+--   * NOT @unique on purpose: it is a snapshot, and after the STAGE-A re-key new
+--     users will carry NULL here (their canonicalId was minted as a token, so
+--     there is no pre-re-key national-ID value to escrow). The rollback COALESCE
+--     leaves those rows untouched.
+--
+-- Additive, non-breaking. Run with `prisma migrate deploy`. DO NOT run as part
+-- of the STAGE-A re-key — this STAGE-0 migration ships FIRST, on its own, with
+-- both feature flags (APP_FK_USE_TOKEN + ENABLE_PDPA_FIELD_ENCRYPTION) OFF.
+-- ============================================================================
+
+-- AlterTable
+ALTER TABLE "users" ADD COLUMN "canonicalIdLegacy" TEXT;
+
+-- Backfill the escrow snapshot from the current canonicalId (the national ID
+-- today). Idempotent: re-running overwrites with the same value while the
+-- STAGE-A re-key has NOT run; once canonicalId is a token this would capture the
+-- token, so the STAGE-A script captures legacy values itself before re-keying
+-- (see scripts/rekey-canonicalid.js — it asserts canonicalIdLegacy is populated
+-- with the pre-re-key value). At STAGE-0 ship time canonicalId == national ID,
+-- so this backfill is correct.
+UPDATE "users" SET "canonicalIdLegacy" = "canonicalId" WHERE "canonicalIdLegacy" IS NULL;

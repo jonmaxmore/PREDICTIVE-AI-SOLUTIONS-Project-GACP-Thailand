@@ -1,0 +1,60 @@
+/// ผลวิเคราะห์ (COA) ที่ผูกกับ "รุ่นเก็บเกี่ยว" — มติ operator 2026-09-05
+///
+/// ทำไมผูกกับรุ่น ไม่ใช่ล็อต: ห้องปฏิบัติการตรวจ "รุ่น" ไม่ได้ตรวจ "ถุง" และรุ่นหนึ่ง
+/// ออกได้หลายล็อต การผูกกับล็อตแปลว่าต้องอัปโหลดไฟล์เดิมซ้ำทุกล็อต แล้ววันหนึ่งจะไม่ตรงกัน
+/// ล็อตจึงสืบทอด COA จากรุ่นที่มันมา (T11)
+///
+/// ทำไมไม่มีช่องค่าตัวเลข: operator สั่ง "เราจะไม่ได้พิมพ์บอกค่าเท่าไหร่ เราจะอัพโหลดผลแลป"
+/// ตัวเลขที่คนพิมพ์เองคือตัวเลขที่พิมพ์ผิดได้ และเมื่อมันขัดกับไฟล์ COA จะไม่มีใครรู้ว่า
+/// อันไหนจริง — ไฟล์เดียวเป็นแหล่งความจริงเดียว ส่วนการตัดสินผ่าน/ไม่ผ่านเป็นของห้องแล็บ
+/// ไม่ใช่ของแพลตฟอร์ม
+///
+/// ทำไมเป็นแถวใหม่เสมอ ไม่ใช่ทับของเดิม: COA คือเอกสารที่ "มาถึงทีหลัง" ไม่ใช่การแก้สิ่งที่
+/// เคยประกาศไว้ การเพิ่มจึงไม่ขัดกับการแช่แข็ง (`FROZEN_ONCE_PACKED` คุมน้ำหนักกับวันเก็บเกี่ยว
+/// ไม่ได้คุมเอกสารแนบ) และมติ 2026-09-05 "ไม่มีสิทธิ์ทั้งหมด" ห้ามแก้ของที่แช่แข็งแล้ว
+/// ⇒ ได้ COA ฉบับใหม่ ให้อัปโหลดเพิ่ม ทั้งสองฉบับแสดงคู่กันพร้อมวันที่
+///
+/// ออกแบบเต็ม: docs/design/2026-09-05-tnt-loop-and-farmer-updates.md §4.5
+model BatchLabResult {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  harvestBatchId String
+  harvestBatch   HarvestBatch @relation(fields: [harvestBatchId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  /// ไฟล์ COA — แหล่งความจริงเดียวของผลตรวจ
+  fileUrl  String
+  fileName String?
+  fileHash String?
+  fileSize Int?
+  mimeType String?
+
+  /// หัวกระดาษของรายงาน เก็บเป็นฟิลด์เพื่อให้ค้นและแสดงได้ ที่เหลืออยู่ในไฟล์
+  labName      String
+  reportNumber String?
+  reportedAt   DateTime?
+
+  /// รหัสตรวจสอบรายงานของห้องแล็บ ถ้ามี — ทางเดียวที่ผู้ซื้อจะยืนยันว่าไฟล์เป็นของจริง
+  verificationCode String?
+
+  /// FARMER_UPLOADED เป็นค่าตั้งต้น · OFFICER_VERIFIED เมื่อเจ้าหน้าที่ตรวจแล้ว
+  /// คนสแกนควรรู้ว่ากำลังดูเอกสารที่ใครเป็นคนใส่เข้ามา ไม่ใช่ให้เดาเอง
+  verificationStatus String  @default("FARMER_UPLOADED")
+  verifiedAt         DateTime?
+  verifiedBy         String?
+
+  uploadedBy String?
+  uploadedAt DateTime @default(now())
+
+  /// ถอนออกจากการแสดงผลได้ แต่แถวไม่หายไป — ประวัติว่าเคยแนบอะไรไว้ต้องอยู่
+  isDeleted Boolean @default(false)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([harvestBatchId])
+  @@index([organizationId])
+  @@index([verificationStatus])
+  @@map("batch_lab_results")
+}

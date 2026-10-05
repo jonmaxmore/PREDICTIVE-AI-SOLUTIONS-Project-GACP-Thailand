@@ -1,0 +1,362 @@
+{
+  "id": "who-gap-2003",
+  "name": "WHO Guidelines on Good Agricultural and Collection Practices (GACP) for Medicinal Plants",
+  "version": "2003",
+  "authority": "World Health Organization (WHO)",
+  "effectiveDate": "2003-01-01",
+  "country": "International",
+  "language": "en",
+  "description": "WHO international guidelines for cultivation and collection of medicinal plants",
+  "applicableProducts": ["medicinal_plants", "herbs", "botanical_materials"],
+  "categories": [
+    {
+      "id": "seed-selection",
+      "name": "Seed Selection and Propagation",
+      "weight": 15,
+      "description": "Quality and authenticity of plant materials",
+      "criteria": [
+        {
+          "id": "who-seed-1",
+          "code": "WHO-SEED-001",
+          "name": "Species Authentication",
+          "description": "Correct botanical identification of plant species",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 10,
+            "partial": 5,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Botanical identification by qualified expert",
+            "Voucher specimen deposited",
+            "Taxonomic nomenclature correct",
+            "Avoid misidentification"
+          ],
+          "evidence": ["Botanical certificate", "Herbarium specimen", "Expert verification report"]
+        },
+        {
+          "id": "who-seed-2",
+          "code": "WHO-SEED-002",
+          "name": "Seed/Plant Material Quality",
+          "description": "High quality propagation materials from reliable sources",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 5,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Certified seed sources",
+            "Genetic uniformity",
+            "Disease-free materials",
+            "Proper storage conditions"
+          ],
+          "evidence": ["Seed certificates", "Quality test reports", "Storage records"]
+        }
+      ]
+    },
+    {
+      "id": "cultivation-site",
+      "name": "Cultivation Site and Soil",
+      "weight": 15,
+      "description": "Environmental factors and soil quality",
+      "criteria": [
+        {
+          "id": "who-site-1",
+          "code": "WHO-SITE-001",
+          "name": "Site Environmental Assessment",
+          "description": "Evaluation of cultivation site suitability",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 8,
+            "partial": 4,
+            "fail": 0
+          },
+          "checkpoints": [
+            "No industrial pollution nearby",
+            "Adequate water supply",
+            "Suitable climate conditions",
+            "Away from contamination sources"
+          ],
+          "evidence": ["Environmental assessment report", "Site map", "Water quality certificate"]
+        },
+        {
+          "id": "who-site-2",
+          "code": "WHO-SITE-002",
+          "name": "Soil Quality",
+          "description": "Soil testing and quality standards",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 7,
+            "partial": 3,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Soil analysis completed",
+            "Heavy metals within limits",
+            "pH suitable for species",
+            "No pesticide residues"
+          ],
+          "evidence": ["Soil test report", "Heavy metal analysis", "Pesticide residue test"]
+        }
+      ]
+    },
+    {
+      "id": "cultivation-practices",
+      "name": "Cultivation Practices",
+      "weight": 25,
+      "description": "Growing and maintenance procedures",
+      "criteria": [
+        {
+          "id": "who-cult-1",
+          "code": "WHO-CULT-001",
+          "name": "Fertilization Management",
+          "description": "Appropriate use of fertilizers",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 8,
+            "partial": 4,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Organic fertilizers preferred",
+            "Synthetic fertilizers documented",
+            "Application rates recorded",
+            "Soil nutrient balance maintained"
+          ],
+          "evidence": [
+            "Fertilizer application records",
+            "Purchase receipts",
+            "Soil nutrient reports"
+          ]
+        },
+        {
+          "id": "who-cult-2",
+          "code": "WHO-CULT-002",
+          "name": "Pest and Disease Management",
+          "description": "Integrated pest management approach",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 9,
+            "partial": 4,
+            "fail": 0
+          },
+          "checkpoints": [
+            "IPM strategy implemented",
+            "Minimize pesticide use",
+            "Only approved pesticides",
+            "Pre-harvest intervals observed"
+          ],
+          "evidence": [
+            "IPM plan",
+            "Pesticide application records",
+            "Pesticide certificates",
+            "Residue test results"
+          ]
+        },
+        {
+          "id": "who-cult-3",
+          "code": "WHO-CULT-003",
+          "name": "Irrigation and Water Management",
+          "description": "Safe and efficient water use",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 8,
+            "partial": 4,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Clean water sources",
+            "Water quality tested",
+            "Efficient irrigation system",
+            "Water use recorded"
+          ],
+          "evidence": ["Water quality reports", "Irrigation records", "System maintenance logs"]
+        }
+      ]
+    },
+    {
+      "id": "harvesting",
+      "name": "Harvesting and Primary Processing",
+      "weight": 20,
+      "description": "Collection and initial processing",
+      "criteria": [
+        {
+          "id": "who-harv-1",
+          "code": "WHO-HARV-001",
+          "name": "Harvest Timing",
+          "description": "Optimal harvest time for active constituents",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 10,
+            "partial": 5,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Harvest at optimal maturity",
+            "Weather conditions suitable",
+            "Pre-harvest intervals observed",
+            "Harvest timing documented"
+          ],
+          "evidence": ["Harvest schedules", "Quality test results", "Weather records"]
+        },
+        {
+          "id": "who-harv-2",
+          "code": "WHO-HARV-002",
+          "name": "Hygiene During Harvest",
+          "description": "Cleanliness and contamination prevention",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 10,
+            "partial": 5,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Clean harvesting equipment",
+            "Worker hygiene maintained",
+            "No soil contamination",
+            "Clean containers used"
+          ],
+          "evidence": ["Hygiene protocols", "Worker health records", "Equipment cleaning logs"]
+        }
+      ]
+    },
+    {
+      "id": "post-harvest",
+      "name": "Drying, Processing and Storage",
+      "weight": 15,
+      "description": "Post-harvest handling procedures",
+      "criteria": [
+        {
+          "id": "who-post-1",
+          "code": "WHO-POST-001",
+          "name": "Drying Procedures",
+          "description": "Appropriate drying methods",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 7,
+            "partial": 3,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Suitable drying method",
+            "Temperature controlled",
+            "Moisture content verified",
+            "Quality maintained"
+          ],
+          "evidence": ["Drying records", "Moisture analysis", "Temperature logs"]
+        },
+        {
+          "id": "who-post-2",
+          "code": "WHO-POST-002",
+          "name": "Storage Conditions",
+          "description": "Proper storage to maintain quality",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 8,
+            "partial": 4,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Clean storage facilities",
+            "Pest control measures",
+            "Temperature and humidity controlled",
+            "FIFO system implemented"
+          ],
+          "evidence": [
+            "Storage facility inspection",
+            "Environmental monitoring records",
+            "Inventory management system"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "quality-assurance",
+      "name": "Quality Assurance and Control",
+      "weight": 10,
+      "description": "Quality management systems",
+      "criteria": [
+        {
+          "id": "who-qa-1",
+          "code": "WHO-QA-001",
+          "name": "Quality Control Testing",
+          "description": "Regular quality testing",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 5,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Identity testing",
+            "Purity testing",
+            "Potency/active constituent analysis",
+            "Microbial limits testing"
+          ],
+          "evidence": ["Laboratory test reports", "Certificate of analysis", "Testing protocols"]
+        },
+        {
+          "id": "who-qa-2",
+          "code": "WHO-QA-002",
+          "name": "Contamination Testing",
+          "description": "Testing for contaminants",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 5,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Heavy metals testing",
+            "Pesticide residue testing",
+            "Mycotoxin testing",
+            "Foreign matter testing"
+          ],
+          "evidence": ["Contaminant test reports", "Lab certificates", "Batch records"]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "maxScore": 100,
+    "passingScore": 75,
+    "levels": [
+      {
+        "level": "excellent",
+        "minScore": 90,
+        "maxScore": 100,
+        "certification": "WHO GACP Compliant - Excellent",
+        "color": "#2E7D32"
+      },
+      {
+        "level": "good",
+        "minScore": 80,
+        "maxScore": 89,
+        "certification": "WHO GACP Compliant - Good",
+        "color": "#689F38"
+      },
+      {
+        "level": "pass",
+        "minScore": 75,
+        "maxScore": 79,
+        "certification": "WHO GACP Compliant",
+        "color": "#FFA726"
+      },
+      {
+        "level": "fail",
+        "minScore": 0,
+        "maxScore": 74,
+        "certification": "Non-Compliant",
+        "color": "#D32F2F"
+      }
+    ]
+  },
+  "compliance": {
+    "mandatoryRequirements": "All mandatory criteria must be met",
+    "documentationRequired": true,
+    "laboratoryTestingRequired": true,
+    "traceabilityRequired": true,
+    "annualInspection": true
+  }
+}

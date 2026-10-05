@@ -1,0 +1,115 @@
+# Fail2Ban Configuration for GACP Platform
+# Intrusion Prevention System
+
+[DEFAULT]
+# Ban hosts for 1 hour
+bantime = 3600
+
+# Find failures in last 10 minutes
+findtime = 600
+
+# Ban after 5 failures
+maxretry = 5
+
+# Use iptables for banning
+backend = auto
+
+# Email notifications
+destemail = security@gacp-platform.th
+sender = fail2ban@gacp-platform.th
+
+# Action shortcuts
+action_ = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s"]
+action_mw = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s"]
+action_mwl = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s"]
+action = %(action_)s
+
+# ==========================================
+# Nginx Jails
+# ==========================================
+
+[nginx-http-auth]
+enabled = true
+filter = nginx-http-auth
+port = http,https
+logpath = /var/log/nginx/error.log
+maxretry = 3
+bantime = 3600
+
+[nginx-limit-req]
+enabled = true
+filter = nginx-limit-req
+port = http,https
+logpath = /var/log/nginx/error.log
+maxretry = 10
+findtime = 60
+bantime = 3600
+
+[nginx-botsearch]
+enabled = true
+filter = nginx-botsearch
+port = http,https
+logpath = /var/log/nginx/access.log
+maxretry = 2
+bantime = 86400
+
+[nginx-noscript]
+enabled = true
+filter = nginx-noscript
+port = http,https
+logpath = /var/log/nginx/access.log
+maxretry = 6
+bantime = 86400
+
+# ==========================================
+# GACP Application Jails
+# ==========================================
+
+[gacp-auth]
+enabled = true
+filter = gacp-auth
+port = http,https
+logpath = /var/log/gacp/application.log
+maxretry = 5
+findtime = 300
+bantime = 3600
+
+[gacp-api-abuse]
+enabled = true
+filter = gacp-api-abuse
+port = http,https
+logpath = /var/log/gacp/application.log
+maxretry = 100
+findtime = 60
+bantime = 3600
+
+# ==========================================
+# SSH Protection
+# ==========================================
+
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+
+[sshd-ddos]
+enabled = true
+port = ssh
+filter = sshd-ddos
+logpath = /var/log/auth.log
+maxretry = 2
+bantime = 3600
+
+# ==========================================
+# Docker Containers
+# ==========================================
+
+[docker-gacp]
+enabled = true
+filter = docker-gacp
+logpath = /var/lib/docker/containers/*/*.log
+maxretry = 5
+bantime = 3600

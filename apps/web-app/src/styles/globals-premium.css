@@ -1,0 +1,51 @@
+/* ═══════════════════════════════════════════════════════════════════
+ * Table Enhancements
+ *
+ * Was "Premium Design Utilities" — a decorative grab-bag (gradient text,
+ * animated gradient-border cards, floating orbs, mesh/grain backgrounds,
+ * status-dot pulses, etc.). Every one of those classes was dead (0 call
+ * sites across src) and contradicted the DESIGN.md anti-slop rules:
+ * no gradient text, no glow, no infinite decorative motion. They were
+ * removed in the design-system redesign so the patterns can't be reached
+ * for again.
+ *
+ * Only the global table styling below is live: it styles every <table>
+ * (header + cell padding/borders) and complements the row hover/zebra
+ * rules in globals.css. Imported by app/globals.css after the component
+ * sheets.
+ *
+ * History: extracted from globals.css (Wave C, 2026-05-04); decorative
+ * slop removed in the redesign (2026-06-01).
+ * Reference: docs/architecture/2026-05-04-css-architecture-audit.md
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Data Table Enhancement ──
+ * letter-spacing intentionally omitted: positive tracking breaks Thai
+ * glyph clusters (DESIGN.md "No-Tracking-On-Thai Rule") and these headers
+ * are predominantly Thai.
+ *
+ * P0-3 systemic fix (2026-06-11): header text color lives on `thead`
+ * (NOT `th`). A color set directly on `th` beats inheritance regardless
+ * of specificity, which silently defeated the primitive TableHeader's
+ * `text-primary-foreground` and rendered dark-on-dark (~1.3:1) headers
+ * on every primary-bg table. On `thead` it is an element-selector
+ * default that any utility class (e.g. `.text-primary-foreground` on
+ * the primitive, or an explicit `text-*` on a light-bg consumer) wins
+ * over — and `th` simply inherits the winner. */
+table thead {
+  color: hsl(var(--muted-foreground));
+}
+
+table thead th {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid hsl(var(--border));
+}
+
+table tbody td {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+}

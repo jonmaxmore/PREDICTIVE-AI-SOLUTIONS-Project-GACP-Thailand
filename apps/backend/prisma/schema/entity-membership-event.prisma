@@ -1,0 +1,71 @@
+// Domain: Entity Membership Event (Wave D — membership lifecycle audit)
+//
+// One row per "something changed about who has what role on this
+// entity". Companion to entity_context_switches (which logs *active*
+// workspace selection by the user); this table logs role / membership
+// mutations driven by an admin (invite, accept, revoke, ownership
+// transfer, etc.).
+//
+// First writer: Wave D PR adds `OWNERSHIP_TRANSFER` rows when
+// transferOwnership runs. invite / accept / revoke event rows can be
+// retrofitted later — the schema is intentionally generic so adding
+// new event types is one-line in `eventType` + a metadata field.
+//
+// Lightweight on purpose: same shape principle as
+// entity_context_switches. No hash chain. Tenancy via organizationId
+// (ADR-014).
+
+model EntityMembershipEvent {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Actor — the user who performed the change (e.g., the OWNER who
+  // initiated the transfer). NOT the subject of the change.
+  actorUserId String
+  actorUser   User   @relation("MembershipEventActor", fields: [actorUserId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  // Workspace whose membership changed.
+  entityId String
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  // Event discriminator. Today: OWNERSHIP_TRANSFER, INVITED, ACCEPTED,
+  // REVOKED, ROLE_CHANGED + (Farm-worker Wave B chunk 5)
+  // ENTITY_PERMISSION_GRANTED / ENTITY_PERMISSION_REVOKED /
+  // ENTITY_PERMISSION_RESET written by entity-service
+  // setMemberPermissionGrant / resetMemberPermissionGrant.
+  eventType String
+
+  // Subject — the user whose membership was changed by this event.
+  // For OWNERSHIP_TRANSFER, this is the *incoming* OWNER (the actor's
+  // own demotion is captured in metadata.demotedTo).
+  targetUserId String?
+  targetUser   User?   @relation("MembershipEventTarget", fields: [targetUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  // Free-form structured detail. Schema enforced by writers, not by
+  // Prisma. Documented shapes:
+  //   OWNERSHIP_TRANSFER: { fromUserId, toUserId, demotedFrom: 'OWNER',
+  //                         demotedTo: 'ADMIN', promotedFrom, promotedTo: 'OWNER' }
+  //   INVITED:            { role, channel: 'healthId'|'email'|'phone',
+  //                         identifierHash } (raw identifier never stored)
+  //   ACCEPTED:           { role }
+  //   REVOKED:            { role }
+  //   ROLE_CHANGED:       { fromRole, toRole }
+  //   ENTITY_PERMISSION_GRANTED/_REVOKED: { permission, effect, reason, before, after }
+  //   ENTITY_PERMISSION_RESET:            { permission, effect: 'INHERIT', before, after: 'inherit' }
+  metadata Json?
+
+  // Request context — short to avoid bloating the table.
+  ipAddress String?
+  userAgent String? @db.VarChar(512)
+
+  // Tenancy — the entity's organization at write time (ADR-014).
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([entityId, createdAt(sort: Desc)])
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([eventType])
+  @@index([organizationId])
+  @@map("entity_membership_events")
+}

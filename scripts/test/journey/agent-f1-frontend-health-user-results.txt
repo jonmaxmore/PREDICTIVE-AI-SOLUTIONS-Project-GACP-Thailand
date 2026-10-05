@@ -1,0 +1,16 @@
+Agent F1 — Frontend Health User Results
+Date: 2026-03-16T12:48:18.618Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Home / Landing | HTTP 200
+PASS | Login page | HTTP 307
+PASS | Register page | HTTP 200
+PASS | Forgot password | HTTP 200
+PASS | Health portal home | HTTP 200
+PASS | Health dashboard | HTTP 307
+PASS | Applications list | HTTP 307
+PASS | New Application wizard | HTTP 307
+PASS | Profile page | HTTP 307
+PASS | Notifications | HTTP 307
+PASS | Tracking overview | HTTP 307
+PASS | Certificates page | HTTP 307

@@ -1,0 +1,16 @@
+Agent J2 — Farm Management Results
+Date: 2026-03-16T12:47:33.938Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Login as health user | Token acquired
+PASS | Get cultivation full-config | status: 200
+PASS | Get cultivation methods | status: 200
+PASS | Get farm layouts | status: 200
+PASS | Get certification purposes | status: 200
+PASS | Get GACP categories | status: 200
+PASS | Get soil types | status: 200
+PASS | Get plant species | status: 200
+PASS | List my farms | status: 200
+PASS | Get document requirements | status: 200
+PASS | Get environment checklist | status: 200
+PASS | Get water sources config | status: 200

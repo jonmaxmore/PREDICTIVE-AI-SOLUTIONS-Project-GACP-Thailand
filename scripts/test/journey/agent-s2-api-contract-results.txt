@@ -1,0 +1,16 @@
+Agent S2 — API Contract Results
+Date: 2026-03-16T12:48:51.034Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Health response | status: 200
+PASS | Version response shape | version: "3.0.0"
+PASS | Pricing response shape | has data field
+PASS | Standards returns array | 0 items
+PASS | Master data structure | status: 200
+PASS | Calculate response shape | has data field
+PASS | Login response has tokens | keys: tokens/token
+PASS | Dashboard response shape | has data field
+PASS | Applications returns array | 1 items
+PASS | Error has message field | "Validation failed: กรุณากรอกเลขบัตรประชา"
+PASS | Notifications response | status: 200
+PASS | Metrics response | status: 200

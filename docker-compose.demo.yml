@@ -1,0 +1,172 @@
+# ============================================================
+# GACP Platform — demo.gacpth.com (the build a customer is shown)
+# ============================================================
+# WHY THIS EXISTS, and why it is not called "production".
+#
+# There is no ministry production system yet. What this droplet ran as
+# "production" on gacpth.com was, in fact, the thing customers were shown — and
+# calling it production is what produced a month of confusion: an image from
+# 2026-08-03 nobody dared touch, a preview stack pointed at the same database,
+# and a staging stack on a local Postgres container that no one could keep
+# straight. This file names the customer-facing environment for what it is.
+#
+# The split, decided by the operator 2026-09-05:
+#
+#   demo.gacpth.com     this file        the customer looks at it — curated data
+#   staging.gacpth.com  ...staging.yml   we break things here
+#   gacpth.com          nothing          the bare domain serves no application
+#
+# THE BARE DOMAIN IS DELIBERATELY DARK. Until this platform is an official
+# ministry system, a stranger finding a working GACP certification site at
+# gacpth.com is a legal problem, so gacpth.com answers by ADDRESS ONLY and no
+# gate cookie can open it (see the $gacp_bare_domain_deny map in
+# deploy/nginx/gacp-platform.conf).
+#
+# DATABASE: the Supabase project that "production" and preview already shared.
+# That project holds the demo material — the certificates that verify, the farms,
+# the applications — so it follows the audience rather than the name. It arrives
+# through .env.demo (a copy of .env.production), never as a literal here.
+#
+# Used WITH the production compose, which owns the shared postgres/redis/minio
+# and the gacp-network the Docker nginx resolves service names on:
+#
+#   cd /opt/gacp-platform
+#   DEMO_IMAGE_TAG=local-<sha> docker compose --env-file .env.demo \
+#       -f docker-compose.production.yml -f docker-compose.demo.yml \
+#       up -d --no-deps backend-demo frontend-demo
+#
+# NEVER a bare `up -d` (it would recreate every service in the merged project)
+# and NEVER `--remove-orphans` (gacp-pgadmin sits behind a profile).
+
+networks:
+  gacp-demo-network:
+    name: gacp-demo-network
+
+# THE SAME THREE VOLUMES THE OTHER STACK ON THIS DATABASE USES — declared
+# external so compose attaches the existing data instead of minting empty ones.
+#
+# This follows from sharing the database. Those rows point at real files: the
+# documents an applicant uploaded, the certificate PDFs already generated, and
+# the RSA key every one of those certificates was signed with. Give this stack
+# fresh volumes and the demo shows a filing whose documents 404 and a
+# certificate that fails to verify.
+#
+# Found the hard way: with an empty key volume the backend refused to boot —
+# "[OPERATOR_INTERVENTION_REQUIRED] Boot refused — certificate signing key,
+# KEY_UNREADABLE" — because it will not mint a replacement key that would
+# invalidate every certificate already signed with the old one. That guard was
+# right and this is the fix it asked for.
+volumes:
+  gacp-uploads-data:
+    external: true
+  gacp-storage-data:
+    external: true
+  # READ-ONLY on purpose. Certificates already issued are verified against this
+  # key; a demo stack must never be able to rotate it. Writable is how you lose
+  # every certificate at once.
+  gacp-signing-keys:
+    external: true
+
+services:
+  backend-demo:
+    image: ${BACKEND_IMAGE:-ghcr.io/jonmaxmore/gacp-backend}:${DEMO_IMAGE_TAG:?DEMO_IMAGE_TAG_required}
+    container_name: gacp-backend-demo
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '0.50', memory: 1G }     # document pre-check OCR job (operator 2026-09-29)
+        reservations: { cpus: '0.10', memory: 128M }
+    ports:
+      # Loopback only — the host nginx routes demo.gacpth.com here.
+      - "127.0.0.1:8003:8000"
+    # Everything — including DATABASE_URL and every secret — comes from the
+    # file. Listing them one by one, as the staging overlay does, is how staging
+    # lost RSA_PRIVATE_KEY_PASSPHRASE and crash-looped: a var that exists in the
+    # env file but is not forwarded simply is not there, and nothing says so.
+    env_file:
+      - .env.demo
+    environment:
+      # Only what must differ from the file. `environment` beats `env_file`.
+      - NODE_ENV=production
+      - PORT=8000
+      # The staging overlay's deploy-slot marker is deliberately NOT set here: that
+      # switch turns on the MOCK identity provider, and a customer must never be shown
+      # a fake ThaiD login. The marker's own name is left unwritten on purpose —
+      # apps/backend/__tests__/unit/staging-slot-compose-pin.test.js fails if any compose
+      # file but the staging overlay so much as mentions it, because a word that appears
+      # in a comment today is a setting somebody uncomments tomorrow.
+      - COOKIE_DOMAIN=demo.gacpth.com
+      - COOKIE_SECURE=true
+      - APP_PUBLIC_URL=https://demo.gacpth.com
+      - FRONTEND_URL=https://demo.gacpth.com
+      - CORS_ORIGIN=https://demo.gacpth.com
+      - CORS_ORIGINS=https://demo.gacpth.com
+      - TRACE_BASE_URL=https://demo.gacpth.com
+      - PUBLIC_TRACE_URL=https://demo.gacpth.com/trace
+      # Error tracking (Sentry, re-added 2026-10-02 with PII scrubbing): set
+      # SENTRY_DSN in .env.demo (empty = off). Only the environment name lives here.
+      - SENTRY_ENVIRONMENT=demo
+      # Payments (operator 2026-09-07: "demo ใช้ key เดียวกันกับ staging"). TEST-mode keys
+      # only — demo shares the production database, so a LIVE key here would take real money
+      # from a demo click. Optional (${VAR:-}) so an env file without them behaves as before.
+      # STRIPE_* deliberately NOT listed here. `environment` beats `env_file`, and
+      # `${STRIPE_SECRET_KEY:-}` interpolates from the --env-file (.env.production),
+      # which has no Stripe vars — so an EMPTY string overwrote the real key that
+      # .env.demo carries. Measured 2026-09-08: demo reported no STRIPE_SECRET_KEY
+      # while .env.demo held the same 107-character key as staging, and the
+      # settlement-reconcile cron failed every 10 minutes trying to re-drive order
+      # 0b8bff25 with "STRIPE_SECRET_KEY is not configured". This is exactly the trap
+      # the comment above the env_file block warns about, three lines later.
+    volumes:
+      - gacp-uploads-data:/app/apps/backend/public/uploads
+      - gacp-storage-data:/app/storage
+      - gacp-signing-keys:/app/apps/backend/keys:ro
+    networks:
+      - gacp-demo-network
+      # Required: the Docker nginx resolves `backend-demo` on this network, and
+      # redis/minio live here too.
+      - gacp-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend-demo:
+    image: ${FRONTEND_IMAGE:-ghcr.io/jonmaxmore/gacp-frontend}:${DEMO_IMAGE_TAG:?DEMO_IMAGE_TAG_required}
+    container_name: gacp-frontend-demo
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '0.50', memory: 512M }
+        reservations: { cpus: '0.10', memory: 128M }
+    ports:
+      - "127.0.0.1:3003:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # The browser calls /api/... on whatever host it is already on, so the
+      # image is host-agnostic and the same tag serves demo and staging. This
+      # var is only read by code that builds an absolute URL.
+      - NEXT_PUBLIC_API_URL=https://demo.gacpth.com
+      - NEXT_PUBLIC_WEB_URL=https://demo.gacpth.com
+      - NEXT_PUBLIC_PWA_ENABLED=false
+      - NEXT_PUBLIC_ENVIRONMENT=demo
+      # Server-side Sentry environment, read at runtime (the DSN itself is baked into
+      # the image at build time: NEXT_PUBLIC_SENTRY_DSN build arg).
+      - SENTRY_ENVIRONMENT=demo
+      # The Next server-side proxy route (app/api/[...path]/route.ts). Without
+      # it the default is http://localhost:8000 — nothing, inside this container.
+      - INTERNAL_API_URL=http://backend-demo:8000
+    networks:
+      - gacp-demo-network
+      - gacp-network
+    depends_on:
+      - backend-demo
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s

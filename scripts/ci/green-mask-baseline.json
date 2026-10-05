@@ -1,0 +1,9 @@
+{
+  "apps/backend/__tests__/integration/provider-cms-workflow.test.js": 1,
+  "apps/backend/__tests__/integration/reports.test.js": 1,
+  "apps/backend/__tests__/smoke-all-endpoints.test.js": 4,
+  "apps/web-app/e2e/e2e-golden-scenario.spec.ts": 4,
+  "apps/web-app/e2e/e2e-trace.spec.ts": 1,
+  "apps/web-app/e2e/smoke.spec.ts": 3,
+  "apps/web-app/e2e/uat-business-rules.spec.ts": 1
+}

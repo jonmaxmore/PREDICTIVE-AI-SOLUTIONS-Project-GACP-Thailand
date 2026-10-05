@@ -1,0 +1,64 @@
+// Waiver-reopen requests (owner ruling 2026-07-08 — fee on auto-cancel/reject).
+//
+// Policy: fees for submitted-for-review work are NON-refundable on staff-reject
+// or auto-expiry, BUT a once-per-application special case may reopen an EXPIRED
+// application REUSING the already-settled payment (no new invoice, no refund).
+// SoD: the assigned inspector (DOCUMENT_REVIEWER for revision-expiry, AUDITOR
+// for CAR-expiry) initiates; a DTAM-side accountant approves — ONLY that path.
+// Full analysis: docs/handoffs/waiver-reopen-decision-2026-07-08.md.
+//
+// Uniqueness (enforced as PARTIAL unique indexes in the migration SQL — Prisma
+// cannot express them declaratively):
+//   * at most ONE PENDING request per application (no queue-stuffing)
+//   * at most ONE APPROVED **LENIENCY** request per application EVER (once-only
+//     ruling; Q1 lane separation 2026-07-08 — WRONGFUL_EXPIRY platform-fault
+//     reinstates are exempt and unlimited: the farmer did nothing wrong)
+
+model WaiverReopenRequest {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ADR-014 multi-tenancy — required, no default. The service stamps it
+  // explicitly from the application row (waiver-reopen-service) and the model
+  // is registered in TENANT_SCOPED_MODELS; explicit org filters in the service
+  // remain the authoritative wall (read-scoping is ENT-01 flag-gated).
+  organizationId String
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  // Requester = the ASSIGNED inspector (User.id UUID — never a national ID).
+  requestedBy   String
+  requesterRole String
+
+  // Snapshot of the state the application EXPIRED from, taken at request time
+  // from workflowHistory (REVISION_REQUESTED | CAR_PENDING). The approval
+  // transition targets THIS value — never a caller-supplied target (a caller
+  // choosing CAR_PENDING for a revision-expired app would skip the unpaid
+  // Phase-2 gate straight toward cert issuance).
+  expiredFromState String
+
+  // LENIENCY (farmer contacted, discretionary) | WRONGFUL_EXPIRY (platform
+  // fault, e.g. the holiday-blind deadline engine fixed in #646).
+  reasonCode String @default("LENIENCY")
+
+  // Mandatory contact evidence / justification (masked via maskThaiIdsInText
+  // before persisting — PII invariant).
+  reason String
+
+  // PENDING -> APPROVED | DENIED
+  status String @default("PENDING")
+
+  decidedBy    String?
+  decidedAt    DateTime?
+  // Money side of the approving accountant — always 'DTAM' (ISSUER_SIDE.DTAM,
+  // the issuer-side vocabulary; NOT the invoice-side term 'STATE'), the only
+  // side allowed by the ruling. Recorded for the audit trail.
+  approverSide String?
+  decisionNote String?
+
+  @@index([applicationId])
+  @@index([organizationId, status])
+  @@map("waiver_reopen_requests")
+}

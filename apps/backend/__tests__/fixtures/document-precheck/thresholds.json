@@ -1,0 +1,11 @@
+{
+  "_about": "Task 9 accuracy floors for the document pre-check, measured on corpus/ against labels.json at the shipped OCR_CONFIDENCE_MIN (catalog.js) and NAME_SIMILARITY_MIN (normalize.js). Synthetic corpus: these floors guard against regressions only; they are not a measure of production accuracy. DOC_TYPE/CROSS_MATCH/VALIDITY are scored only on files whose truth READABILITY is PASS (fix round 1). Each floor = the achieved value (4 decimals), no tolerance. Measured with tesseract.js 7.0.0 (package.json ^7.0.0) and the bundled tessdata_fast on the development machine: a breach after an engine, tessdata or CPU change = re-run scripts/document-precheck/accuracy-report.js, read the disagreements, and the operator decides. Ratchet (the project rules): raising a floor is normal; lowering one, or raising unreadableRateMax, is the operator's call with a the change log entry. Reasoning and the sweep: evidence/document-precheck-task-9/INDEX.md.",
+  "checks": {
+    "READABILITY": { "precisionMin": 1, "recallMin": 1 },
+    "DOC_TYPE": { "precisionMin": 0.7143, "recallMin": 0.8333 },
+    "CROSS_MATCH": { "precisionMin": 0.6364, "recallMin": 0.7778 },
+    "VALIDITY": { "precisionMin": 0.75, "recallMin": 1 }
+  },
+  "overall": { "precisionMin": 0.8056, "recallMin": 0.9063 },
+  "unreadableRateMax": 0.2295
+}

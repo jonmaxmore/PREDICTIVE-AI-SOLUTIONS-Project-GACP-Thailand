@@ -1,0 +1,16 @@
+Agent F12 — Form Validation UI Results
+Date: 2026-03-13T13:19:59.906Z
+Pass: 10 | Fail: 2 | Skip: 0 | Rate: 83.3%
+
+PASS | Empty login rejected | status: 400
+PASS | Short password rejected | status: 400
+PASS | Empty register rejected | status: 400
+FAIL | Invalid email rejected | status: 503
+FAIL | Empty provider login | status: 503
+PASS | Pre-submit empty | status: 200
+PASS | Pricing empty calc | status: 200
+PASS | Pricing valid calc | status: 200
+PASS | Standards accessible | status: 200
+PASS | Master data accessible | status: 200
+PASS | Plants accessible | status: 200
+PASS | Health check | status: 200

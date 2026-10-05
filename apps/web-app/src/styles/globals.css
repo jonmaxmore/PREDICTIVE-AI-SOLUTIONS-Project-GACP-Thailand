@@ -1,0 +1,615 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Brand typeface: Sukhumvit Set ──────────────────────────────────────────
+   GACP Thailand Design System ("The Official Green Register"). Sukhumvit Set is
+   the user-supplied brand face, self-hosted from /public/fonts (six weights:
+   Thin 100 · Light 300 · Text 400 · Medium 500 · SemiBold 600 · Bold 700). One
+   family does the whole job — hierarchy comes from weight + size. This
+   supersedes the prior Sarabun-first stack; Sarabun (loaded via @fontsource in
+   layout.tsx) and Noto Sans Thai remain graceful fallbacks for any glyph it
+   lacks. Never apply positive letter-spacing to Thai text (breaks sara/วรรณยุกต์). */
+@font-face { font-family: 'Sukhumvit Set'; font-weight: 100; font-style: normal; font-display: swap; src: url('/fonts/SukhumvitSet-Thin.ttf') format('truetype'); }
+@font-face { font-family: 'Sukhumvit Set'; font-weight: 300; font-style: normal; font-display: swap; src: url('/fonts/SukhumvitSet-Light.ttf') format('truetype'); }
+@font-face { font-family: 'Sukhumvit Set'; font-weight: 400; font-style: normal; font-display: swap; src: url('/fonts/SukhumvitSet-Text.ttf') format('truetype'); }
+@font-face { font-family: 'Sukhumvit Set'; font-weight: 500; font-style: normal; font-display: swap; src: url('/fonts/SukhumvitSet-Medium.ttf') format('truetype'); }
+@font-face { font-family: 'Sukhumvit Set'; font-weight: 600; font-style: normal; font-display: swap; src: url('/fonts/SukhumvitSet-SemiBold.ttf') format('truetype'); }
+@font-face { font-family: 'Sukhumvit Set'; font-weight: 700; font-style: normal; font-display: swap; src: url('/fonts/SukhumvitSet-Bold.ttf') format('truetype'); }
+@font-face { font-family: 'Sukhumvit Set'; font-weight: 800; font-style: normal; font-display: swap; src: url('/fonts/SukhumvitSet-Bold.ttf') format('truetype'); }
+/* 900 alias → Bold: kills browser-synthesized "black" (which distorts Thai
+   glyphs) for every remaining font-black/weight-900 use, app-wide. */
+@font-face { font-family: 'Sukhumvit Set'; font-weight: 900; font-style: normal; font-display: swap; src: url('/fonts/SukhumvitSet-Bold.ttf') format('truetype'); }
+
+@layer base {
+  :root {
+    --background: 150 12% 96%;
+    --foreground: 150 30% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 150 30% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 30% 10%;
+    --primary: 153 100% 20%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 43 45% 55%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 150 10% 93%;
+    --muted-foreground: 150 12% 35%;
+    --accent: 43 45% 55%;
+    /* W3-B: white on the gold accent was 2.43:1 (axe serious, admin nav +
+       role badge). Deep bronze keeps the gold vivid at 6.1:1 (dark 5.4:1). */
+    --accent-foreground: 43 100% 10%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 150 12% 85%;
+    --input: 150 12% 85%;
+    --ring: 153 100% 20%;
+    --radius: 0.75rem;
+    --success: 153 60% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 210 80% 50%;
+    --info-foreground: 0 0% 100%;
+
+    --sidebar-background: 153 40% 12%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 43 45% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 153 30% 18%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 153 25% 22%;
+    --sidebar-ring: 43 45% 55%;
+
+    /* Hero & Panel Tokens */
+    --hero-start: 153 100% 20%;
+    --hero-end: 153 60% 28%;
+    --hero-shadow: 0 103 56;
+
+    /* ── Form / Surface Field Tokens ──
+       Used by .field-surface, .contrast-panel, .form-block, .surface-card,
+       .surface-panel and the filter-bar component. Previously referenced
+       but never declared, causing surfaces to render with no background
+       and no shadow (browser fallback to transparent). */
+    --field-surface: 0 0% 100%;            /* white — matches --card */
+    --field-muted-surface: 150 10% 95%;    /* slightly tinted muted surface */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+
+    /* ── Display font (.prose-gov h1/h2/h3). Design-system update (2026-06-04):
+       Sukhumvit Set is the brand face; body + display share the one family,
+       hierarchy from weight + size. Sarabun/Noto Sans Thai stay as fallbacks. */
+    --font-display: 'Sukhumvit Set', 'Sarabun', 'Noto Sans Thai', 'Prompt', sans-serif;
+
+    /* ── Friendly UI layer (GACP Thailand Design System ui_kit, 2026-06-08).
+       The fresh-green action + soft-surface layer the redesign primitives
+       (Button/Card/Badge) drive off. Deep forest --primary stays for text,
+       depth, links and footers; these are the *action/surface* greens. Hex
+       (not HSL) — mirrors the design bundle's colors_and_type.css verbatim. */
+    --leaf: #34b56a;        /* fresh action green — decorative fills, icons, borders only:
+                               2.64:1 with white text, NEVER a text-bearing button bg (W3-B) */
+    --leaf-300: #8ed4ab;    /* disabled button fill (contrast-exempt state) */
+    --leaf-600: #229b54;    /* decorative hover (3.57:1 w/ white — not for text surfaces) */
+    --leaf-700: #18803f;    /* solid button bg (5.0:1 w/ white) / on-light text */
+    --leaf-800: #146333;    /* solid button hover/pressed (7.3:1 w/ white) */
+    --leaf-ring: rgba(52, 181, 106, 0.14); /* input focus-ring halo (= --leaf @ 14% alpha) */
+    --lime: #cdeb6e;        /* lime highlight (charts, accents) */
+
+    /* ── Tinted SURFACES — space-separated RGB channels, not hex ──
+       These six carry a value in BOTH themes, and Tailwind reads them as
+       `rgb(var(--x) / <alpha-value>)` so `bg-leaf-soft/50` still works.
+       They were literal hexes with no `.dark` override until 2026-09-07,
+       which is why themed text landed on a near-white ground: measured
+       #f1f3f2 on #eaf9f0 = 1.02:1 on /auth, nine nodes, the whole benefit
+       list invisible (evidence/apple-qa-audit-2026-09-07). A tint is not a
+       decoration — it is a background, and a background needs both themes.
+       Pinned by src/styles/__tests__/themed-surfaces-have-dark-values.test.ts. */
+    --leaf-soft: 234 249 240;      /* #eaf9f0 — soft fill / active nav tint */
+    --leaf-on-soft: 24 128 63;     /* #18803f — 4.6:1 on --leaf-soft */
+    --lime-soft: 238 248 208;      /* #eef8d0 */
+    --mint-bg: 238 244 239;        /* #eef4ef — app page field */
+    --mint-soft: 244 248 244;      /* #f4f8f4 — hover surface */
+    --avatar-bg: 189 233 200;      /* #bde9c8 */
+    /* Caution tint: a REQUIRED slot with no file yet (requirement-slot-card.tsx).
+       Light values are Tailwind amber-50 / amber-200, so the light look is
+       unchanged; stock amber-50 has no dark value, which left the card title
+       near-white on near-white in dark (walk D2, 2026-09-29). */
+    --caution-soft: 255 251 235;   /* #fffbeb — 17.1:1 --foreground, 6.1:1 --muted-foreground, 4.8:1 --leaf-on-soft */
+    --caution-edge: 253 230 138;   /* #fde68a — border only */
+
+    /* ── Officer accent (UI-01 login redesign, 2026-08-05).
+       Teal counterpart to --leaf-* for the "สำหรับเจ้าหน้าที่" door, so the
+       citizen and officer entrances read as equal-weight but instantly
+       distinguishable. Same contrast contract as leaf: -700 is the
+       text-bearing solid button bg (7.3:1 white), -800 is hover/pressed
+       (darker still), -soft is the tint surface (6.3:1 under -700 text). */
+    --officer-700: #0F5F6B;
+    --officer-800: #0C4A54;
+    --officer-soft: 227 240 242;   /* #E3F0F2 — RGB channels, see the surface note above */
+    --officer-on-soft: 15 95 107;  /* #0F5F6B — 6.28:1 on --officer-soft */
+
+    /* ── The one field surface every input paints from (.field-emphasis).
+       Declared as its own token rather than reusing --card, because the field
+       is deliberately brighter than the card it sits on in light mode, and
+       deliberately darker than it in dark mode. */
+    --field-emphasis-bg: #ffffff;
+    --field-emphasis-fg: hsl(150 30% 8%);
+    --field-emphasis-border: hsl(0 0% 82%);
+  }
+
+  .dark {
+    --background: 150 20% 6%;
+    --foreground: 0 0% 95%;
+    --card: 150 20% 9%;
+    --card-foreground: 0 0% 95%;
+    --popover: 150 20% 9%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 153 80% 35%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 43 45% 50%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 150 15% 15%;
+    --muted-foreground: 150 10% 60%;
+    --accent: 43 45% 50%;
+    --accent-foreground: 43 100% 10%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 150 15% 18%;
+    --input: 150 15% 18%;
+    --ring: 153 80% 35%;
+    --hero-start: 153 80% 20%;
+    --hero-end: 153 60% 15%;
+    --hero-shadow: 0 0 0;
+    --sidebar-background: 150 25% 8%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 43 45% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 150 20% 14%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 150 15% 18%;
+    --sidebar-ring: 43 45% 50%;
+
+    /* ── Form / Surface Field Tokens (dark mode) ── */
+    --field-surface: 150 15% 18%;          /* matches --input dark */
+    --field-muted-surface: 150 15% 14%;    /* slightly darker muted variant */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+
+    /* ── Tinted surfaces (dark) ──
+       Each value chosen so `--foreground` (0 0% 95% = 242 242 242) clears WCAG AA
+       on it, and so the tint stays distinguishable from --card/--background rather
+       than collapsing into them. Measured ratios under 242 242 242:
+         leaf-soft 12.7  ·  officer-soft 12.48  ·  lime-soft 12.38
+         mint-bg 16.53   ·  mint-soft 15.52     ·  avatar-bg 10.26
+       and each surface against its own on-colour: leaf 8.3, officer 7.61. */
+    --leaf-soft: 22 48 31;         /* #16301f */
+    --leaf-on-soft: 127 216 164;   /* #7fd8a4 */
+    --lime-soft: 42 47 20;         /* #2a2f14 */
+    --mint-bg: 14 21 18;           /* #0e1512 */
+    --mint-soft: 20 28 24;         /* #141c18 */
+    --avatar-bg: 29 64 48;         /* #1d4030 */
+    --officer-soft: 18 48 55;      /* #123037 */
+    --officer-on-soft: 127 203 216;/* #7fcbd8 */
+    --caution-soft: 51 40 12;      /* #33280c — 12.9:1 --foreground, 5.4:1 --muted-foreground, 8.5:1 --leaf-on-soft */
+    --caution-edge: 120 90 24;     /* #785a18 — border only */
+
+    /* Field surface (dark): 16.4:1 under --foreground, and darker than --card
+       (150 20% 9%) so an input still reads as a well, not as a raised card. */
+    --field-emphasis-bg: hsl(150 18% 11%);
+    --field-emphasis-fg: hsl(0 0% 95%);
+    --field-emphasis-border: hsl(150 15% 24%);
+  }
+
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    /* Design-system update (2026-06-04): Sukhumvit Set is the brand face
+       (self-hosted, see @font-face above). Sarabun (Thai gov standard, loaded
+       via @fontsource) + Noto Sans Thai + Prompt remain fallbacks so any glyph
+       Sukhumvit Set lacks degrades gracefully. */
+    font-family: 'Sukhumvit Set', 'Sarabun', 'Noto Sans Thai', 'Prompt', Tahoma, system-ui, sans-serif;
+  }
+
+  .gov-gradient {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, #004d2a 100%);
+  }
+
+  .gold-gradient {
+    background: linear-gradient(135deg, hsl(var(--secondary)) 0%, #a68a3d 100%);
+  }
+
+  .card-shadow {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  }
+
+  .card-shadow-lg {
+    box-shadow: 0 10px 20px -4px rgba(0, 0, 0, 0.08), 0 4px 8px -2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out;
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.4s ease-out both;
+  }
+
+  .delay-1 {
+    animation-delay: 50ms;
+  }
+
+  .delay-2 {
+    animation-delay: 100ms;
+  }
+
+  .delay-3 {
+    animation-delay: 150ms;
+  }
+
+  .delay-4 {
+    animation-delay: 200ms;
+  }
+
+  .delay-5 {
+    animation-delay: 250ms;
+  }
+
+  /* Hide scrollbar but keep scroll functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Prototype radius overrides */
+.rounded-lg {
+  border-radius: 0.5rem !important;
+}
+
+.rounded-xl {
+  border-radius: 0.75rem !important;
+}
+
+.rounded-2xl {
+  border-radius: 1rem !important;
+}
+
+.rounded-3xl {
+  border-radius: 1.5rem !important;
+}
+
+/* ── Force rounded inputs everywhere (outside @layer for max specificity) ── */
+input:not([type="radio"]):not([type="checkbox"]):not([type="hidden"]):not([type="file"]),
+textarea,
+select,
+[role="combobox"],
+.rounded-md[data-slot="input"],
+input.rounded-md,
+textarea.rounded-md,
+select.rounded-md {
+  border-radius: 0.75rem !important;
+}
+
+/* ── Micro-Animations: Card Hover Lift ── */
+.card-hover {
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px rgb(0 0 0 / 0.08),
+              0 4px 10px -3px rgb(0 0 0 / 0.04);
+}
+
+/* ── Micro-Animations: Button Press Feedback ── */
+.btn-press {
+  transition: transform 100ms ease-out, box-shadow 100ms ease-out;
+}
+
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* ── Smooth Default Transitions for Interactive Elements ── */
+a, button, [role="button"],
+input, select, textarea {
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Skeleton Loading Animation ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted-foreground) / 0.08) 37%,
+    hsl(var(--muted)) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
+
+/* ── Theme cross-fade ──
+   Present only while the root carries .theme-transition, which theme-provider.tsx
+   adds for the length of a deliberate swap and then removes. Colour properties
+   only: animating `all` here would also animate layout on the swap. The `*` rule
+   in the prefers-reduced-motion block below does NOT reach these selectors —
+   both sides are !important, so the cascade falls through to specificity and
+   `.theme-transition` (0,1,0) outranks `*` (0,0,0) — so that block carries an
+   explicit override. Do not delete it believing the `*` rule covers this. */
+.theme-transition,
+.theme-transition *:not(svg):not(svg *) {
+  transition:
+    background-color 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    fill 260ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* ── Accessibility: Respect reduced motion preference ── */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* The `*` rule above cannot reach the theme cross-fade: both are !important
+     and author-origin, so specificity decides and `.theme-transition` wins.
+     A reduced-motion user was still getting the full 260ms fade. */
+  .theme-transition,
+  .theme-transition *:not(svg):not(svg *) {
+    transition: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* ── Phase 1 Polish: System-wide UX Enhancements          ── */
+/* ═══════════════════════════════════════════════════════════ */
+
+/* ── Page Entrance Stagger Animation ── */
+.page-enter > * {
+  opacity: 0;
+  transform: translateY(16px);
+  animation: page-stagger-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.page-enter > *:nth-child(1) { animation-delay: 0ms; }
+.page-enter > *:nth-child(2) { animation-delay: 60ms; }
+.page-enter > *:nth-child(3) { animation-delay: 120ms; }
+.page-enter > *:nth-child(4) { animation-delay: 180ms; }
+.page-enter > *:nth-child(5) { animation-delay: 240ms; }
+.page-enter > *:nth-child(6) { animation-delay: 300ms; }
+.page-enter > *:nth-child(7) { animation-delay: 360ms; }
+.page-enter > *:nth-child(8) { animation-delay: 420ms; }
+
+@keyframes page-stagger-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Slide Animations ── */
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-slide-left  { animation: slide-in-left 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-slide-right { animation: slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-scale-in    { animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* ── Enhanced Focus Ring ── */
+*:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: var(--radius);
+  transition: outline-offset 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Progress Bar Animation ── */
+@keyframes progress-fill {
+  from { width: 0%; }
+}
+
+.progress-animated {
+  animation: progress-fill 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Number Count-up Animation ── */
+@keyframes count-pop {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.count-animated {
+  animation: count-pop 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Table Row Hover ── */
+table tbody tr {
+  transition: background-color 150ms ease;
+}
+
+table tbody tr:hover {
+  background-color: hsl(var(--muted) / 0.5);
+}
+
+/* ── Zebra Striping for Tables ── */
+table tbody tr:nth-child(even) {
+  background-color: hsl(var(--muted) / 0.25);
+}
+
+/* ── Improved Scrollbar ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.35);
+}
+
+/* ── Thai Text Optimization ── */
+body {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Thai has no word spaces, so a long run-on needs to be breakable when it
+     would otherwise overflow its container — that is `overflow-wrap`.
+     `word-break: break-word` used to sit here too. It is the deprecated alias
+     Blink treats like `overflow-wrap: anywhere`, which additionally drops an
+     element's min-content width to a single character. That let the public fee
+     table squeeze its amount column to 62px and render ฿5,535 as "฿5,5"/"35"
+     and ฿27,675 as "฿27,"/"675" at 390px (visual-QA sweep, 2026-07-26).
+     Guarded by src/app/__tests__/currency-never-wraps.test.ts. */
+  overflow-wrap: break-word;
+}
+
+/* ── Selection Color ── */
+::selection {
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+}
+
+/* ── Smooth Page Scroll ── */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+/* ── Status Badge Colors (Consistent Semantics) ── */
+.status-draft      { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
+.status-submitted  { background: hsl(var(--info) / 0.12); color: hsl(210 80% 40%); }
+.status-reviewing  { background: hsl(var(--warning) / 0.12); color: hsl(38 80% 35%); }
+.status-approved   { background: hsl(var(--success) / 0.12); color: hsl(153 60% 30%); }
+.status-rejected   { background: hsl(var(--destructive) / 0.12); color: hsl(0 72% 45%); }
+.status-expired    { background: hsl(0 0% 90%); color: hsl(0 0% 40%); }
+
+/* Glassmorphism system removed — DESIGN.md "No-Glass Rule": no
+   backdrop-filter blur, no frosted translucent panels, no glow. The
+   dialog / sheet / card / toaster primitives now use opaque
+   bg-card + 1px border + shadow-card. Dead decorative utilities
+   (.badge-pulse, .card-accent-left/-top, .card-borderless) removed
+   alongside (0 call sites). */
+
+/* ── Empty State Styling ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+}
+
+.empty-state svg {
+  width: 4rem;
+  height: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.4;
+}
+
+/* ── Print Styles ── */
+@media print {
+  /* App shell chrome must NEVER print — the document prints alone.
+     `.gov-topbar` is a <header> (not <nav>) so it wasn't covered before;
+     `.gov-bottom-nav` is position:fixed so force it hidden too. */
+  nav, .sidebar, .no-print, [data-print-hide="true"],
+  .gov-topbar, .gov-bottom-nav, footer {
+    display: none !important;
+  }
+
+  body {
+    font-size: 12pt;
+    color: #000;
+    background: #fff;
+  }
+
+  /* Drop the dashboard content gutters/pb-24 (reserved for the mobile nav)
+     so the printed document uses the @page margin edge-to-edge. */
+  main {
+    padding: 0 !important;
+  }
+
+  /* Flatten the document panel for print — no shadow / rounded corners. */
+  .surface-panel {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Belt-and-suspenders page-break control (complements the Tailwind
+     print:break-inside-avoid on the field cards / table rows). */
+  table tr, .surface-panel .grid > * {
+    break-inside: avoid;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}

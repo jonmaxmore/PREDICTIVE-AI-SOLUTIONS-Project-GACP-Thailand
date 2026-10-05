@@ -1,0 +1,23 @@
+{
+    "name": "@gacp/error-reporting",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Personal-data scrubbing for error reports, shared by the GACP backend and web app",
+    "main": "src/scrub.js",
+    "exports": {
+        ".": {
+            "import": "./src/scrub.js",
+            "require": "./src/scrub.js",
+            "default": "./src/scrub.js"
+        },
+        "./scrub": {
+            "import": "./src/scrub.js",
+            "require": "./src/scrub.js",
+            "default": "./src/scrub.js"
+        }
+    },
+    "files": [
+        "src"
+    ],
+    "license": "UNLICENSED"
+}

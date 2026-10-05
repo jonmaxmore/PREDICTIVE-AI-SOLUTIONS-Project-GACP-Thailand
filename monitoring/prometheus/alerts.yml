@@ -1,0 +1,217 @@
+groups:
+  # ==========================================
+  # GACP Application Alerts
+  # ==========================================
+  - name: gacp-application
+    interval: 30s
+    rules:
+      - alert: GACPBackendDown
+        expr: up{job="gacp-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "GACP Backend is down"
+          description: "The GACP backend API has been down for more than 1 minute"
+          runbook_url: "https://wiki.gacp-platform.th/runbooks/backend-down"
+
+      - alert: GACPBackendHighLatency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="gacp-backend"}[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "GACP Backend high latency"
+          description: "95th percentile latency is above 2 seconds"
+
+      - alert: GACPBackendHighErrorRate
+        expr: sum(rate(http_requests_total{job="gacp-backend",status=~"5.."}[5m])) / sum(rate(http_requests_total{job="gacp-backend"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "GACP Backend high error rate"
+          description: "Error rate is above 5% for the last 5 minutes"
+
+      - alert: GACPBackendMemoryUsage
+        expr: (process_resident_memory_bytes{job="gacp-backend"} / 1024 / 1024) > 1024
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "GACP Backend high memory usage"
+          description: "Memory usage is above 1GB"
+
+  # ==========================================
+  # Database Alerts
+  # ==========================================
+  - name: database
+    interval: 30s
+    rules:
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database is unreachable"
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "PostgreSQL high connection count"
+          description: "PostgreSQL has more than 80 active connections"
+
+      - alert: PostgreSQLSlowQueries
+        expr: pg_stat_statements_mean_exec_time > 1000
+        for: 10m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Average query execution time is above 1 second"
+
+      - alert: PostgreSQLReplicationLag
+        expr: pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: critical
+          team: database
+        annotations:
+          summary: "PostgreSQL replication lag"
+          description: "Replication lag is above 30 seconds"
+
+  # ==========================================
+  # Redis Alerts
+  # ==========================================
+  - name: redis
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache server is unreachable"
+
+      - alert: RedisHighMemoryUsage
+        expr: (redis_memory_used_bytes / redis_memory_max_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: cache
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is above 90%"
+
+  # ==========================================
+  # Infrastructure Alerts
+  # ==========================================
+  - name: infrastructure
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80% for more than 10 minutes"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 85% for more than 10 minutes"
+
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10%"
+
+      - alert: NodeDown
+        expr: up{job="node-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Node is down"
+          description: "Server node has been down for more than 2 minutes"
+
+  # ==========================================
+  # SSL Certificate Alerts
+  # ==========================================
+  - name: ssl
+    interval: 1h
+    rules:
+      - alert: SSLCertificateExpiring
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate will expire in less than 30 days"
+
+      - alert: SSLCertificateExpired
+        expr: probe_ssl_earliest_cert_expiry - time() < 0
+        for: 1h
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "SSL certificate expired"
+          description: "SSL certificate has expired"
+
+  # ==========================================
+  # Business Logic Alerts
+  # ==========================================
+  - name: business
+    interval: 5m
+    rules:
+      - alert: ApplicationSubmissionSpike
+        expr: increase(gacp_applications_submitted_total[1h]) > 100
+        for: 10m
+        labels:
+          severity: info
+          team: product
+        annotations:
+          summary: "Application submission spike"
+          description: "Unusually high number of applications submitted"
+
+      - alert: FailedPaymentRate
+        expr: sum(rate(gacp_payments_failed_total[1h])) / sum(rate(gacp_payments_total[1h])) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          team: payments
+        annotations:
+          summary: "High payment failure rate"
+          description: "More than 10% of payments are failing"

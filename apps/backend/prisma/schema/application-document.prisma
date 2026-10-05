@@ -1,0 +1,96 @@
+// Relational store for per-application uploaded documents, consumed by the
+// fraud-detection document scan (file-integrity / image-quality / EXIF-tamper /
+// exact photo-duplicate). Field contract is defined by the existing
+// fraud-detection service code (services/fraud-detection/*) and the
+// planting-service ownership probe — this model makes `prisma.applicationDocument`
+// resolve to real rows instead of `undefined`.
+//
+// DESIGN CHOICES (see PR description — review before production migration):
+//   • Populated by a dual-write from the draft-document upload path, ALONGSIDE
+//     the existing `Application.formData.draftDocuments` JSON (JSON kept for
+//     backward compatibility; the dual-write is best-effort and never blocks an
+//     upload).
+//   • ONE SLOT, ONE CURRENT DOCUMENT, AND A KEPT HISTORY (ledger F-G4-15). A
+//     slot is re-uploadable: a farmer who notices they attached the wrong file
+//     attaches the right one. Every such upload used to be a plain insert, so
+//     one draft held six ภท.11 rows and nothing in the data said which of the
+//     six an officer was judging. `currentForSlot` says it — field comments
+//     below. Superseded rows are KEPT, not deleted, because three readers need
+//     them to exist: middleware/uploads-access.js:311 authorises a stored file
+//     by looking up its row, CorrectionSubmissionVersion.attachments snapshots
+//     the file URLs of an earlier correction round, and the fraud scan's
+//     cross-application photo-duplicate search reads every row ever recorded.
+//   • `documentType` = canonical slot id (validation-slot-utils taxonomy),
+//     upper-cased — so the existing fraud filters `contains 'PHOTO'` / `'ID'`
+//     match (e.g. PHOTOS_EXTERIOR, ID_CARD).
+//   • `fileHash` / `photoHash` = SHA-256 of the file bytes → exact-duplicate
+//     detection (photoHash set for image/* only).
+//   • `idNumber` is left NULL: national-ID duplicate detection needs OCR at
+//     ingest, deferred to a follow-up. The scan degrades to "no ID match"
+//     (never a false positive).
+//   • NOT tenant-scoped (no organizationId): fraud duplicate detection is a
+//     cross-application admin function, so queries are intentionally global.
+
+model ApplicationDocument {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  // Mirrors the JSON draftDocuments[] entry it was derived from.
+  documentId String?
+  slotId     String?
+  stepKey    String?
+
+  // The date printed ON the paper, not the date it was uploaded. กทล.1 requires some
+  // papers to be recent ("หนังสือรับรองการจดทะเบียนนิติบุคคล ออกให้ไม่เกิน 6 เดือน"), and
+  // RequirementRule.maxDocumentAgeMonths has held that number since the register was built —
+  // with nothing to compare it against, so the condition was never enforced (operator
+  // approved closing this 2026-09-06). Nullable: papers already uploaded have no stated
+  // issue date, and a missing date is "unknown", never "fresh".
+  issuedDate DateTime?
+
+  documentType String // canonical slot id, upper-cased (ID_CARD, PHOTOS_EXTERIOR, …)
+  fileName     String?
+  fileUrl      String
+  fileSize     Int?
+  mimeType     String?
+
+  fileHash  String? // SHA-256 of file bytes
+  photoHash String? // SHA-256 of file bytes (images only) — exact photo-duplicate
+  idNumber  String? // deferred: requires OCR-at-ingest
+
+  verificationStatus String?
+  verifiedAt         DateTime?
+  uploadedBy         String?
+
+  // WHICH ROW IS BEING JUDGED — stated in the data, never inferred from
+  // ordering. Holds this row's `documentType` for exactly as long as this row
+  // is the slot's live document, and NULL from the moment another upload takes
+  // the slot. Postgres treats NULLs as distinct inside a unique index, so the
+  // @@unique below reads: at most ONE live document per (application, slot),
+  // and any number of superseded ones.
+  //
+  // NULL from the start for an upload that carries no slot (documentType
+  // UNKNOWN): a document that belongs to no slot cannot be a slot's answer, and
+  // two such uploads must not collide with each other.
+  currentForSlot String?
+
+  // The nth document filed into this slot, counted from 1 — a total order over
+  // the slot's history that does not depend on clock values.
+  slotVersion Int @default(1)
+
+  supersededAt   DateTime?
+  supersededById String?
+  supersededBy   ApplicationDocument?  @relation("ApplicationDocumentSupersession", fields: [supersededById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  supersedes     ApplicationDocument[] @relation("ApplicationDocumentSupersession")
+
+  @@unique([applicationId, currentForSlot])
+  @@index([applicationId])
+  @@index([documentType])
+  @@index([idNumber])
+  @@index([photoHash])
+  @@map("application_documents")
+}

@@ -1,0 +1,16 @@
+Agent F05 — Provider Mobile UX Results
+Date: 2026-03-13T13:19:33.633Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Provider login (mobile) | HTTP 200
+PASS | Provider dash (mobile) | HTTP 200
+PASS | Audits (mobile) | HTTP 200
+PASS | Applications (mobile) | HTTP 200
+PASS | Certificates (mobile) | HTTP 200
+PASS | Accounting (mobile) | HTTP 200
+PASS | Receipts (mobile) | HTTP 200
+PASS | Analytics (mobile) | HTTP 200
+PASS | Calendar (mobile) | HTTP 200
+PASS | Settings (mobile) | HTTP 200
+PASS | Reports (mobile) | HTTP 200
+PASS | Profile (mobile) | HTTP 200

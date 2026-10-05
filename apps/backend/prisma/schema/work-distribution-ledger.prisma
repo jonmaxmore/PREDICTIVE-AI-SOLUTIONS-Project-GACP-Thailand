@@ -1,0 +1,58 @@
+// Domain: Work Distribution Ledger (Phase 1A — accountability)
+//
+// Append-only, queryable record of work-assignment lifecycle events:
+// who assigned which work to which person, when, and why. Complements (does
+// NOT replace) the immutable regulatory AuditLog — this is the lightweight
+// OPERATIONAL view ("who is/was assigned to this work?") used for per-person
+// workload, distribution-fairness reports, and reassignment audit.
+//
+// Polymorphic by design: entityType + entityId reference Application /
+// WorkActivity / PostAuditTask without typed FKs (keeps the ledger decoupled
+// from each work model + avoids multi-FK reverse-relation sprawl). The two
+// people involved (assignee, assignedBy) + the tenant ARE typed FKs.
+//
+// Writers (Phase 1B) emit one row per assignment event via
+// assignment-ledger-service.recordAssignment(); rows are never updated/deleted
+// (Phase 2 adds RLS forbidding UPDATE/DELETE, folding into ADR-014 Phase 3c).
+//
+// See docs/handoffs/work-distribution-ledger-design-2026-06-18.md.
+
+model AssignmentLedgerEntry {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // What work this event is about (polymorphic — no typed FK).
+  entityType String // APPLICATION | WORK_ACTIVITY | POST_AUDIT_TASK
+  entityId   String
+
+  // Lifecycle action.
+  action String // ASSIGN | REASSIGN | CLAIM | UNCLAIM | COMPLETE | CANCEL
+
+  // Who is now responsible for the work.
+  assigneeUserId String
+  assignee       User   @relation("LedgerAssignee", fields: [assigneeUserId], references: [id])
+
+  // Who initiated the assignment (null = self-claim or system action).
+  assignedByUserId String?
+  assignedBy       User?   @relation("LedgerAssignedBy", fields: [assignedByUserId], references: [id])
+
+  // Canonical role the work pertains to (document_reviewer | auditor | scheduler | ...).
+  role String?
+
+  // Prior assignee (set on REASSIGN). Plain reference (no FK) — historical only.
+  previousAssigneeUserId String?
+
+  // How the assignment happened + free-text reason/note.
+  source String? // SCHEDULER | ADMIN_BATCH | SELF_CLAIM | SYSTEM
+  reason String?
+
+  // Tenancy (ADR-014).
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([assigneeUserId, organizationId, createdAt(sort: Desc)], map: "assignment_ledger_assignee_org_created_idx")
+  @@index([assignedByUserId, organizationId, createdAt(sort: Desc)], map: "assignment_ledger_assignedby_org_created_idx")
+  @@index([entityType, entityId, createdAt(sort: Desc)], map: "assignment_ledger_entity_created_idx")
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("assignment_ledger_entries")
+}

@@ -1,0 +1,114 @@
+// Domain: Work Activity Tracking (ADR-016 Phase 1A)
+//
+// BPMN-aligned work-item tracking that lives alongside Application.status.
+// Application.status answers "where in the pipeline?"; WorkActivity answers
+// "what work needs to be done at this stage and by whom?". Decoupling these
+// two lets us track per-work-type assignment + SLA + audit trail without
+// over-loading the application status.
+//
+// See migration 20260430160000_create_work_activity_models for the seed
+// data and full design notes.
+
+model WorkActivity {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  // What kind of work — DOC_REVIEW | FIELD_AUDIT | CAR_REVIEW |
+  // FINAL_APPROVAL | SLIP_REVIEW | SCHEDULING | RECEIPT_ISSUE.
+  // Free-form so admins can introduce new types via stage_activity_configs.
+  workType String
+
+  // Canonical role code from canonical-rbac.js (any user with this role
+  // can claim).  Phase 3 may upgrade to multi-group via UserGroupMembership.
+  candidateGroup String
+
+  // TODO | CLAIMED | IN_PROGRESS | DONE | CANCELLED
+  state String @default("TODO")
+
+  // Assignment — who is responsible for completing this activity.
+  assignedUserId String?
+  assignedUser   User?     @relation("WorkActivityAssignee", fields: [assignedUserId], references: [id])
+  claimedAt      DateTime?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  completedBy String?
+  completer   User?     @relation("WorkActivityCompleter", fields: [completedBy], references: [id])
+
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  // SLA targets — frozen at creation so policy edits don't move past
+  // deadlines retroactively.
+  dueAt     DateTime?
+  warningAt DateTime?
+
+  // Alert dispatch dedup (Phase 1B).  The hourly cron only fires the
+  // warning/breach notification once per row.
+  warnedAt   DateTime?
+  breachedAt DateTime?
+
+  // Workflow stage that triggered this row — used for idempotency
+  // (one open row per (applicationId, workType, triggeredAtStage)).
+  triggeredAtStage String
+
+  note String?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([applicationId])
+  @@index([assignedUserId])
+  @@index([state, candidateGroup])
+  @@index([workType, state])
+  @@index([organizationId])
+  // DB-06: index FK column
+  @@index([completedBy])
+  @@map("work_activities")
+}
+
+// Global config: which activities each workflow stage spawns.
+// Read at runtime by work-activity-service when application status changes.
+model StageActivityConfig {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflowStage  String
+  workType       String
+  candidateGroup String
+  displayOrder   Int    @default(0)
+
+  labelTH       String
+  labelEN       String
+  descriptionTH String?
+
+  isActive Boolean @default(true)
+
+  @@unique([workflowStage, workType])
+  @@index([workflowStage, isActive])
+  @@map("stage_activity_configs")
+}
+
+// Global config: per-workType SLA targets (warning + breach thresholds).
+model SlaPolicy {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workType        String @unique
+  targetHours     Int
+  warningHours    Int?
+  escalationHours Int?
+
+  labelTH String
+  labelEN String
+
+  isActive Boolean @default(true)
+
+  @@map("sla_policies")
+}

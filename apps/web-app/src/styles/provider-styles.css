@@ -1,0 +1,118 @@
+/* =====================================================
+   Provider Portal & Print Styles
+   Extracted from inline styles for lint compliance
+   ===================================================== */
+
+/* --- Provider Layout --- */
+.provider-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    background: #ffffff;
+}
+
+.provider-brand-icon {
+    box-shadow: 0 4px 8px rgba(99, 102, 241, 0.3);
+}
+
+.provider-brand-title {
+    /* Thai title — negative tracking pulls tone marks into their neighbours.
+       See the rule at the top of globals.css. */
+    letter-spacing: normal;
+}
+
+.provider-user-text {
+    text-align: left;
+}
+
+.provider-menu-dropdown-inner {
+    border-radius: 0.5rem;
+}
+
+.provider-navbar {
+    background: #ffffff;
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.provider-nav-label {
+    /* Thai nav labels — positive tracking detaches สระ/วรรณยุกต์ from their base. */
+    letter-spacing: normal;
+}
+
+.provider-nav-link {
+    text-decoration: none;
+}
+
+.provider-nav-item {
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.provider-nav-item--active {
+    background: linear-gradient(90deg, #edf2ff 0%, rgba(255, 255, 255, 0) 100%);
+    color: #4263eb;
+}
+
+.provider-nav-item--inactive {
+    background: transparent;
+    color: #868e96;
+}
+
+.provider-sidebar-footer {
+    border-top: 1px solid #e9ecef;
+}
+
+.provider-sidebar-card {
+    border-radius: 0.5rem;
+    background: linear-gradient(135deg, #edf2ff 0%, #f3f0ff 100%);
+    border: 1px solid #dbe4ff;
+}
+
+/* --- Clear Session --- */
+.clear-session-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: sans-serif;
+}
+
+/* --- Application Detail --- */
+.review-action-bar {
+    border-top: 2px solid #20c997;
+    z-index: 100;
+}
+
+/* --- Print Page --- */
+.print-action-bar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.print-page {
+    min-height: 297mm;
+    page-break-after: always;
+}
+
+.print-page-last {
+    min-height: 297mm;
+}
+
+.print-video-section {
+    border-radius: 8px;
+}
+
+.print-declaration-box {
+    border-radius: 8px;
+}
+
+.print-signature-line {
+    border-bottom: 1px dotted #666;
+}
+
+.print-checkbox {
+    border: 1px solid #666;
+}
+
+.print-footer {
+    border-top: 1px solid #ddd;
+}

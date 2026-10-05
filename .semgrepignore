@@ -1,0 +1,21 @@
+# ── Semgrep scan scope (the gating "SAST (Semgrep)" job) ──────────────────────
+# Excludes non-application surfaces from the app SAST gate. Application code under
+# apps/*/ (routes, services, middleware, controllers, shared, utils) is STILL
+# fully scanned — only the surfaces below are out of scope:
+#
+#   • Build / CI tooling — spawns child processes by design (running eslint/jest,
+#     etc.); it is not a runtime attack surface, yet `detect-child-process` fires
+#     on every scripts/ci/check-*.js.
+#   • Test fixtures — deliberately use fixed/known test JWT secrets
+#     (`jwt-hardcode`); not production credentials.
+#   • Infra configs — nginx `.conf` files are reviewed by infra, not by a JS/TS
+#     application SAST (`generic.nginx.*` header/proxy-host rules).
+#
+# Genuine application findings are fixed in code or annotated inline with a
+# justified `// nosemgrep: <rule>` — never blanket-ignored here.
+
+scripts/
+**/__tests__/
+**/*.test.js
+**/*.spec.js
+*.conf

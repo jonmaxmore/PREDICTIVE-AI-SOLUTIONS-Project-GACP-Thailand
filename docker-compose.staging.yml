@@ -1,0 +1,223 @@
+# ============================================================
+# GACP Platform — Staging stack (same droplet, isolated namespace)
+# ============================================================
+# Runs alongside production on the same droplet. Cost: $0/month.
+# Trade-offs (deliberate, documented in deploy-runbook.md):
+#   - Shares kernel + disk + network with prod. A staging memory leak
+#     CAN affect prod scheduling. Set strict resource limits below.
+#   - Shares the postgres CONTAINER but uses a separate DATABASE
+#     (`gacp_staging`). Backups and migrations are independent.
+#   - Shares redis CONTAINER but uses a different keyspace (DB index 1
+#     instead of 0).
+#   - Frontend ↔ backend traffic stays on a separate docker network.
+#
+# Used WITH the existing production compose:
+#
+#   docker compose \
+#       --env-file .env.staging \
+#       -f docker-compose.staging.yml \
+#       up -d
+#
+# Or via the staging deploy script:
+#
+#   /opt/gacp-platform/scripts/deploy/deploy-staging.sh
+#
+# Image tag selection (mirrors prod model):
+#   - STAGING_IMAGE_TAG=main-latest        → tracks main branch (default)
+#   - STAGING_IMAGE_TAG=sha-abc1234        → pinned for testing
+#   - STAGING_IMAGE_TAG=deploy-production-… → "promote" rehearsal
+
+
+networks:
+  gacp-staging-network:
+    name: gacp-staging-network
+
+# Reuse the production volumes for postgres/redis/minio. Staging uses
+# different DBs/keyspaces inside the SAME container instance — no point
+# running two postgres processes.
+volumes:
+  gacp_staging_uploads:
+  gacp_staging_storage:
+  # FU-4 (full-system audit follow-up, 2026-07-07): staging RSA signing keys
+  # (QR + certificate signatures) regenerated on EVERY recreate because only
+  # uploads/storage were volume-mounted — so staging-signed certs stopped
+  # verifying after each deploy (prod already persists via gacp_signing_keys).
+  gacp_staging_signing_keys:
+
+services:
+  # ------------------------------------------------------------
+  # Backend — Staging
+  # ------------------------------------------------------------
+  backend-staging:
+    image: ${BACKEND_IMAGE:-ghcr.io/jonmaxmore/gacp-backend}:${STAGING_IMAGE_TAG:-main-latest}
+    container_name: gacp-backend-staging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '0.50', memory: 1G }     # 1G for the document pre-check OCR job (operator 2026-09-29); CPU stays capped
+        reservations: { cpus: '0.10', memory: 128M }
+    ports:
+      # Bind only to loopback — host nginx routes staging.gacpth.com here.
+      - "127.0.0.1:8001:8000"
+    environment:
+      - NODE_ENV=staging
+      # Marks this container as the staging slot for auth-providers.js —
+      # enables the mock IdP here regardless of what NODE_ENV the running image
+      # ends up with (the deploy scripts reuse the production image/env). Pinned
+      # by apps/backend/__tests__/unit/staging-slot-compose-pin.test.js: this
+      # line must exist here and must never appear in
+      # docker-compose.production.yml.
+      - GACP_DEPLOY_SLOT=staging
+      - PORT=8000
+      # Different database, same postgres instance:
+      # Operator ruling 2026-09-05: staging runs on its OWN Supabase project, isolated
+      # from prod/demo, so break-tests can never touch shared data. The env file's
+      # DATABASE_URL (set in /opt/gacp-platform/.env.staging → the staging Supabase
+      # transaction pooler) wins; the old local-postgres template stays as the fallback
+      # so an env file without the new var behaves exactly as before (expand, not break).
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${APP_DB_USER:-${DB_USER:-gacp}}:${APP_DB_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD_required}}@postgres:5432/${STAGING_DB_NAME:-gacp_staging}?schema=public}
+      # Different redis keyspace (db index 1 instead of 0):
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-gacp_redis_2026}@redis:6379/1
+      - HEALTH_JWT_SECRET=${STAGING_HEALTH_JWT_SECRET:-${HEALTH_JWT_SECRET:?required}}
+      - PROVIDER_JWT_SECRET=${STAGING_PROVIDER_JWT_SECRET:-${PROVIDER_JWT_SECRET:?required}}
+      - ENCRYPTION_KEY=${STAGING_ENCRYPTION_KEY:-${ENCRYPTION_KEY:?required}}
+      - QR_SIGNATURE_FALLBACK_SECRET=${STAGING_QR_SIGNATURE_FALLBACK_SECRET:-${QR_SIGNATURE_FALLBACK_SECRET:?required}}
+      # signature-service.initialize() throws at boot if this is unset (no
+      # bypass) — newer images hard-require it. Prod compose already passes it;
+      # staging was missing the passthrough, so backend-staging crash-looped
+      # ("RSA_PRIVATE_KEY_PASSPHRASE secret is required but unset") on every
+      # deploy of a current image despite .env.staging defining the value.
+      - RSA_PRIVATE_KEY_PASSPHRASE=${RSA_PRIVATE_KEY_PASSPHRASE:-}
+      - PAYMENT_WEBHOOK_SECRET=${STAGING_PAYMENT_WEBHOOK_SECRET:-${PAYMENT_WEBHOOK_SECRET:?required}}
+      # P1-e2e: shared secret gating the mutating /api/v1/e2e/* routes. Fail-closed:
+      # if unset, the e2e router rejects every request (the nightly golden-scenario
+      # spec tolerates 401). Set E2E_SECRET in the host staging .env to enable.
+      - E2E_SECRET=${E2E_SECRET:-}
+      - HMAC_KEY=${HMAC_KEY:-}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:-}
+      # Payments (2026-09-06): staging had NO payment configuration at all, so every
+      # filing froze at PENDING_DOC_FEE — checkout answered 503 and the slip rail,
+      # which attaches to the checkout-minted invoice, was stranded with it. TEST-mode
+      # keys only on staging (L3: live keys stay operator-only, gated on G1).
+      - PAYMENT_ADAPTER=${PAYMENT_ADAPTER:-}
+      - STRIPE_CHECKOUT_ENABLED=${STRIPE_CHECKOUT_ENABLED:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      # PromptPay QR step (2026-09-27): the backend hands this pk_test_ key to the
+      # browser with each checkout; without it checkout refuses before minting
+      # (STRIPE_PUBLISHABLE_KEY_NOT_CONFIGURED). Must be the same mode as the secret.
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY:-}
+      - SESSION_SECRET=${SESSION_SECRET:-}
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-10}        # cheaper for staging
+      - COOKIE_DOMAIN=${STAGING_COOKIE_DOMAIN:-staging.gacpth.com}
+      - COOKIE_SECURE=true
+      - REQUIRE_MFA_FOR_PRIVILEGED=false
+      # ENT-01 org-level read backstop (2026-06-06). Enabled on STAGING first
+      # per docs/handoffs/ent-01-org-read-backstop.md. Verified with real
+      # 2-org data (org-A sees only org-A rows; withoutTenantScope sees both;
+      # authed /applications/my non-empty + org-scoped). Instant rollback =
+      # set false / remove + recreate. Prod flip is a separate owner step.
+      - TENANT_READ_ORG_SCOPE=true
+      # H-4 PDPA: keyed-HMAC national-ID lookup. Set true in .env.staging after
+      # the backfill. Instant rollback = set false + recreate (legacy *Hash
+      # always written). See docs/handoffs/H-4-national-id-hmac-migration-rfc.md.
+      - AUTH_LOOKUP_USE_HMAC=${AUTH_LOOKUP_USE_HMAC:-false}
+      # H-4 detokenize STAGE A: canonicalId FK = keyed-HMAC token when true. Set
+      # true in .env.staging after scripts/rekey-canonicalid.js. Instant rollback
+      # = false + recreate + rekey-canonicalid.js --rollback.
+      - APP_FK_USE_TOKEN=${APP_FK_USE_TOKEN:-false}
+      # H-4 detokenize STAGE B3: AES-256-GCM at-rest encryption of the plaintext
+      # national-ID columns (User.healthId/providerId/idCard/taxId/
+      # communityRegistrationNo/laserCode + Entity.thaiCitizenId). OFF = whole
+      # prisma-pdpa-extension bypassed (today's behaviour). Set true in
+      # .env.staging ONLY AFTER scripts/pdpa/backfill-encrypt-national-id-pii.js
+      # ("0 plaintext remaining"); SAME ENCRYPTION_KEY at backfill + serve time
+      # (mismatch → silent '[PII_DECRYPT_FAILED]'; do NOT rotate — it also keys
+      # the *Hmac lookups). Instant rollback = false + recreate (enc:v1: prefix
+      # keeps both forms readable).
+      - ENABLE_PDPA_FIELD_ENCRYPTION=${ENABLE_PDPA_FIELD_ENCRYPTION:-false}
+      # Audit hash-chain nightly-verify baseline floor (audit gap #14). Set to the
+      # then-current MAX("sequenceNumber") at each deploy so the daily cron verifies
+      # only the clean v2-forward chain (see services/audit-trail.js BASELINE FLOOR).
+      - AUDIT_CHAIN_VERIFY_FROM_SEQ=${AUDIT_CHAIN_VERIFY_FROM_SEQ:-0}
+      # Audit hash-chain KEYING (audit gap #14 follow-up). true → NEW audit rows
+      # sealed with keyed HMAC (v3); default/unset → v2 (unchanged); verify falls
+      # back v3→v2→v1. Key from AUDIT_HASH_KEY else derived from ENCRYPTION_KEY.
+      - AUDIT_HASH_HMAC=${AUDIT_HASH_HMAC:-}
+      - AUDIT_HASH_KEY=${AUDIT_HASH_KEY:-}
+      - TRACE_BASE_URL=${STAGING_PUBLIC_URL:-https://staging.gacpth.com}
+      - APP_PUBLIC_URL=${STAGING_PUBLIC_URL:-https://staging.gacpth.com}
+      - PUBLIC_TRACE_URL=${STAGING_PUBLIC_URL:-https://staging.gacpth.com}/trace
+      - FRONTEND_URL=${STAGING_PUBLIC_URL:-https://staging.gacpth.com}
+      - CORS_ORIGIN=${STAGING_PUBLIC_URL:-https://staging.gacpth.com}
+      - PARTNER_TRACE_API_KEY=${STAGING_PARTNER_TRACE_API_KEY:-staging-only-no-prod-secrets}
+      # Per-partner M2M API keys for /api/interoperability/v1/* (partner-api-key.js).
+      # JSON {partnerId: secret}; fail-closed when empty. Explicit passthrough
+      - INTEROP_PARTNER_API_KEYS=${INTEROP_PARTNER_API_KEYS:-}
+      - TRUST_PRIVATE_PROXY_RANGES=true
+      - STORAGE_PROVIDER=local                    # avoid contaminating prod minio bucket
+      # PLATFORM bank account shown on the payment page + financial docs. This
+      # overlay has no env_file, so each var is explicitly forwarded (cf. the
+      # PENDING_FINANCE_CONFIRMATION. Mirrors docker-compose.production.yml.
+      - PLATFORM_BANK_NAME=${PLATFORM_BANK_NAME:-}
+      - PLATFORM_BANK_ACCOUNT_NO=${PLATFORM_BANK_ACCOUNT_NO:-}
+      - PLATFORM_PROMPTPAY_ID=${PLATFORM_PROMPTPAY_ID:-}
+      # Error tracking (Sentry, re-added 2026-10-02 with PII scrubbing). Empty
+      # SENTRY_DSN = off. The backend project's DSN goes in .env.staging; this
+      # overlay has no env_file, so it is forwarded here like every other var.
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=staging
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-}
+    volumes:
+      - gacp_staging_uploads:/app/apps/backend/public/uploads
+      - gacp_staging_storage:/app/storage
+      # FU-4: persist RSA signing keys across recreates (signature-service
+      # keyDir = /app/apps/backend/keys; mirrors prod's gacp_signing_keys).
+      - gacp_staging_signing_keys:/app/apps/backend/keys
+    networks:
+      - gacp-staging-network
+      - gacp-network                              # so it can reach postgres/redis/minio
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ------------------------------------------------------------
+  # Frontend — Staging
+  # ------------------------------------------------------------
+  frontend-staging:
+    image: ${FRONTEND_IMAGE:-ghcr.io/jonmaxmore/gacp-frontend}:${STAGING_IMAGE_TAG:-main-latest}
+    container_name: gacp-frontend-staging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '0.50', memory: 512M }
+        reservations: { cpus: '0.10', memory: 128M }
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      - NODE_ENV=staging
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=${STAGING_PUBLIC_URL:-https://staging.gacpth.com}
+      - NEXT_PUBLIC_PWA_ENABLED=false
+      - NEXT_PUBLIC_ENVIRONMENT=staging          # frontend uses this to colour the topbar etc.
+      # Server-side Sentry environment, read at runtime (the DSN itself is baked into
+      # the image at build time: NEXT_PUBLIC_SENTRY_DSN build arg).
+      - SENTRY_ENVIRONMENT=staging
+      # Server-side calls to the backend (the Next proxy route and server-rendered
+      # pages such as /pricing). Without it the default is http://localhost:8000,
+      # which is nothing inside this container; demo sets the same (backend-demo).
+      - INTERNAL_API_URL=http://backend-staging:8000
+    networks:
+      - gacp-staging-network
+      - gacp-network
+    depends_on:
+      - backend-staging
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s

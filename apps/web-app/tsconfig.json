@@ -1,0 +1,80 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext",
+      "webworker"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@gacp/validation": [
+        "../../packages/validation/src/index.ts"
+      ],
+      "@gacp/validation/*": [
+        "../../packages/validation/src/*"
+      ],
+      "@gacp/error-reporting/scrub": [
+        "../../packages/error-reporting/src/scrub.js"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts",
+    ".next/dev/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "e2e",
+    // Playwright walk harnesses, the same kind of thing as "e2e" above and excluded for
+    // the same reason: they are driven by Playwright's own transpiler, they are not part
+    // of the Next application, and `next build` type-checks whatever tsconfig includes.
+    //
+    // They were never added to this list when they were created, so from the day e2e-g4
+    // landed (2026-08-29) `pnpm exec next build` failed on their type errors and NO
+    // frontend image could be built at all — which is why staging still served an image
+    // from 2026-08-14 and preview one from 2026-08-23.
+    //
+    // The 66 errors they carry (34 in e2e-phase0, 32 in e2e-g4) are REAL — mostly
+    // `noUncheckedIndexedAccess` on indexing into a fixture array — and excluding these
+    // directories does not fix them, it only stops them from blocking the application
+    // build. They are recorded in the backlog so the debt is visible.
+    "e2e-g4",
+    "e2e-phase0",
+    "__tests__",
+    "jest.setup.tsx",
+    "jest.config.mjs",
+    "playwright.config.ts",
+    "capacitor.config.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

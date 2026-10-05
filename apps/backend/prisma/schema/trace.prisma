@@ -1,0 +1,251 @@
+// Domain: Traceability & QR
+
+model Lot {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Lot Number
+  lotNumber String @unique // 'LOT-2026-001-A'
+
+  // Relation to Batch
+  batchId String
+  batch   HarvestBatch @relation(fields: [batchId], references: [id])
+
+  // Packaging Info
+  packageType String // 'BAG_1KG', 'BOX_5KG', 'BOTTLE_100ML'
+  quantity    Int // Number of packages
+  unitWeight  Float // Weight per package (kg)
+  totalWeight Float? // Total weight
+
+  // QR Code Tracking
+  qrCode      String  @unique // UUID for public lookup
+  trackingUrl String? // Full URL with domain
+
+  // Processing
+  processedAt DateTime?
+  packagedAt  DateTime?
+  expiryDate  DateTime?
+
+  // Lab Test
+  labTestReportUrl String?
+  thcContent       Float?
+  cbdContent       Float?
+  moistureContent  Float?
+  testStatus       String? // 'PENDING', 'PASSED', 'FAILED'
+
+  // Destination
+  destinationType String? // 'DOMESTIC', 'EXPORT'
+  destination     String? // Customer/Country
+  shippedAt       DateTime?
+
+  // Status
+  status String @default("CREATED") // CREATED, PACKAGED, TESTED, SHIPPED
+
+  // Print Lock - once printed, data cannot be modified
+  printedAt DateTime? // When QR label was first printed (locks editing)
+
+  // Soft Delete
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([batchId])
+  @@index([qrCode])
+  @@index([status])
+  @@index([isDeleted])
+  @@index([organizationId])
+  @@map("lots")
+}
+
+// TRACE QR SECURITY MODELS (Cryptographic integrity, no blockchain)
+
+model TraceQrSecurity {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entityType String // HARVEST_BATCH | PACKAGING_LOT | PLANT_UNIT
+  entityId   String
+  qrCode     String? @unique // M-017: unique QR lookup key
+  publicUrl  String  @unique // M-017: unique public verification URL
+
+  payload            Json
+  dataHash           String
+  previousHash       String?
+  chainHash          String
+  signature          String
+  signatureAlgorithm String  @default("RSA-SHA256")
+  timestampData      Json?
+  keyFingerprint     String?
+
+  status    String @default("ACTIVE")
+  scanCount Int    @default(0)
+
+  scans TraceQrScan[]
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([entityType, entityId], name: "trace_qr_security_entity_key")
+  @@index([entityType, entityId])
+  @@index([chainHash])
+  @@index([createdAt(sort: Desc)])
+  @@index([organizationId])
+  @@map("trace_qr_security")
+}
+
+model TraceQrScan {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  qrSecurityId String
+  qrSecurity   TraceQrSecurity @relation(fields: [qrSecurityId], references: [id], onDelete: Cascade)
+
+  requestIp    String?
+  userAgent    String?
+  requestPath  String?
+  verification Json?
+  verified     Boolean @default(false)
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([qrSecurityId])
+  @@index([createdAt(sort: Desc)])
+  @@index([organizationId])
+  @@map("trace_qr_scans")
+}
+
+// SUPPLEMENTARY CRITERION MODEL (เกณฑ์เสริม)
+
+model ConsumerFeedback {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Certificate Link (optional - from QR code)
+  certificateId String?
+  certificate   Certificate? @relation(fields: [certificateId], references: [id])
+
+  // Feedback Details
+  rating   Int // 1-5 stars
+  feedback String  @db.Text
+  contact  String? // Email/Phone (optional)
+
+  // Product Info (from QR)
+  productName String?
+  batchNumber String?
+  farmName    String?
+
+  // Status
+  status String @default("RECEIVED") // RECEIVED, REVIEWED, FLAGGED, RESOLVED
+
+  // Audit
+  reviewedBy String?
+  reviewedAt DateTime?
+  notes      String?   @db.Text
+
+  // Soft delete (Wave A Phase 15)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([certificateId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([isDeleted])
+  @@index([organizationId])
+  @@map("consumer_feedback")
+}
+
+// Post-Audit Task Management
+
+model PlantSpecies {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Identification (Maps to legacy plantId)
+  code String @unique // CAN, KRA, TUR
+
+  // Basic Info
+  nameTH         String // nameTH
+  nameEN         String? // nameEN
+  scientificName String? // scientificName
+  familyName     String? // familyName
+  description    String?
+  imageUrl       String?
+
+  // GACP Configuration
+  group           String  @default("GENERAL") // HIGH_CONTROL, GENERAL
+  requiresLicense Boolean @default(false)
+  sortOrder       Int     @default(0)
+
+  // Yield Prediction Data (New Phase 5 Requirement)
+  maxYieldPerPlant Float   @default(0.0) // Max Dry Weight (kg) per plant per cycle
+  standardSpacing  String? // Recommended spacing (e.g. "1x1", "1.5x1.5")
+
+  // Dynamic Configuration (JSON)
+  units      Json? // ["ไร่", "Rai"] or ["ต้น", "Tree"]
+  plantParts Json? // ["Root", "Leaf"]
+
+  // Requirements (JSON)
+  securityRequirements Json? // Array of check items
+  productionInputs     Json? // Form fields configuration
+
+  // Legacy Fields (kept for compatibility or future use)
+  gacpCategory    String? // MEDICINAL, CANNABIS, KRATOM, OTHER
+  dtamPlantCode   String?
+  cultivationType String? @default("SELF_GROWN")
+  harvestCycle    String?
+
+  // Relations
+  harvestBatches       HarvestBatch[]
+  plantingCycles       PlantingCycle[]
+
+  // Status
+  isActive  Boolean @default(true)
+  isDeleted Boolean @default(false)
+
+  @@index([code])
+  @@index([nameTH])
+  @@index([isActive, isDeleted])
+  @@map("plant_species")
+}
+
+
+// PLANTING CYCLE MODEL (รอบการปลูก)
+
+// PARTNER ACCESS LOG (DTAM Next integration, 2026-07-08) — audit trail of
+// partner API reads through /interoperability/v1/*. Platform-level (partner
+// requests carry no tenant context); written best-effort by
+// services/partner-access-log.js, never blocks a request.
+model PartnerAccessLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  partnerId  String
+  method     String
+  path       String
+  code       String? // resolver input, truncated to 200 chars
+  entityType String?
+  entityId   String?
+  status     Int?
+  ip         String?
+
+  @@index([partnerId, createdAt(sort: Desc)])
+  @@map("partner_access_logs")
+}

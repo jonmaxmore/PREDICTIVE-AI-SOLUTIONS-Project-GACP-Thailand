@@ -1,0 +1,30 @@
+# ssot-domains.txt — SSOT registry for ratchet.sh (dup-source counter).
+# Format: <domain>|<grep -lE pattern that identifies a DEFINING file>
+# Each domain must have exactly ONE defining file under apps/backend.
+#
+# A pattern must match a DECLARATION, not a mention. Bare-token patterns made a
+# file count as a source merely for naming the identifier in a comment, so writing
+# "the second table was deleted, do not bring it back" raised dup-source with zero
+# duplication present (the backlog, three occurrences in one work item,
+# evidence/l001/ratchet-comment-token-regression-result-fail.txt). ratchet.sh also
+# drops comment-only lines generically, which covers the bare-token domains still
+# listed below; anchoring the pattern is the stronger of the two guards and is
+# preferred for any new domain.
+# holiday-calendar is read by scripts/probes/holiday-single-source.sh too — that
+# probe parses this line instead of keeping its own copy (Law 3.6).
+holiday-calendar|^[[:space:]]*(export[[:space:]]+)?(const|let|var)[[:space:]]+(RECURRING|PUBLIC|EXTRA)_HOLIDAYS[A-Za-z0-9_]*[[:space:]]*=|^[[:space:]]*(RECURRING|PUBLIC|EXTRA)_HOLIDAYS[A-Za-z0-9_]*[[:space:]]*:
+workflow-status-vocab|const WORKFLOW_STATES = Object.freeze
+checkout-status-vocab|const CHECKOUT_STATUSES = Object.freeze
+# fee-table matches a DEFINITION — a fee name assigned a NUMERIC LITERAL — and not a
+# re-export. The old pattern matched the field NAME alone, so
+# modules/billing/internal/fee-service.js counted as a fee table for forwarding the
+# value it reads from config/business-rules.js. Two consequences, both bad: the counter
+# measured the wrong thing, and it could never reach zero, because deleting the real
+# duplicate still left the re-export matching. Same class of error the holiday-calendar
+# domain was anchored for — a pattern must match a declaration, not a mention.
+# The names are listed rather than globbed so a NEW fee cannot slip in unnoticed:
+# adding one to the tariff means adding it here, which is a decision, not an accident.
+# Read by scripts/probes/fee-single-source.sh (GOALS.md G1's own measure) as well as
+# ratchet.sh, from this one line.
+fee-table|(DOCUMENT_REVIEW_FEE|FIELD_AUDIT_FEE|RE_SUBMISSION_FEE|PHASE1_PER_SCOPE|PHASE2_PER_SCOPE|RENEWAL_PER_CERT)[[:space:]]*:[[:space:]]*[0-9_]+
+entity-legal-name|PLATFORM_LEGAL_NAME_TH

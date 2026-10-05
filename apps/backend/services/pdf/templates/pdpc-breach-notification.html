@@ -1,0 +1,229 @@
+<!--
+  SKELETON — operator MUST verify layout + field ordering against PDPC website
+  (https://www.pdpc.or.th) BEFORE production submission. Form may have been
+  updated since 2026-05-17 — last verified date noted here.
+
+  PDPC Breach Notification Form — PDPA ม.28 + PDPC Notification on Breach
+  Reporting B.E. 2565 (2022).
+  - Single-page A4 portrait, Thai-first.
+  - Sarabun (ministry typography) + ministry-grey palette mirrored from
+    application-summary.html. NO corner triangles, NO commercial-product
+    trade dress (see instinct I-010).
+  - Placeholders are HTML-escaped on substitution by the
+    pdpc-breach-report-service render path (see escapeHtml helper there).
+  - This SKELETON is intentionally minimal — the live PDPC form layout
+    must be confirmed against the official PDPC publication before any
+    real submission is filed.
+-->
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>แบบแจ้งเหตุละเมิดข้อมูลส่วนบุคคล — {{BREACH_ID}}</title>
+  <style>
+    /* Sarabun is embedded locally, not imported.
+       The vendored woff2 faces in assets/fonts/sarabun are base64-inlined as
+       data: URIs and injected into <head> by pdf-generator.service.js, so this
+       template needs no font URL. The @import that used to pull Sarabun from a
+       foreign font CDN on every render was removed 2026-07-25 so the render has
+       no remote font dependency; the renderer now allows only data: + about:blank, so any
+       remote @import re-added here would be aborted and silently fall back. */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Sarabun', 'Noto Sans Thai', Tahoma, sans-serif;
+      font-size: 12px;
+      color: #111827;
+      background: #fff;
+      padding: 16mm 14mm;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* Ministry-grey header chrome (mirrors application-summary.html) */
+    .form-header {
+      border-bottom: 2px solid #374151;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .form-header h1 {
+      font-size: 15px;
+      font-weight: 800;
+      color: #111827;
+      line-height: 1.4;
+    }
+    .form-header .subtitle {
+      font-size: 11px;
+      color: #4b5563;
+      margin-top: 3px;
+    }
+    .form-header .legal-basis {
+      font-size: 10px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    /* Document metadata row */
+    .doc-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 16px;
+      padding: 8px 10px;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+      border-radius: 3px;
+      margin-bottom: 12px;
+      font-size: 11px;
+    }
+    .doc-meta .lbl { color: #6b7280; }
+    .doc-meta .val { font-weight: 600; color: #111827; }
+
+    /* Section */
+    .section { margin-bottom: 12px; }
+    .section-header {
+      background: #374151;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 3px 3px 0 0;
+    }
+    .section-body {
+      border: 1px solid #d1d5db;
+      border-top: none;
+      border-radius: 0 0 3px 3px;
+      padding: 9px 11px;
+      background: #fafafa;
+    }
+
+    /* Info grid */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 18px;
+    }
+    .info-field .lbl { font-size: 10px; color: #6b7280; }
+    .info-field .val { font-size: 12px; font-weight: 600; color: #111827; }
+    .info-field.full { grid-column: 1 / -1; }
+
+    /* Free-text block */
+    .free-text {
+      font-size: 11.5px;
+      line-height: 1.55;
+      color: #1f2937;
+      white-space: pre-wrap;
+      padding: 4px 0;
+    }
+
+    /* Footer */
+    .doc-footer {
+      margin-top: 14px;
+      padding-top: 8px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 10px;
+      color: #9ca3af;
+      text-align: center;
+    }
+
+    @media print { body { padding: 12mm 10mm; } }
+  </style>
+</head>
+<body>
+
+  <!-- Ministry-grey header -->
+  <div class="form-header">
+    <h1>แบบแจ้งเหตุละเมิดข้อมูลส่วนบุคคล</h1>
+    <div class="subtitle">Personal Data Breach Notification Form</div>
+    <div class="legal-basis">
+      ตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 มาตรา 28
+      และประกาศ สคส. เรื่องหลักเกณฑ์การแจ้งเหตุการละเมิดข้อมูลส่วนบุคคล พ.ศ. 2565
+    </div>
+  </div>
+
+  <!-- Document metadata -->
+  <div class="doc-meta">
+    <div><span class="lbl">เลขที่เหตุการณ์ / Breach ID:</span> <span class="val">{{BREACH_ID}}</span></div>
+    <div><span class="lbl">วันที่แจ้ง / Reported At:</span> <span class="val">{{REPORTED_AT_TH}}</span></div>
+    <div><span class="lbl">วันที่ตรวจพบ / Detected At:</span> <span class="val">{{DETECTED_AT_TH}}</span></div>
+    <div><span class="lbl">กำหนดการรายงานต่อ สคส. (72 ชม.):</span> <span class="val">{{PDPC_72H_DEADLINE_TH}}</span></div>
+  </div>
+
+  <!-- Section 1: Data controller -->
+  <div class="section">
+    <div class="section-header">1. ข้อมูลผู้ควบคุมข้อมูลส่วนบุคคล / Data Controller</div>
+    <div class="section-body">
+      <div class="info-grid">
+        <div class="info-field full">
+          <div class="lbl">ชื่อหน่วยงาน / Name</div>
+          <div class="val">{{DATA_CONTROLLER_NAME_TH}}</div>
+        </div>
+        <div class="info-field full">
+          <div class="lbl">อีเมลเจ้าหน้าที่คุ้มครองข้อมูล (DPO) / DPO Email</div>
+          <div class="val">{{DATA_CONTROLLER_DPO_EMAIL}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Breach nature -->
+  <div class="section">
+    <div class="section-header">2. ลักษณะเหตุการณ์ / Nature of the Breach</div>
+    <div class="section-body">
+      <div class="info-grid">
+        <div class="info-field">
+          <div class="lbl">ประเภท / Breach Type</div>
+          <div class="val">{{BREACH_TYPE_TH}}</div>
+        </div>
+        <div class="info-field">
+          <div class="lbl">จำนวนผู้ได้รับผลกระทบ / Affected Subjects</div>
+          <div class="val">{{AFFECTED_SUBJECTS_COUNT}}</div>
+        </div>
+        <div class="info-field full">
+          <div class="lbl">ประเภทข้อมูลที่ได้รับผลกระทบ / Affected PII Categories</div>
+          <div class="val">{{AFFECTED_PII_CATEGORIES_TH}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Risk assessment -->
+  <div class="section">
+    <div class="section-header">3. การประเมินความเสี่ยง / Risk Assessment</div>
+    <div class="section-body">
+      <div class="free-text">{{RISK_ASSESSMENT_TH}}</div>
+    </div>
+  </div>
+
+  <!-- Section 4: Containment actions -->
+  <div class="section">
+    <div class="section-header">4. มาตรการระงับเหตุที่ดำเนินการแล้ว / Containment Actions Taken</div>
+    <div class="section-body">
+      <div class="free-text">{{CONTAINMENT_ACTIONS_TH}}</div>
+    </div>
+  </div>
+
+  <!-- Section 5: Remedial actions -->
+  <div class="section">
+    <div class="section-header">5. มาตรการแก้ไขเยียวยา / Remedial Actions</div>
+    <div class="section-body">
+      <div class="free-text">{{REMEDIAL_ACTIONS_TH}}</div>
+    </div>
+  </div>
+
+  <!-- Section 6: Subject notification -->
+  <div class="section">
+    <div class="section-header">6. การแจ้งเจ้าของข้อมูลส่วนบุคคล / Subject Notification</div>
+    <div class="section-body">
+      <div class="free-text">{{SUBJECT_NOTIFICATION_DESCRIPTION_TH}}</div>
+    </div>
+  </div>
+
+  <div class="doc-footer">
+    เอกสารนี้ออกโดยระบบ GACP สำหรับยื่นต่อสำนักงานคณะกรรมการคุ้มครองข้อมูลส่วนบุคคล (สคส.) — ผู้ใช้งานต้องตรวจสอบความถูกต้องของแบบฟอร์มจากเว็บไซต์ ofpc.or.th ก่อนยื่นจริง
+  </div>
+
+</body>
+</html>

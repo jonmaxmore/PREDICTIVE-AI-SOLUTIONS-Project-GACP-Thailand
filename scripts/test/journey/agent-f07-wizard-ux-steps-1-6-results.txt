@@ -1,0 +1,16 @@
+Agent F07 — Wizard UX Steps 1-6 Results
+Date: 2026-03-13T13:19:40.791Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Wizard entry | HTTP 200
+PASS | Step 1 page | HTTP 200
+PASS | Step 2 page | HTTP 200
+PASS | Step 3 page | HTTP 200
+PASS | Step 4 page | HTTP 200
+PASS | Step 5 page | HTTP 200
+PASS | Step 6 page | HTTP 200
+PASS | Step requirements API | status: 200
+PASS | GACP categories API | status: 200
+PASS | Soil types API | status: 200
+PASS | Cultivation methods | status: 200
+PASS | Document slots config | status: 200

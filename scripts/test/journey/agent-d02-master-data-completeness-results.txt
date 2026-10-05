@@ -1,0 +1,16 @@
+Agent D02 — Master Data Completeness Results
+Date: 2026-03-13T14:03:27.365Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Provinces/locations | status: 200
+PASS | Fee schedule | status: 200
+PASS | QR pricing | status: 200
+PASS | Purposes | status: 200
+PASS | GACP categories | status: 200
+PASS | Soil types | status: 200
+PASS | Cultivation methods | status: 200
+PASS | Standards data | status: 200
+PASS | Plants species | status: 200
+PASS | Document slots | status: 200
+PASS | Full config | status: 200
+PASS | Pricing data | status: 200

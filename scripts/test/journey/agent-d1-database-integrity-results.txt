@@ -1,0 +1,16 @@
+Agent D1 — Database Integrity Results
+Date: 2026-03-16T12:48:37.130Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | DB connection healthy | status: connected
+PASS | Master data — provinces | 77 items
+PASS | Master data — QR pricing | status: 200
+PASS | Master data — fee schedule | status: 200
+PASS | GACP categories data | status: 200
+PASS | Soil types data | status: 200
+PASS | Cultivation methods | status: 200
+PASS | GACP standards data | status: 200
+PASS | Plant species in DB | 6 species
+PASS | Audit trail accessible | status: 200
+PASS | Document slots config | status: 200
+PASS | System config (public) | status: 200

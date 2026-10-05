@@ -1,0 +1,316 @@
+# Dependencies
+node_modules/
+# ไม่มี / ต่อท้าย เพราะรูปแบบที่ลงท้ายด้วย / แมตช์เฉพาะ "ไดเรกทอรีจริง" — symlink ชื่อ
+# node_modules จึงรอดออกมาและถูก commit ไปกับ b8e345ea (worktree ที่ symlink มาจากต้นไม้หลัก
+# เพื่อให้เครื่องมือรันได้ ไม่ต้องติดตั้งซ้ำ) สิ่งที่หลุดไปคือ path เต็มของเครื่องเครื่องเดียว
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+.nyc_output/
+# Playwright MCP runtime snapshot artifacts (local debug only)
+
+# Production
+build/
+dist/
+.next/
+out/
+
+# Environment variables
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+.env.staging
+env.production
+env.production.local
+*.env
+
+# Logs (Strict)
+logs/
+!**/src/**/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Debug Files
+debug_*.txt
+debug_*.log
+*_debug.txt
+*_debug.log
+reproduce_*.js
+test-*.js
+# jest.globalsetup.js requires these — a fresh clone breaks without them (found by the 2026-09-04 server migration)
+!apps/backend/test-support/test-*.js
+!scripts/test-wizard-flow.js
+!scripts/test-trace-qr-flow.js
+!scripts/test-PROVIDER-cms-flow.js
+!scripts/test-PROVIDER-erp-flow.js
+!scripts/test-accounting-receipt-flow.js
+!scripts/test-full-first-cycle-auto-trace-public-qr.js
+!scripts/test-subsequent-cycle-manual-trace-public-qr.js
+!scripts/test-negative-gates.js
+!scripts/test-provider-flow.js
+!scripts/test-provider-alias-compat-flow.js
+!scripts/test-auth-hardening-flow.js
+
+# Lint Output Files
+lint_*.txt
+*_lint.txt
+*_lint_*.txt
+backend_lint*.txt
+prod_lint*.txt
+final_lint*.txt
+eslint_*.txt
+*_errors.txt
+*_remaining.txt
+
+# Test Output Files
+test_*.txt
+test_*.log
+verify_*.txt
+*_output.txt
+*_output_*.txt
+uat_report_*.json
+apps/backend/e2e-output/*
+!apps/backend/e2e-output/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.swo
+*~
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.tfvars
+!terraform.tfvars.example
+
+# AWS
+.aws/
+
+# Secrets
+secrets/
+*.pem
+*.key
+*.crt
+# The development box's own signing-key passphrase (config/dev-signing-passphrase.js).
+# It is random per machine and it opens that machine's keys/private.pem, so it is a real
+# secret even though it only ever exists on a dev box — committing it would publish the
+# key material's password alongside the code that reads it.
+.dev-signing-passphrase
+# Cloud service-account private keys — NEVER commit. This platform integrates
+# no Google identity or admin SDK (the Firebase Auth path was removed under the
+# data-sovereignty requirement, e451fd04) and must never start; the patterns
+# stay as defense-in-depth for the case where someone downloads a key file into
+# the repo while investigating one. A key that reaches a commit is rotated, not
+# deleted — see the project rules §8.
+*serviceAccount*.json
+*-adminsdk-*.json
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+nul
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# SQLite development artifacts
+*.db-journal
+dev.db
+
+# Build output logs
+build_out.txt
+
+# PM2
+.pm2/
+
+# Docker build artifacts
+*.tar
+*.tar.gz
+
+# Turbo
+.turbo
+
+# Build Artifacts
+*.tgz
+*.zip
+
+# Sentry
+.sentryclirc
+
+# Build Logs
+build_log*.txt
+*_build_log*.txt
+
+# Report Files
+*_report.txt
+spike_report.txt
+k6_report.txt
+knip-report.json
+
+# Analysis Files
+analysis.txt
+flutter-analysis.txt
+analyze_*.txt
+uat_log.txt
+db_debug.txt
+# Playwright
+.playwright-cli/
+apps/web-app/playwright-report/
+apps/web-app/test-results/
+apps/web-app/playwright/.auth/
+apps/backend/playwright-report/*
+!apps/backend/playwright-report/.gitkeep
+
+# STAGING-WALKTHROUGH capture kit — raw video/trace are large binaries and
+# already ship via the CI artifact (14-day retention, staging-walkthrough.yml)
+# or the operator's tar.gz pack (scripts/ops/run-walkthrough.sh). Screenshots
+# + walkthrough-manifest.json stay tracked (evidence/<work-item>/ convention,
+# the gacp-view-in-the-loop guideline) so they can go into the manual.
+evidence/staging-walkthrough/test-output/
+
+# FULL-GATE per-run logs — scripts/ci/full-gate.sh writes the ATTESTATION
+# (evidence/gate/<sha>.json) and its per-check logs (evidence/gate/logs/<sha>/)
+# into the repo. Only the attestation is an artifact anyone else needs: it is
+# what scripts/probes/gate-attestation.sh and main-attestation-audit.sh read,
+# so it stays TRACKED and the runbook commits it after every run.
+#
+# The logs are per-run diagnostics for whoever is standing at the machine.
+# #845 made them survive cleanup() so they can actually be read there; that is
+# the whole job, and it does not need git. Tracking them cost more than the
+# bytes: the gate writes them DURING a run, so the next run's workspace-clean
+# saw `?? evidence/gate/` and failed at check 1 — the gate dirtying the tree it
+# checks, which cannot be escaped without committing megabytes of jest output
+# between every run. Observed on VM-0-3-ubuntu 2026-08-08.
+evidence/gate/logs/
+
+# PROBE RUNNER per-run output — scripts/check-done.sh writes the result of the
+# probes it just ran to evidence/probe-results.json. Same shape of problem as the
+# gate logs above, and recorded once already at the change log: every run
+# rewrites it, so the tree is dirty after every run and agents learn to
+# `git checkout --` a guardrail's output by reflex.
+#
+# The 2026-08-07 fix made the PATHS inside it machine-independent, which was
+# necessary but not sufficient: the CONTENT is a list of probe verdicts, and
+# those legitimately differ per machine — no-secret is BLOCKED without gitleaks,
+# suite-green needs a database. There is no version of this file that is correct
+# everywhere, so a committed copy is a cached claim about probe outcomes that may
+# not describe the commit someone is reading it next to. ci.yml:355 already
+# records the session start script printing exactly such a cached copy instead of
+# re-running.
+#
+# This does NOT stop it being evidence. the project rules §5 puts probe-results.json
+# inside evidence/<work-item>/, where a pack keeps its own copy of the run it is
+# attesting to — point PROBE_OUT_DIR at the pack. What is dropped here is only
+# the floating copy at a fixed path that nothing reads across runs.
+evidence/probe-results.json
+
+# dependency-audit.sh per-run output (the raw `pnpm audit --json` it judged). Same
+# reason as probe-results.json above: rewritten every run, differs per registry state.
+# A pack that needs it points PROBE_OUT_DIR at itself.
+evidence/dependency-audit.json
+evidence/dependency-audit.json.err
+
+# Generated local test reports
+tests/reports/*.json
+!tests/reports/.gitkeep
+
+# Backups
+backups/
+
+# Local temp working folders
+.tmp/
+tmp_server_logs/
+tmp_health_creds.json
+tmp_login_payload.json
+tmp_register_payload.json
+dummy_id_card.txt
+data.json
+tmp_*
+debug-*.js
+temp-*.js
+*.traineddata
+!apps/backend/data/tessdata/tha.traineddata
+!apps/backend/data/tessdata/eng.traineddata
+
+# Stale files cleanup
+critical-error.log
+scripts/*-results.txt
+
+# npm lockfiles inside apps (project uses pnpm workspaces)
+apps/*/package-lock.json
+package-lock.json
+
+# SSH keys — NEVER commit private keys to version control
+scripts/ssh-keys-backup/
+id_ed25519*
+id_rsa*
+*.ppk
+
+# Local git worktrees and stray nested clones — never tracked.
+.worktrees/
+/app/
+
+# Build / generated output dirs that appear on production server runs.
+output/
+
+# Hygiene additions 2026-04-28 — prevent build artifacts / playwright dumps
+# / sqlite journal files from sneaking back into the repo.
+apps/web-app/lint.txt
+apps/web-app/lint-report.json
+apps/web-app/lint-web.json
+apps/web-app/tmp-provider-shots/
+apps/web-app/tmp-provider-shots-auth/
+apps/test-reports/
+apps/backend/prisma/dev.db
+apps/backend/prisma/dev.db-journal
+**/*.db-journal
+
+
+# Stray shell-redirect artifacts (e.g. `> NOW()` mistyped as a file)
+NOW()
+
+# ─── Removed from tracking for data-security / de-AI (kept LOCAL only) ───
+# Internal methods / audit reports / deliverable exports (reveal system internals)
+docs/handoffs/
+
+# agent/tooling screenshot output — never commit
+shots2/
+# Multi-viewport visual-QA captures (7 routes x 3 widths x th/en, @2x).
+# ~37 MB of PNGs per run, regenerated on demand — the sibling text reports in
+# test-reports/ stay tracked, the binaries do not enter history.
+test-reports/visual-qa/
+
+.projects/cache
+.projects/vault
+.projects/state.test.json
+.projects/state.local.test.json
+.env
+.env.*
+!.env.example
+# `.env.*` above also swallows the *.example templates, and `!.env.example` is
+# an exact match that does not rescue them. Without this line
+# `.env.preview.example` is untrackable and the preview stack ships with no
+# documented key list — while the real `.env.preview` stays ignored, which is
+# the part that matters. Add a sibling line for any future *.example template.
+!.env.preview.example
+
+# Generated run output (e2e captures, gate logs, probe results)
+/evidence/
+/reports/

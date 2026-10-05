@@ -1,0 +1,280 @@
+// Domain: Onsite Audit Evidence Capture (cert-integrity fix, Phase B, 2026-08-16)
+//
+// Provisions the two models onsite-evidence-gate.js and audit-onsite-service.js
+// have depended on since Phase A/A2 (see the change log) but that were never
+// added to the schema — every PASS decision / certificate mint threw
+// EVIDENCE_CAPTURE_UNAVAILABLE (fail-closed) because `prisma.farmAuditPhoto`
+// and `prisma.farmAuditChecklistItem` did not exist on the generated client.
+//
+// Field names/types below are dictated EXACTLY by the existing callers, not
+// invented here:
+//   - services/audit-onsite-service.js `submitChecklistItem`
+//     (tx.farmAuditChecklistItem.upsert — create/update payload + the
+//     `auditId_itemCode` compound-unique lookup key)
+//   - services/audit-onsite-service.js `uploadPhoto`
+//     (prisma.farmAuditPhoto.create payload, and the updateMany that sets
+//     checklistItemId from submitChecklistItem)
+//   - services/onsite-evidence-gate.js `assertOnsiteEvidenceSufficient`
+//     (prisma.farmAuditPhoto.count / prisma.farmAuditChecklistItem.count,
+//     both `where: { auditId } `)
+// No behavior in any of those files changed to accommodate these models.
+
+model FarmAuditChecklistItem {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference. No onDelete override — matches the sibling
+  // AuditChecklist.applicationId -> Application convention (DB default),
+  // not the explicit Restrict/Cascade pattern reserved for organizationId.
+  auditId String
+  audit   AuditChecklist @relation(fields: [auditId], references: [id])
+
+  // Template linkage — itemCode must match a CHECKLIST_TEMPLATE_2026 entry;
+  // submitChecklistItem refuses unknown codes before ever reaching this
+  // table. section/isCritical/maxPoints are copied from the matched
+  // template row at write time (denormalized; the template itself is
+  // versioned by audit-onsite-service.TEMPLATE_VERSION, not by a column
+  // here).
+  itemCode String
+  section  String
+
+  // Auditor's recorded answer for this checklist item.
+  response String // PASS | FAIL | NA
+  notes    String? @db.Text
+
+  isCritical Boolean
+  maxPoints  Int
+
+  // Bare actor-id column (matches createdBy/updatedBy/recordedBy convention
+  // throughout this schema) — not a formal User relation.
+  recordedBy String?
+  recordedAt DateTime
+
+  // ── PDPA ม.30 disclosure switch (F-TNT-M30-01, 2026-09-06) ────────────────
+  //
+  // ม.30 วรรคหนึ่ง gives the data subject the right to see and copy their own
+  // personal data, and what an auditor writes about a farmer in `notes` IS the
+  // farmer's personal data — so the default is DISCLOSED, which is why this
+  // column defaults to false rather than true.
+  //
+  // ม.30 วรรคสอง lets the controller refuse when the law or a court order says
+  // so, or when disclosure would affect another person's rights and freedoms.
+  // That is a per-ROW judgement, not a per-table one, so it lives here with the
+  // row it withholds. A reason is required by the door that sets it: a refusal
+  // with no recorded reason is indistinguishable from a bug, and ม.30 requires
+  // the controller to be able to justify it.
+  disclosureWithheld Boolean   @default(false)
+  withholdReason     String?   @db.Text
+  withheldBy         String?
+  withheldAt         DateTime?
+
+  // Reverse relation for FarmAuditPhoto.checklistItemId (submitChecklistItem
+  // links uploaded photoIds to the item they were taken for).
+  photos FarmAuditPhoto[]
+
+  // Deliberately NO organizationId column: submitChecklistItem's upsert
+  // never sets one (verified against the current create/update payload), so
+  // adding it here would either sit permanently NULL or require changing the
+  // already-correct coded flow — out of scope for this fix. Reachable for
+  // tenant-scoped queries via `audit.organizationId` if ever needed.
+
+  // One row per (audit, template item) — submitChecklistItem upserts on this
+  // exact compound key: `where: { auditId_itemCode: { auditId, itemCode } }`.
+  @@unique([auditId, itemCode])
+  @@map("farm_audit_checklist_items")
+}
+
+model FarmAuditPhoto {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  auditId String
+  audit   AuditChecklist @relation(fields: [auditId], references: [id])
+
+  // Storage — the actual bytes live behind attachment-service. Attachment is
+  // a polymorphic resModel/resId store; this is a loose reference by design,
+  // matching every other *ById actor/reference column in this schema rather
+  // than a formal relation.
+  attachmentId String
+
+  // Tamper-detection hash — SHA-256 hex over the raw bytes, computed by
+  // audit-onsite-service.computePhotoHash BEFORE storage (same algorithm
+  // family as slip-hash-integrity.js).
+  fileHash String
+
+  // Geo + time evidence (GACP-PRD §6.2 geo traceability of evidence).
+  gpsLatitude  Float
+  gpsLongitude Float
+  capturedAt   DateTime
+
+  caption String? @db.Text
+
+  // ── Provenance: does this photograph belong to this visit? (2026-08-26) ────
+  //
+  // Every column below is RECORDED, never enforced. Nothing here refuses an
+  // upload and nothing in onsite-evidence-gate.js reads any of it. The reason
+  // is the same one the perceptual-hash module states: a farm's registered
+  // coordinates can be wrong, a large farm outruns any tolerance, a greenhouse
+  // kills GPS, and an auditor photographing the same shed twice from the same
+  // doorway legitimately produces near-identical frames. A rule tight enough to
+  // catch the determined strands the careful, who then cannot do their job at
+  // all — while the determined edits the coordinates. So: measure, store, show
+  // a human.
+  //
+  // WHAT NULL MEANS HERE, and it is the opposite of reassuring. NULL means the
+  // fact was NEVER ESTABLISHED — the row predates this migration, or the
+  // measurement could not run. It does NOT mean "checked and fine". A reader
+  // (screen, report, export) MUST render NULL as "ไม่ได้บันทึก" / "not
+  // recorded" and never as a blank cell beside rows that say MEASURED, because
+  // a blank beside a green tick reads as agreement. audit-onsite-service.
+  // reviewPhotoProvenance() is the canonical reader and does exactly that.
+
+  // How far this photograph's own coordinates sat from the farm registered on
+  // the parent Application, in metres (haversine, same helper the inspection
+  // start uses). Read alongside farmDistanceStatus: a NULL here with status
+  // FARM_LOCATION_UNKNOWN means the FARM has no coordinates, which is a fact
+  // about our records, not about the auditor.
+  farmDistanceMeters Float?
+  // MEASURED | FARM_LOCATION_UNKNOWN | UNAVAILABLE. UNAVAILABLE = the lookup
+  // itself failed (models absent, query threw); the upload still succeeded,
+  // because evidence capture must not depend on a metadata read.
+  farmDistanceStatus String?
+
+  // Where the timestamp in `capturedAt` came from, stated at the strength it
+  // can actually be defended:
+  //   CALLER_SUPPLIED_UNVERIFIED — a timestamp arrived with the request. That
+  //     is ALL it means. Nothing proves a camera produced it; routes/api/audit/
+  //     onsite.js substitutes its own `new Date()` when the client sends none,
+  //     so this value covers both cases and must not be read as shutter time.
+  //   SERVER_RECEIPT — no timestamp arrived; `capturedAt` is the moment the
+  //     bytes landed on the server, which is strictly later than the shutter.
+  // Real shutter time needs EXIF DateTimeOriginal (no parser in this tree) or
+  // a signature applied at capture (C2PA); neither exists yet.
+  captureTimeSource String?
+
+  // INSPECTION_START | SCHEDULED_DATE | NONE — which clock the window came
+  // from. INSPECTION_START is the GpsVerificationLog row the auditor's check-in
+  // writes and is the only observed event of the three; SCHEDULED_DATE is the
+  // planned visit day off Application.scheduledDate, evaluated in Asia/Bangkok.
+  captureWindowSource String?
+  // INSIDE | OUTSIDE | WINDOW_UNKNOWN | CAPTURE_TIME_UNKNOWN.
+  captureWindowStatus String?
+  // Signed seconds by which capturedAt fell outside the window: negative =
+  // before it opened (the interesting one — a photograph taken before the
+  // auditor arrived), positive = after it closed, 0 = inside. NULL whenever
+  // the comparison could not be made.
+  captureWindowOffsetSec Int?
+
+  // What the photograph LOOKS like, as opposed to what its bytes are: 16 hex
+  // characters, 64 bits, from services/crypto/perceptual-hash.js. Survives the
+  // re-encode that gives one photograph five different fileHash values. Compare
+  // two of these by Hamming distance and only when perceptualHashAlgo matches —
+  // hashes from different algorithms are not on the same scale and their
+  // "distance" is noise.
+  perceptualHash String?
+  // e.g. 'dhash-64-v1'. Present so a future recalibration or a different
+  // algorithm cannot be silently compared against these rows.
+  perceptualHashAlgo String?
+
+  // Bare actor-id column (see FarmAuditChecklistItem.recordedBy note).
+  uploadedBy String
+
+  // Optional link back to the checklist item this photo was taken for —
+  // submitChecklistItem's updateMany sets this after the photo already
+  // exists.
+  checklistItemId String?
+  checklistItem   FarmAuditChecklistItem? @relation(fields: [checklistItemId], references: [id])
+
+  // Tenancy (ADR-014) — uploadPhoto always supplies this (validated:
+  // `if (!organizationId) throw`), unlike FarmAuditChecklistItem above whose
+  // writer never sets one, so this FK is required, mirroring
+  // AuditChecklist.organizationId exactly.
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([auditId])
+  @@index([organizationId])
+  @@index([attachmentId])
+  @@index([checklistItemId])
+  @@index([uploadedBy])
+  @@map("farm_audit_photos")
+}
+
+model GpsVerificationLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Polymorphic reference — today the only writer is
+  // audit-onsite-service.startInspection, which always writes
+  // entityType 'AUDIT_INSPECTION_START' / entityId = AuditChecklist.id
+  // (see audit-onsite-service.js:474-487, the guarded create() call this
+  // model exists to unblock).
+  entityType String
+  entityId   String
+
+  // Device-reported coordinates at verification time.
+  reportedLatitude  Float
+  reportedLongitude Float
+  gpsAccuracy       Float?
+
+  // Bare actor-id column (see FarmAuditChecklistItem.recordedBy note) —
+  // not a formal User relation.
+  verifiedBy         String
+  verifiedAt         DateTime
+  verificationMethod String // 'GPS_DEVICE' today
+
+  // Computed on read against the parent farm (haversineDistanceMeters +
+  // tolerance in audit-onsite-service.js), not at write time — always
+  // false at insert.
+  isVerified Boolean @default(false)
+
+  // Tenancy (ADR-014) — startInspection supplies this from the already
+  // in-memory audit row (audit.organizationId), mirroring
+  // FarmAuditPhoto.organizationId exactly. No soft-delete fields:
+  // append-only evidence, matching both sibling models in this file.
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([entityType, entityId])
+  @@index([organizationId])
+  @@map("gps_verification_logs")
+}
+
+/// ผลการตรวจ **รายลักษณะพื้นที่** ของงานตรวจหนึ่งครั้ง
+///
+/// operator 2026-09-11: ผลต้องแยกตามลักษณะพื้นที่ และผ่านบางลักษณะก็ออกใบเฉพาะที่ผ่าน (M4)
+///
+/// `AuditChecklist` เป็นหนึ่งแถวต่อหนึ่งคำขอ — ผู้ตรวจคนเดียว คะแนนเดียว สถานะเดียว และ
+/// แบบประเมินเป็นต่อ**ชนิดพืช** ไม่มีมิติลักษณะพื้นที่ · การยัดผลสามลักษณะลงแถวเดียว
+/// แปลว่าต้องเข้ารหัสไว้ใน JSON ซึ่งอ่านกลับเป็นเงื่อนไขไม่ได้ · หนึ่งแถวต่อหนึ่งลักษณะ
+/// ทำให้ "ผ่านอะไรบ้าง" เป็นคำถามที่ฐานตอบได้ และเป็นสิ่งที่ `CertificateScope` ชี้กลับมาหา
+model AuditScopeResult {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditId String
+  audit   AuditChecklist @relation(fields: [auditId], references: [id])
+
+  /// OUTDOOR | GREENHOUSE | INDOOR — ต้องเป็นลักษณะที่คำขอประกาศไว้เท่านั้น
+  /// (บังคับใน services/audit-scope-results.js ไม่ใช่ที่ฐาน เพราะรายการที่ประกาศ
+  ///  อยู่ใน formData ของคำขอ ซึ่ง constraint ระดับคอลัมน์เอื้อมไม่ถึง)
+  areaType String
+
+  /// PASS | FAIL | CAR_REQUIRED — CAR_REQUIRED คือ "ต้องแก้ก่อน" ยังไม่ใช่ผ่านและยังไม่ใช่ตก
+  result String
+
+  score Float?
+  notes String? @db.Text
+
+  decidedAt DateTime
+  /// bare actor-id ตามแบบเดียวกับ recordedBy/createdBy ทั้ง schema นี้
+  decidedBy String
+
+  @@unique([auditId, areaType])
+  @@index([auditId])
+  @@map("audit_scope_results")
+}

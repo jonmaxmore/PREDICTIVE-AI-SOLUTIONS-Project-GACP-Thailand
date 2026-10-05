@@ -1,0 +1,47 @@
+{
+  "environment": "production",
+  "state": "target_architecture",
+  "provider": "provider-neutral",
+  "deploymentModel": "multi_failure_domain_managed_services",
+  "minimumFailureDomains": 2,
+  "publicEdge": {
+    "type": "managed_edge",
+    "tlsTermination": true,
+    "waf": true,
+    "cdn": "preferred",
+    "healthChecks": true
+  },
+  "appRuntime": {
+    "frontendReplicasMin": 2,
+    "backendReplicasMin": 2,
+    "deployPolicy": "health_based_rolling_or_blue_green",
+    "frontendContainerPort": 3000,
+    "backendContainerPort": 8000
+  },
+  "statefulDependencies": {
+    "postgres": {
+      "managed": true,
+      "ha": true,
+      "engine": "postgresql"
+    },
+    "redis": {
+      "managed": true,
+      "ha": true,
+      "engine": "redis"
+    },
+    "objectStorage": {
+      "external": true,
+      "interface": "s3_compatible_or_adapter"
+    }
+  },
+  "observability": {
+    "centralized": true,
+    "sloReporting": true,
+    "alerting": true
+  },
+  "portabilityContracts": {
+    "database": "postgresql",
+    "cache": "redis",
+    "objectStorage": "s3_compatible_or_adapter"
+  }
+}

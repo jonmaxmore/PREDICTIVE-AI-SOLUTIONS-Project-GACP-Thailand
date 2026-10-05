@@ -1,0 +1,26 @@
+-- ============================================================================
+-- BE-AUTH-03-03 (session epoch) — User.sessionsRevokedAt
+-- ============================================================================
+--
+-- Closes the "stolen refresh token survives a password change" gap. Until now,
+-- changePassword / resetPasswordWithToken only revoked the per-user refresh-
+-- token ALLOWLIST key (best-effort) — a copied refresh token whose JTI was
+-- never individually blocklisted kept passing /refresh and minting fresh
+-- 24h access + 7d refresh tokens after the victim rotated their credential.
+--
+-- The session epoch is a single timestamp column stamped to now() on every
+-- password change / reset. Enforcement (auth-session-security-handlers.js
+-- refreshToken + auth-middleware access-token path) rejects any token whose
+-- `iat` predates this instant. A post-change LOGIN mints a fresh token whose
+-- iat > sessionsRevokedAt, so the legitimate user is never locked out.
+--
+-- ## Why this is SAFE / INERT until the enforcement code runs
+--   * NULLABLE, no DEFAULT — the ALTER touches no existing row, sets nothing.
+--   * A NULL epoch means "no revocation instant" → every token is allowed
+--     (byte-for-byte the current behaviour for accounts that never change
+--     their password after this deploy).
+--
+-- Additive-safe to apply. Run with `prisma migrate deploy`.
+-- ============================================================================
+
+ALTER TABLE "users" ADD COLUMN "sessionsRevokedAt" TIMESTAMP(3);

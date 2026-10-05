@@ -1,0 +1,321 @@
+// Domain: Harvest & Post-Harvest Processing
+
+// HARVEST BATCH MODEL (รุ่นเก็บเกี่ยว)
+// W1-3: this is NOT a "Lot" — batchNumber is minted "BATCH-...", never
+// "LOT-...". The packaging Lot ("ชุดบรรจุ", lotNumber "LOT-...") is a
+// separate model — see trace.prisma `model Lot`.
+
+model HarvestBatch {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // รหัส Lot
+  batchNumber String @unique // เช่น "LOT-2025-001"
+
+  // QR Code Tracking
+  qrCode      String? @unique // UUID for public lookup
+  trackingUrl String? // Full URL with domain
+
+  // ความสัมพันธ์ (เพิ่ม cycleId)
+  cycleId String?
+  cycle   PlantingCycle? @relation(fields: [cycleId], references: [id])
+
+  // Relation to Farm
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id])
+
+  // ข้อมูลพืช (Relation to Plant)
+  plantCode String? // e.g. "CAN"
+  plant     PlantSpecies? @relation(fields: [plantCode], references: [code])
+
+  // วันที่
+  harvestDate DateTime @default(now())
+
+  // ผลผลิต
+  freshWeight Float // น้ำหนักสด (กก.)
+  dryWeight   Float? // น้ำหนักแห้ง (กก.)
+  lossWeight  Float? // น้ำหนักสูญเสีย (กก.)
+
+  // คุณภาพ
+  moistureContent Float? // ความชื้น (%)
+  qualityGrade    String? // A, B, C, REJECT
+
+  // การแปรรูปเบื้องต้น (Primary Processing)
+  isDried        Boolean @default(false)
+  dryingMethod   String? // SUN_DRY, OVEN_DRY, DEHUMIDIFIER
+  dryingTemp     Float? // อุณหภูมิ (C)
+  dryingDuration Int? // ระยะเวลา (ชั่วโมง)
+
+  // การตรวจสอบ (QC)
+  qcPassed Boolean @default(false)
+  qcNotes  String?
+  qcBy     String?
+
+  // สถานะ
+  status String @default("RECEIVED") // RECEIVED, DRYING, PROCESSED, PACKED, SOLD
+
+  // Audit Trail
+  recordedBy String?
+  notes      String?
+
+  // Relation to Lots
+  lots Lot[]
+
+
+  // GACP Thai Requirements
+  packagingDetails PackagingDetail[]
+  dryingProcesses  DryingProcess[]
+  labResults       BatchLabResult[]
+
+  // Soft Delete
+  isDeleted Boolean @default(false)
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([batchNumber])
+  @@index([status])
+  @@index([organizationId])
+  // DB-06: index FK columns
+  @@index([cycleId])
+  @@index([farmId])
+  @@index([plantCode])
+  @@map("harvest_batches")
+}
+
+// NOTE: Legacy provider model removed — provider auth now uses providerId on User model
+
+// DRYING TEMPERATURE (ข้อมูลอุณหภูมิการตาก)
+
+model DryingTemperature {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id])
+
+  // Readings
+  temperature Float // Celsius
+  humidity    Float // %
+  timestamp   DateTime
+
+  // Audit
+  createdBy  String?
+  recordedBy String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([farmId])
+  @@index([timestamp])
+  @@index([organizationId])
+  @@map("drying_temperatures")
+}
+
+// Drying Humidity Tracking
+
+model DryingHumidity {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id])
+
+  // Readings
+  humidity  Float // %
+  timestamp DateTime
+
+  // Audit
+  createdBy  String?
+  recordedBy String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([farmId])
+  @@index([timestamp])
+  @@index([organizationId])
+  @@map("drying_humidity")
+}
+
+// Drying Dark Room Control
+
+model DryingDarkRoom {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id])
+
+  // Measurements
+  lightLevel   Float // LUX
+  darkRoomUsed Boolean
+  timestamp    DateTime
+
+  // Audit
+  createdBy  String?
+  recordedBy String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([farmId])
+  @@index([timestamp])
+  @@index([organizationId])
+  @@map("drying_dark_rooms")
+}
+
+// Curing Process Tracking
+
+model CuringProcess {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id])
+
+  // Details
+  cureDuration Int // Days
+  curationType String // STANDARD, ENHANCED, VACUUM
+  startDate    DateTime
+  endDate      DateTime?
+  status       String    @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, PAUSED
+
+  // Notes
+  notes String? @db.Text
+
+  // Audit
+  createdBy String?
+  updatedBy String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([farmId])
+  @@index([status])
+  @@index([startDate])
+  @@index([organizationId])
+  @@map("curing_processes")
+}
+
+// PACKAGING DETAIL - บรรจุภัณฑ์ (GACP: ถุงอากาศ/ฟู้ดเกรด)
+
+model PackagingDetail {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to HarvestBatch
+  batchId String
+  batch   HarvestBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  // Packaging Type
+  packageType String // VACUUM_BAG(ถุงสุญญากาศ), AIR_BAG(ถุงอากาศ),
+  // FOOD_GRADE_BAG(ถุงฟู้ดเกรด), CONTAINER(ภาชนะ), OTHER
+
+  // Grade (ระดับ)
+  grade String? // FOOD_GRADE, MEDICAL_GRADE, INDUSTRIAL_GRADE
+
+  // Material
+  material    String? // PLASTIC, PAPER, ALUMINUM, Mylar
+  isFoodGrade Boolean @default(false)
+
+  // Storage Conditions
+  storageTemp     Int? // อุณหภูมิเก็บรักษา (°C)
+  storageHumidity Int? // ความชื้น (%RH)
+  storageDays     Int? // จำนวนวันเก็บรักษา
+
+  // Label Info
+  labelText  String? // ข้อความบนฉลาก
+  hasQrCode  Boolean @default(false)
+  qrCodeData String? // ข้อมูล QR
+
+  // Sealing
+  sealingMethod String? // HEAT_SEAL, ZIP_LOCK, TWIST_TIE
+  isTamperProof Boolean @default(false) // ซีลป้องกันการแกะ
+
+  // Photos
+  photoUrl String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([batchId])
+  @@index([organizationId])
+  @@map("packaging_details")
+}
+
+// DRYING PROCESS ENHANCEMENT - ขยายจาก DryingTemperature
+
+model DryingProcess {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to PlantingCycle
+  cycleId String?
+  cycle   PlantingCycle? @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+
+  // Relation to HarvestBatch
+  batchId String
+  batch   HarvestBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  // Duration (GACP: ตากกี่วัน)
+  startDate  DateTime
+  endDate    DateTime?
+  dryingDays Int       @default(0) // คำนวณ auto หรือระบุเอง
+
+  // Method
+  method String // SUN(ตากแดด), OVEN(เตาอบ), DEHYDRATOR(เครื่องอบ),
+  // AIR_DRY(ลมธรรมชาติ), NONE(ไม่ตาก)
+
+  // Temperature Log (from DryingTemperature)
+  tempLogs Json? // [{ date, temp, humidity, time }]
+
+  // Dark Room (GACP: ห้องมืด)
+  hasDarkRoom   Boolean @default(false)
+  darkRoomHours Int? // ชั่วโมงในห้องมืด
+
+  // Quality Check
+  moistureContent  Float? // % ความชื้นหลังตาก
+  isQualityChecked Boolean @default(false)
+
+  // Curing Process (GACP: อบ/บ่ม)
+  hasCuring       Boolean @default(false)
+  curingDays      Int? // บ่มกี่วัน
+  curingContainer String? // ภาชนะบ่ม
+
+  // Location
+  location String? // สถานที่ตาก
+  photos   Json? // รูปภาพกระบวนการ
+
+  // Audit
+  performedBy String?
+  notes       String? @db.Text
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([batchId])
+  @@index([organizationId])
+  // DB-06: index FK column
+  @@index([cycleId])
+  @@map("drying_processes")
+}

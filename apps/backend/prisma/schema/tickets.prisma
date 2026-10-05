@@ -1,0 +1,36 @@
+/// Support tickets — persisted (replaces the prior in-memory store in
+/// routes/api/system/tickets.js). SEC-SYS-002 ownership is enforced in the route
+/// (HEALTH callers may only touch their own tickets); `organizationId` carries the
+/// ADR-014 tenant scope. Kept as scalar `organizationId`/`creatorId` (no formal FK)
+/// to match the lightweight tenant-scoped pattern and avoid touching User/Organization.
+model Ticket {
+  id                 String          @id @default(uuid())
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  organizationId     String
+  creatorId          String // User.id of the HEALTH applicant who opened the ticket
+  title              String
+  description        String?
+  category           String?
+  priority           String?         @default("normal")
+  status             String          @default("open") // open | resolved | closed
+  relatedApplication String?
+  isDeleted          Boolean         @default(false)
+  messages           TicketMessage[]
+
+  @@index([organizationId])
+  @@index([creatorId])
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId  String // User.id of the message author
+  content   String
+
+  @@index([ticketId])
+  @@map("ticket_messages")
+}

@@ -1,0 +1,57 @@
+-- ============================================================================
+-- Detokenize STAGE B2 — keyed-HMAC lookup column for Entity.thaiCitizenId (INERT)
+-- ============================================================================
+--
+-- Migration name: add_entity_thaicitizenid_hmac
+-- RFC: docs/handoffs/national-id-detokenize-rfc-2026-06-29.md
+--      ("REQUIRED scope addition" — Entity.thaiCitizenId is a SECOND plaintext
+--       national ID with an UNKEYED SHA-256 thaiCitizenIdHash, brute-forceable
+--       from a dump with NO key at all).
+--
+-- Adds ONE NULLABLE column on `entities`, mirroring the existing legacy
+-- `thaiCitizenIdHash` (raw SHA-256) but intended to hold the keyed
+-- HMAC-SHA-256 produced by `utils/field-encryption.js computeLookupHmac()`
+-- (the SAME keyed HMAC the User.*Hmac columns use — H-4 Phase 1):
+--
+--   thaiCitizenIdHash (raw SHA-256, unkeyed, KEPT)  ->  thaiCitizenIdHmac (keyed)
+--
+-- Plus a type-scoped unique index mirroring the existing
+-- `entities_type_thaiCitizenIdHash_key` uniqueness.
+--
+-- Why this is SAFE / INERT:
+--   * The column is NULLABLE — no backfill required for the migration to apply,
+--     no row is touched, no DEFAULT.
+--   * The unique index is partial-by-nature (Postgres treats multiple NULLs as
+--     distinct), so an all-NULL column carries no uniqueness pressure during the
+--     backfill window.
+--   * NO application code READS this column while `AUTH_LOOKUP_USE_HMAC` is off
+--     AND no row is backfilled. The personal-entity lookups prefer the stable
+--     EntityMembership(userId, OWNER, INDIVIDUAL) link (non-PII, flag-independent);
+--     only the create/dedup path consults a hash, and it reads the legacy
+--     `thaiCitizenIdHash` while the flag is off — byte-for-byte the current
+--     behaviour.
+--   * The legacy unkeyed `thaiCitizenIdHash` (and its @@unique) is KEPT here for
+--     back-compat / rollback. Dropping it (and encrypting `thaiCitizenId`) is
+--     STAGE B3, NOT this migration.
+--
+-- Rollout (mirror H-4 Phase 1):
+--   1. Apply THIS migration (additive, no behaviour change).
+--   2. Run scripts/backfill-entity-thaicitizenid-hmac.js (computes
+--      computeLookupHmac(thaiCitizenId) into thaiCitizenIdHmac; idempotent,
+--      batched, withoutTenantScope, asserts "0 INDIVIDUAL entities missing
+--      thaiCitizenIdHmac").
+--   3. Flip `AUTH_LOOKUP_USE_HMAC=true` (already on prod+staging from H-4) — the
+--      create/dedup path then reads/writes the keyed `thaiCitizenIdHmac`.
+--   Rollback at any point = unset the flag. The column can stay; it remains
+--   inert when the flag is off.
+--
+-- Additive, non-breaking. Run with `prisma migrate deploy` (the backfill is a
+-- SEPARATE, explicitly-run script — NOT part of this migration). DO NOT run as
+-- part of any other STAGE — this B2 migration ships on its own.
+-- ============================================================================
+
+-- AlterTable
+ALTER TABLE "entities" ADD COLUMN "thaiCitizenIdHmac" TEXT;
+
+-- CreateIndex
+CREATE UNIQUE INDEX "entities_type_thaiCitizenIdHmac_key" ON "entities"("type", "thaiCitizenIdHmac");

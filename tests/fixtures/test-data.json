@@ -1,0 +1,210 @@
+{
+  "Applicants": [
+    {
+      "type": "INDIVIDUAL",
+      "idCard": "1234567890123",
+      "firstName": "สมชาย",
+      "lastName": "ใจดี",
+      "phone": "0891234567",
+      "email": "somchai.test@gacp.local",
+      "password": "Test@12345",
+      "address": "123 หมู่ 4",
+      "province": "เชียงใหม่",
+      "district": "หางดง",
+      "subdistrict": "หนองควาย",
+      "postalCode": "50230"
+    },
+    {
+      "type": "JURISTIC",
+      "taxId": "1234567890123",
+      "companyName": "บริษัท เกษตรกรรมไทย จำกัด",
+      "representativeName": "สมหญิง รักดี",
+      "representativePosition": "ผู้จัดการ",
+      "phone": "0897654321",
+      "email": "company.test@gacp.local",
+      "password": "Test@12345",
+      "address": "456 หมู่ 8",
+      "province": "เชียงราย",
+      "district": "เมือง",
+      "subdistrict": "รอบเวียง",
+      "postalCode": "57000"
+    },
+    {
+      "type": "COMMUNITY_ENTERPRISE",
+      "communityRegistrationNo": "2568/001",
+      "communityName": "วิสาหกิจชุมชนบ้านสวนเกษตร",
+      "phone": "0812345678",
+      "email": "community.test@gacp.local",
+      "password": "Test@12345",
+      "address": "789 หมู่ 2",
+      "province": "กรุงเทพมหานคร",
+      "district": "หนองจอก",
+      "subdistrict": "กระทุ่มราย",
+      "postalCode": "10530"
+    }
+  ],
+  "provider": [
+    {
+      "username": "admin",
+      "password": "Admin@12345",
+      "role": "admin",
+      "firstName": "แอดมิน",
+      "lastName": "ระบบ",
+      "email": "admin@dtam.go.th"
+    },
+    {
+      "username": "reviewer",
+      "password": "Test@12345",
+      "role": "reviewer",
+      "firstName": "ผู้ตรวจสอบ",
+      "lastName": "เอกสาร",
+      "email": "reviewer@dtam.go.th"
+    },
+    {
+      "username": "auditor",
+      "password": "Test@12345",
+      "role": "auditor",
+      "firstName": "ผู้ตรวจ",
+      "lastName": "พื้นที่",
+      "email": "auditor@dtam.go.th"
+    },
+    {
+      "username": "scheduler",
+      "password": "Test@12345",
+      "role": "scheduler",
+      "firstName": "ผู้จัดคิว",
+      "lastName": "นัดหมาย",
+      "email": "scheduler@dtam.go.th"
+    },
+    {
+      "username": "accountant",
+      "password": "Test@12345",
+      "role": "accountant",
+      "firstName": "บัญชี",
+      "lastName": "การเงิน",
+      "email": "accountant@dtam.go.th"
+    }
+  ],
+  "farms": [
+    {
+      "name": "ฟาร์มสมชาย",
+      "type": "CULTIVATION",
+      "latitude": 18.7883,
+      "longitude": 98.9853,
+      "areaRai": 5,
+      "areaNgan": 2,
+      "cultivationMethod": "SOIL",
+      "waterSource": "BOREWELL",
+      "filtration": ["AGRICULTURAL_FILTER"],
+      "soilType": "LOAM"
+    },
+    {
+      "name": "ฟาร์มบริษัท",
+      "type": "CULTIVATION",
+      "latitude": 19.9082,
+      "longitude": 99.8345,
+      "areaRai": 20,
+      "areaNgan": 0,
+      "cultivationMethod": "HYDROPONIC",
+      "waterSource": "TAP_WATER",
+      "filtration": ["RO", "UV"],
+      "soilType": "N/A"
+    }
+  ],
+  "applications": [
+    {
+      "type": "new_application",
+      "areaType": "OUTDOOR",
+      "plantCode": "CANNABIS",
+      "expectedYield": 100,
+      "supplementaryCriteria": {
+        "contaminantTest": true,
+        "soilAnalysis": true
+      }
+    },
+    {
+      "type": "new_application",
+      "areaType": "GREENHOUSE",
+      "plantCode": "TURMERIC",
+      "expectedYield": 500,
+      "supplementaryCriteria": {
+        "contaminantTest": false,
+        "organicCertification": true
+      }
+    },
+    {
+      "type": "renewal",
+      "previousCertificateId": "cert-previous-001",
+      "areaType": "OUTDOOR",
+      "plantCode": "CANNABIS"
+    }
+  ],
+  "plantingCycles": [
+    {
+      "cycleName": "รอบที่ 1/2569",
+      "plantSpecies": "CANNABIS",
+      "variety": "Thai Sativa",
+      "startDate": "2026-02-01",
+      "expectedHarvestDate": "2026-06-01",
+      "seedSource": "SEED",
+      "growingMedium": "SOIL"
+    }
+  ],
+  "harvestBatches": [
+    {
+      "harvestDate": "2026-06-15",
+      "freshWeight": 100.5,
+      "dryWeight": 25.2,
+      "moistureContent": 12,
+      "qualityGrade": "A",
+      "dryingMethod": "SUN_DRY"
+    }
+  ],
+  "lots": [
+    {
+      "packageType": "VACUUM_BAG",
+      "quantity": 10,
+      "unitWeight": 0.5,
+      "grade": "A",
+      "destination": "DOMESTIC"
+    }
+  ],
+  "dtamData": {
+    "waterSources": [
+      {
+        "sourceType": "BOREWELL",
+        "filtrationTypes": ["AGRICULTURAL_FILTER", "SEDIMENT"],
+        "irrigationType": "DRIP",
+        "isTested": true,
+        "testResults": {
+          "coliform": 0,
+          "ph": 7.2,
+          "turbidity": 1.5
+        }
+      }
+    ],
+    "seedSources": [
+      {
+        "sourceType": "SEED",
+        "supplierName": "ร้านเมล็ดพันธุ์ดี",
+        "hasCertificate": true,
+        "certificateNo": "CERT-2026-001",
+        "isPorPor4Registered": true,
+        "porPor4No": "ภพ.4-2568-001"
+      }
+    ],
+    "fertilizerRecords": [
+      {
+        "brandName": "ปุ๋ยอินทรีย์ดี",
+        "registrationNo": "อย. 1234/2568",
+        "type": "ORGANIC",
+        "usageDate": "2026-02-15",
+        "amount": 50,
+        "unit": "kg",
+        "npkN": 5,
+        "npkP": 5,
+        "npkK": 5
+      }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+// Domain: Entity Context Switch (Wave C — workspace switcher audit trail)
+//
+// One row per "user switched the active entity in the dashboard". Mirrors
+// AWS CloudTrail's AssumeRole pattern — every switch is recorded for
+// regulated-platform compliance (DTAM-facing, PDPA, post-incident review).
+//
+// Lightweight on purpose: no hash chain, no per-tenant hashing, no log id
+// sequence. Keep it cheap so we never have a reason to skip writing.
+//
+// Multi-tenant via Organization (ADR-014). The user might be a member of
+// entities across organizations, but at any given moment they're acting in
+// exactly one entity inside one organization, so organizationId here is
+// the *active* entity's tenant — copied at write time.
+
+model EntityContextSwitch {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Actor
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  // Switch endpoints — fromEntityId is null on first-pick (user logged in
+  // and hadn't selected anything yet). toEntityId is required.
+  fromEntityId String?
+  fromEntity   Entity? @relation("ContextSwitchFrom", fields: [fromEntityId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  toEntityId String
+  toEntity   Entity @relation("ContextSwitchTo", fields: [toEntityId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  // Context — kept short so we don't bloat the table
+  ipAddress String?
+  userAgent String? @db.VarChar(512)
+  source    String  @default("HEADER") // HEADER (XHR) | URL_SLUG (deep link) | DEFAULT (fallback)
+
+  // Tenancy — the *active* entity's organization at the moment of the
+  // switch. Allows ADR-014 organization-scoped queries on the audit trail.
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([toEntityId])
+  @@index([organizationId])
+  // DB-06: index FK column
+  @@index([fromEntityId])
+  @@map("entity_context_switches")
+}

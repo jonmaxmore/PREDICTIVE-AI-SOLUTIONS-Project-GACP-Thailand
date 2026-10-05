@@ -1,0 +1,26 @@
+# Operator-signed acceptances for dependency-audit.sh (the project rules L6: a cover is operator-only).
+# A row counts only when signed-by is exactly `operator` and expires is a real YYYY-MM-DD date >= today.
+# A row whose expiry is anything else (`never`, `2026-9-1`, `2026-02-30`) or that has fewer than 5
+# fields is INVALID and FAILs the probe, naming the line.
+# id (GHSA-… or, for a package.json ignoreCves entry, CVE-…) | package | expires YYYY-MM-DD | signed-by | reason
+#
+# PROPOSED by agent — every row below is inert until the operator changes `proposed` to `operator`.
+#
+# extract-zip <=2.0.1 (proposed 2026-09-17, reason corrected 2026-09-26 per the PR #858 security review).
+# No fixed release exists upstream. It sits in the production dependency tree through
+# puppeteer → @puppeteer/browsers 2.11.1 → extract-zip 2.0.1, but it never runs in the production image:
+# apps/backend/Dockerfile:31 installs with --ignore-scripts, :81 sets PUPPETEER_SKIP_DOWNLOAD=true,
+# :82 points puppeteer at the system chromium, and no app code imports extract-zip or @puppeteer/browsers.
+# It runs only when a developer or CI `pnpm install` executes puppeteer's Chrome download from Google's
+# CDN over TLS, so exploiting it would need a malicious zip from that CDN. The alternative is replacing
+# puppeteer (PDF rendering); see the audit's ARCH-03 worker split.
+GHSA-jmr9-qjv8-65gv | extract-zip | 2026-12-31 | operator | dev/CI install chain only: production image installs with --ignore-scripts, sets PUPPETEER_SKIP_DOWNLOAD and uses system chromium; no app code imports extract-zip; no fixed release upstream
+GHSA-7pqw-9j4j-h8q3 | extract-zip | 2026-12-31 | operator | dev/CI install chain only: production image installs with --ignore-scripts, sets PUPPETEER_SKIP_DOWNLOAD and uses system chromium; no app code imports extract-zip; no fixed release upstream
+#
+# brace-expansion <=5.0.7, GHSA-mh99-v99m-4gvg / CVE-2026-14257, high (proposed 2026-09-26).
+# Suppressed in package.json pnpm.auditConfig.ignoreCves since 0e745372 (2026-07-25); pnpm drops it
+# from `pnpm audit --json`, so this row is what the probe asks for. Facts are from
+# security/vulnerability-exceptions.json (opened 2026-07-25, expiresOn 2026-10-23, reachability
+# build-tooling-only, reviewedBy pending-owner-signoff). Patched only in 5.0.8, and 5.x changes the
+# export shape, so minimatch@3 throws `expand is not a function`; the v1/v2 lines have no backport.
+CVE-2026-14257 | brace-expansion | 2026-10-23 | operator | build tooling only (minimatch in eslint/jest/nodemon/swagger-jsdoc glob expansion of developer-authored patterns); not imported by the shipped API or web bundle; impact is OOM of the expanding process; fix only in breaking 5.x, no v1/v2 backport

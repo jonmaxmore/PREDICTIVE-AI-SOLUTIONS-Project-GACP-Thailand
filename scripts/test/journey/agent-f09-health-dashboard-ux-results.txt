@@ -1,0 +1,16 @@
+Agent F09 — Health Dashboard UX Results
+Date: 2026-03-13T13:19:48.510Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Dashboard page | HTTP 200
+PASS | Start page | HTTP 200
+PASS | Readiness check | HTTP 200
+PASS | Payments page | HTTP 200
+PASS | Resources page | HTTP 200
+PASS | Training page | HTTP 200
+PASS | SOP builder | HTTP 200
+PASS | SOP templates | HTTP 200
+PASS | Export documents | HTTP 200
+PASS | Official documents | HTTP 200
+PASS | Site analysis | HTTP 200
+PASS | Establishments | HTTP 200

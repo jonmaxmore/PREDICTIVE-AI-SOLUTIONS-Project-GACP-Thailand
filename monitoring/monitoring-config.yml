@@ -1,0 +1,299 @@
+﻿# GACP Platform Monitoring & Metrics Configuration
+
+# Prometheus Configuration
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - 'gacp_alerts.yml'
+
+scrape_configs:
+  # GACP Backend Services
+  - job_name: 'gacp-backend'
+    static_configs:
+      - targets: ['gacp-backend:5000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # GACP Frontend Applications
+  - job_name: 'gacp-frontend'
+    static_configs:
+      - targets: ['Applicant-portal:3000', 'admin-portal:3001']
+    metrics_path: '/api/metrics'
+    scrape_interval: 15s
+
+  # MongoDB Metrics
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongodb-exporter:9216']
+
+  # System Metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Health Check Monitoring
+  - job_name: 'gacp-health'
+    static_configs:
+      - targets: ['gacp-backend:5000']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+# Alertmanager Configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+---
+# Grafana Dashboard Configuration for GACP Platform
+# Dashboard: GACP Platform Overview
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    url: http://prometheus:9090
+    access: proxy
+    isDefault: true
+
+  - name: Loki
+    type: loki
+    url: http://loki:3100
+    access: proxy
+
+dashboards:
+  - name: 'GACP Platform Overview'
+    panels:
+      # System Health Overview
+      - title: 'System Health Status'
+        type: stat
+        targets:
+          - expr: up{job="gacp-backend"}
+          - expr: up{job="gacp-frontend"}
+          - expr: up{job="mongodb"}
+
+      # Application Performance
+      - title: 'Response Time (95th percentile)'
+        type: graph
+        targets:
+          - expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+      # User Activity
+      - title: 'Active Users'
+        type: graph
+        targets:
+          - expr: gacp_active_users_total
+
+      # Error Rates
+      - title: 'Error Rate'
+        type: graph
+        targets:
+          - expr: rate(http_requests_total{status=~"5.."}[5m])
+
+      # Database Performance
+      - title: 'Database Connection Pool'
+        type: graph
+        targets:
+          - expr: pg_stat_database_numbackends{datname="gacp_db"}
+
+      # Certificate Processing
+      - title: 'Certificates Issued Today'
+        type: stat
+        targets:
+          - expr: increase(gacp_certificates_issued_total[24h])
+
+      # Application Processing
+      - title: 'Applications by Status'
+        type: pie
+        targets:
+          - expr: gacp_applications_total by (status)
+
+---
+# Alert Rules for GACP Platform
+groups:
+  - name: gacp_platform_alerts
+    rules:
+      # Critical System Alerts
+      - alert: GACPSystemDown
+        expr: up{job="gacp-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: gacp-platform
+        annotations:
+          summary: 'GACP Backend service is down'
+          description: 'GACP Backend service has been down for more than 1 minute'
+
+      - alert: GACPDatabaseDown
+        expr: up{job="mongodb"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: 'GACP Database is unreachable'
+          description: 'MongoDB database has been unreachable for more than 2 minutes'
+
+      # Performance Alerts
+      - alert: GACPHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+          service: gacp-platform
+        annotations:
+          summary: 'GACP Platform high response time'
+          description: '95th percentile response time is above 3 seconds for 5 minutes'
+
+      - alert: GACPHighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          service: gacp-platform
+        annotations:
+          summary: 'GACP Platform high error rate'
+          description: 'Error rate is above 10% for 3 minutes'
+
+      # Business Logic Alerts
+      - alert: GACPCertificateProcessingStalled
+        expr: increase(gacp_certificates_issued_total[1h]) == 0 and hour() >= 9 and hour() <= 17
+        for: 2h
+        labels:
+          severity: warning
+          service: certification
+        annotations:
+          summary: 'Certificate processing may be stalled'
+          description: 'No certificates issued in the last hour during business hours'
+
+      - alert: GACPAuditLogFailure
+        expr: increase(gacp_audit_log_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: compliance
+        annotations:
+          summary: 'CRITICAL: Audit logging failure'
+          description: 'Audit log writing has failed - immediate attention required for compliance'
+
+      # Security Alerts
+      - alert: GACPUnauthorizedAccess
+        expr: increase(gacp_auth_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: 'Multiple authentication failures detected'
+          description: 'More than 10 authentication failures in 5 minutes - possible attack'
+
+      - alert: GACPDataIntegrityIssue
+        expr: increase(gacp_data_integrity_failures_total[1m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: data-integrity
+        annotations:
+          summary: 'CRITICAL: Data integrity check failed'
+          description: 'Data integrity verification has failed - immediate investigation required'
+
+---
+# Log Collection Configuration (Loki)
+# docker-compose.monitoring.yml
+
+version: '3.8'
+
+services:
+  # Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gacp-prometheus
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/gacp_alerts.yml:/etc/prometheus/gacp_alerts.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+
+  # Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gacp-grafana
+    ports:
+      - '3001:3000'
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+
+  # Log Aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: gacp-loki
+    ports:
+      - '3100:3100'
+    volumes:
+      - ./monitoring/loki.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+
+  # Log Collection Agent
+  promtail:
+    image: grafana/promtail:latest
+    container_name: gacp-promtail
+    volumes:
+      - ./monitoring/promtail.yml:/etc/promtail/config.yml
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+
+  # Alert Management
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: gacp-alertmanager
+    ports:
+      - '9093:9093'
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+
+  # Node Metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: gacp-node-exporter
+    ports:
+      - '9100:9100'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  alertmanager_data:
+
+networks:
+  default:
+    external:
+      name: gacp_network

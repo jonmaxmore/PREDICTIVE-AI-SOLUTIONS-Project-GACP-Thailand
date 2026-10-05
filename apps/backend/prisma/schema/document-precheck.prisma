@@ -1,0 +1,108 @@
+// Document pre-check (2026-09-27 design, §2/§8) — local, warn-only checks run
+// on an uploaded document at upload time; the officer decides, this table
+// never blocks a submission by itself (task-1..4 build the pure rule/extract
+// layer this persists — services/document-precheck/{extract,evaluate}.js).
+//
+// ONE PRECHECK PER LIVE DOCUMENT (`@@unique([documentId])`): `documentId` is
+// the SAME uuid `ApplicationDocument.documentId` carries (prisma/schema/
+// application-document.prisma) — the upload the applicant is looking at when
+// this ran, not a second identity for it. A re-upload into the same slot
+// gets a new `ApplicationDocument.documentId`, so it gets a new row here too
+// (the old row's `status` moves to SUPERSEDED by the caller, per §8 — that
+// transition is Task 6/7, not this migration).
+//
+// FK pattern (organizationId → Organization, onDelete: Restrict; applicationId
+// → Application, onDelete: Cascade) follows prisma/schema/
+// application-document-review.prisma verbatim (:14-15 there has the same
+// applicationId FK) — added here in the same migration since the table is
+// new and empty (fix round 1, task-5-review.md Important 1).
+model DocumentPrecheck {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  documentId    String @map("document_id")
+
+  // Canonical slot id (lower_snake) — same vocabulary as
+  // ApplicationDocumentReview.slotId / the upload's slot.
+  slotId String @map("slot_id")
+
+  // PENDING while extraction/evaluation is running, DONE once evaluate()
+  // (services/document-precheck/evaluate.js) has produced its flags, FAILED
+  // when extraction itself errored (not a check finding — that's still
+  // DONE), SUPERSEDED once a later upload into the same slot replaces this
+  // row as the one the officer should read (§8), or once its file is deleted
+  // (services/document-precheck/service.js retireForDocument — text cleared).
+  status String
+
+  // Version of the CATALOG (services/document-precheck/catalog.js) this row
+  // was evaluated against, so a later catalog change never silently
+  // reinterprets an old result.
+  rulesVersion Int @map("rules_version")
+
+  // How the text was obtained (services/document-precheck/extract.js
+  // `{method}`). NONE means no text was extracted (e.g. unreadable/corrupt
+  // file) — still a completed extraction attempt, not a pending one.
+  extractMethod String? @map("extract_method")
+
+  // Aggregate OCR confidence when extractMethod = OCR (extract.js's
+  // per-page `pages[].confidence`, rolled up by the caller); null for
+  // TEXT_LAYER/NONE.
+  ocrConfidence Float? @map("ocr_confidence")
+  pageCount     Int?   @map("page_count")
+
+  // Raw extracted text — CAN hold OCR'd national IDs and other PII off the
+  // page. Retention/PDPA handling for this column is Task 10's rule; it is
+  // NOT encrypted or scrubbed by this migration.
+  extractedText String? @map("extracted_text")
+
+  // When the applicant clicked past the pre-check's warnings (if any) to
+  // submit anyway — null until then.
+  applicantAcknowledgedAt DateTime? @map("applicant_acknowledged_at")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+
+  flags DocumentPrecheckFlag[]
+
+  // Tenancy (ADR-014) — follows application-document-review.prisma.
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  reviews ApplicationDocumentReview[]
+
+  @@unique([documentId])
+  // Fix round 1 (task-5-review.md Minor 1): named explicitly — Prisma's own
+  // default (document_prechecks_applicationId_slot_id_status_idx) would
+  // otherwise drift from this migration's shorter name, same precedent as
+  // 20260901310000_application_document_reviews.
+  @@index([applicationId, slotId, status], map: "document_prechecks_app_slot_status_idx")
+  @@map("document_prechecks")
+}
+
+// One row per rule finding (services/document-precheck/evaluate.js's
+// returned array — READABILITY/DOC_TYPE/CROSS_MATCH/VALIDITY/SIGNATURE).
+// Append-only alongside its parent DocumentPrecheck; deleted only by cascade
+// when the parent precheck itself is removed (there is no independent
+// lifecycle for a flag).
+model DocumentPrecheckFlag {
+  id String @id @default(uuid())
+
+  precheckId String           @map("precheck_id")
+  precheck   DocumentPrecheck @relation(fields: [precheckId], references: [id], onDelete: Cascade)
+
+  check      String
+  result     String
+  reasonTH   String  @map("reason_th")
+  confidence Float
+  evidenceSnippet String? @map("evidence_snippet")
+
+  // Tenancy (ADR-014) — follows application-document-review.prisma.
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Fix round 1 (task-5-review.md Minor 2): matches the FK column index the
+  // migration already creates (document_precheck_flags_precheck_id_idx).
+  @@index([precheckId])
+  @@map("document_precheck_flags")
+}

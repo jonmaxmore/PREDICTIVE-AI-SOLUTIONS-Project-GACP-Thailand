@@ -1,0 +1,17 @@
+{
+    "maxUnreached": 891,
+    "totalLeaves": 1934,
+    "measuredAt": "2026-07-26",
+    "why": [
+        "Was 912 before /help/glossary and /help/faq were wired; both now switch language.",
+        "A Thai dictionary leaf that no source file reaches means the page which",
+        "should render it hardcoded its copy instead. The English leaf at the same",
+        "path is unreachable too, so a user who has selected English still gets",
+        "Thai there. Measured on screen, not inferred: /help/faq, /help/contact and",
+        "/help/glossary render byte-identical text in both languages, under",
+        "<html lang=\"en\">, carrying 589, 720 and 1281 Thai characters.",
+        "",
+        "This budget only ever goes down. Raising it means shipping another page",
+        "that cannot be translated."
+    ]
+}

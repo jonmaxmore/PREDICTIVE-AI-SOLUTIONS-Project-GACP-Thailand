@@ -1,0 +1,24 @@
+GACP 20-Agent Mega Report
+Date: 2026-03-13T13:33:09.985Z
+Overall: 240/240 (100.0%) in 79.4s
+
+PASS | F01 | Health User Pages (Frontend) | 12/12
+PASS | F02 | Provider Pages (Frontend) | 12/12
+PASS | B01 | API Health & Uptime (Backend) | 12/12
+PASS | B02 | Auth & Token Validation (Backend) | 12/12
+PASS | D01 | DB Connection & Health (Database) | 12/12
+PASS | D02 | Master Data Completeness (Database) | 12/12
+PASS | H01 | Registration & Onboarding (Health User) | 12/12
+PASS | H02 | Application Submission (Health User) | 12/12
+PASS | P01 | Reviewer Workflow (Provider) | 12/12
+PASS | P02 | Auditor Workflow (Provider) | 12/12
+PASS | T01 | กทล.1 Form Compliance (DTAM) | 12/12
+PASS | T05 | Inspection Criteria (DTAM) | 12/12
+PASS | W01 | GACP Guidelines WHO (WHO) | 12/12
+PASS | W02 | Quality Standards WHO (WHO) | 12/12
+PASS | A01 | Registration FDA (FDA) | 12/12
+PASS | A03 | Quality Control FDA (FDA) | 12/12
+PASS | G01 | Soil Analysis (Agriculture) | 12/12
+PASS | G02 | Cultivation Methods (Agriculture) | 12/12
+PASS | E01 | Good Agricultural Practices (GACP Expert) | 12/12
+PASS | E03 | Quality Assurance System (GACP Expert) | 12/12

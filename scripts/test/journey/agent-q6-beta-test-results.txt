@@ -1,0 +1,14 @@
+Agent Q6 — Beta Test Results
+Date: 2026-03-16T11:24:28.532Z
+Pass: 10 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Health endpoint JSON | Content-Type: application/json ✅
+PASS | API v1 alias | /api/v1/health → 200 ✅
+PASS | 404 response | status: 404 (HTML format)
+PASS | CORS preflight | status: 204
+PASS | HEAD request | status: 200
+PASS | X-Request-ID header | b6dde63654862c8019fec56faafa788c
+PASS | Compression | Not detected (may be handled by proxy)
+PASS | Security headers | 3/3 present
+PASS | Rate limit headers | Present ✅
+PASS | Public trace endpoint | status: 404

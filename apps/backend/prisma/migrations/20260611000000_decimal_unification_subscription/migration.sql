@@ -1,0 +1,54 @@
+-- ============================================================================
+-- C3-02 — Decimal type unification, part 3: Subscription.priceTHB
+-- ============================================================================
+--
+-- Migration name: decimal_unification_subscription
+--
+-- Completes the follow-up explicitly documented in
+-- 20260606000000_decimal_unification_line_items_quote ("deliberately OUT OF
+-- SCOPE ... migrate them in a separate pass once their code paths are
+-- covered"). The code paths are now covered (audit C3-02, 2026-06-11):
+--
+--   - ONLY write path: subscription-order-service.createSubscriptionOrder()
+--     → resolvePrice(tier, billingCycle) → frozen constants 990 / 9,900
+--     (DEFAULT_PRICING; ENTERPRISE tiers are null → contact-sales, no DB
+--     write). No user input ever reaches priceTHB, so every live value is an
+--     integer — the cast below is provably lossless.
+--   - Read paths: invoice creation (Decimal columns already), audit log +
+--     order API JSON (Decimal serializes as string — FE coerces at the
+--     service boundary, see apps/web-app subscription-service.ts), and the
+--     subscription/accounting display pages (same coercion).
+--
+-- Compliance basis (identical to parts 1 + 2):
+--   - TFRS for NPAEs ch.18 — revenue recognised at the EXACT captured amount.
+--   - ป.รัษฎากร ม.86/4 — taxable amounts must be exact decimals.
+--
+-- Strictly ADDITIVE / non-destructive:
+--   - No DROP COLUMN, no nullability change. Only the numeric domain changes.
+--   - USING clause preserves every row's value; `double precision` →
+--     `numeric(15,2)` is deterministic. Largest live value (฿9,900) is far
+--     below the column ceiling (฿99,999,999,999,999.99).
+--   - Reversible (rollback documented below).
+--
+-- DELIBERATELY OUT OF SCOPE (still): payment_reconciliations.totalAmount —
+-- the PaymentReconciliation model is UNWIRED (no create/read code path
+-- exists; verified 2026-06-11). Whether to migrate-or-delete that model is a
+-- separate owner decision; migrating an unwired column buys nothing.
+--
+-- Concurrency: ALTER COLUMN TYPE rewrites the table under ACCESS EXCLUSIVE.
+-- At GACP volumes (low hundreds of subscriptions) this completes well under a
+-- second — safe without a maintenance window.
+-- ============================================================================
+
+ALTER TABLE "subscriptions"
+  ALTER COLUMN "priceTHB" TYPE DECIMAL(15, 2) USING "priceTHB"::DECIMAL(15, 2);
+
+-- ============================================================================
+-- Rollback (DBA reference — NOT applied automatically):
+--
+--   ALTER TABLE "subscriptions"
+--     ALTER COLUMN "priceTHB" TYPE DOUBLE PRECISION
+--     USING "priceTHB"::DOUBLE PRECISION;
+--
+-- The reverse cast is lossless for any value this column can hold.
+-- ============================================================================

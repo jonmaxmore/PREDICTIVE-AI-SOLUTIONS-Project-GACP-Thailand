@@ -1,0 +1,46 @@
+# deploy-targets.txt — what is deployed where, and which ref it must match.
+#
+# DATA, not code. Hosts and refs change without the probe's logic changing, and a
+# URL compiled into a shell script is the hardcode this project treats as a
+# defect rather than a shortcut.
+#
+# FORMAT (3 fields, '|' separated):  <name> | <url> | <git ref it must match>
+# Lines starting with # and blank lines are ignored. A file with NO rows is a
+# FAIL, not a pass — a drift probe that contacted nothing has learned nothing,
+# and reporting PASS for that is the "checker exists but never runs" bug.
+#
+# PROVENANCE 2026-08-14, from `docker ps` on 203.0.113.10:
+#   gacp-frontend-staging   built 2026-07-23
+#   gacp-frontend           built 2026-08-03
+# and origin/deploy/production's head 78f26732 is dated 2026-08-03 — the same
+# day the production image was built. So on the first real run the production
+# rows are expected to PASS and the staging rows to FAIL. Any other result means
+# the probe is wrong, not the fleet. That is the acceptance criterion in
+# design note 2026-08-14-runtime-deploy-drift-design §4.
+
+# FRONTEND PATH: /api/webapp-version, not /api/version. The backend owns
+# /api/version (mobile minClientVersion check) and nginx routes /api/* to the
+# backend by default, so the frontend's route needs its own exact-match nginx
+# carve-out — see nginx/gacp.production.conf. The first run of this probe against
+# the deployed stack (2026-08-14) had /api/version here and read the backend's
+# mobile answer where the frontend's revision should have been.
+
+# ── สองประตูที่มีอยู่จริง (2026-09-11) ────────────────────────────────────────
+staging-backend  | https://staging.gacpth.com/api/health          | origin/main
+staging-frontend | https://staging.gacpth.com/api/webapp-version  | origin/main
+demo-backend     | https://demo.gacpth.com/api/health             | origin/main
+demo-frontend    | https://demo.gacpth.com/api/webapp-version     | origin/main
+
+# ── แถว production ถูกถอด 2026-09-11 ─────────────────────────────────────────
+#
+# เดิมมีสองแถวชี้ https://gacpth.com เทียบกับ origin/deploy/production
+#
+# gacpth.com ไม่มีคอนเทนเนอร์แล้ว — ถอดตามมติ operator (สามโดเมน: demo = ลูกค้า ·
+# staging = เรา · gacpth.com ไม่เปิดสาธารณะ) และโฮสต์ตอบ 502 โดยตั้งใจ
+# `.env.production` ก็ตั้ง DATABASE_URL ให้ติดต่อไม่ได้เพื่อให้อะไรที่ยังอ่านมันพังเสียงดัง
+#
+# ด่านนี้จึงแดงด้วยข้อความ "could not reach" ทุกครั้ง — ซึ่งไม่ใช่คำตัดสินเรื่อง deployment
+# เลย มันคือการรายงานว่าประตูที่เราถอดเองยังถูกถามอยู่ · ด่านที่แดงด้วยเหตุที่ไม่เกี่ยวกับ
+# สิ่งที่มันตรวจ คือด่านที่คนจะเรียนรู้ที่จะเมิน
+#
+# **ถ้ามี production จริงเมื่อไร ให้เติมแถวกลับ** พร้อม ref ที่มันต้องตรงด้วย

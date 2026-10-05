@@ -1,0 +1,18 @@
+Agent F14 — Accessibility WCAG Results
+Date: 2026-03-13T13:16:57.953Z
+Pass: 14 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Home has lang attr | HTTP 200
+PASS | Home has title | HTTP 200
+PASS | Home has title title | Present
+PASS | Home has viewport | HTTP 200
+PASS | Home has viewport viewport | Present
+PASS | Home has charset | HTTP 200
+PASS | Login accessible | HTTP 200
+PASS | Register accessible | HTTP 200
+PASS | Health entry | HTTP 200
+PASS | Provider entry | HTTP 200
+PASS | Trace page | HTTP 200
+PASS | Favicon exists | HTTP 200
+PASS | API health | status: 200
+PASS | Version endpoint | status: 200

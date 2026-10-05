@@ -1,0 +1,490 @@
+{
+  "info": {
+    "name": "GACP Partner API (DTAM Next)",
+    "description": "Partner integration surface of the GACP platform (ต้นน้ำ) for downstream programs (DTAM Next — กลางน้ำ/ปลายน้ำ).\n\n**Setup**: import the matching environment file (staging/production), set `apiKey` to the partner secret issued by the platform owner. Public folder needs no key.\n\n**Contract doc**: docs/integration/partner-interoperability-api.md (§6 = resolver).\n\nNote: `GET /v1/resolve` ships with PR #653 — on an environment deployed before it, resolve returns 404 for the ROUTE (not the code) until deployed.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "certNumber",
+      "value": "GACP-TH-2569-52BB9F"
+    },
+    {
+      "key": "batchNumber",
+      "value": "LOT-2569-CFBC-001"
+    },
+    {
+      "key": "batchQrUuid",
+      "value": "56ad107f-8008-4d23-96c7-d42df8aa4a38"
+    },
+    {
+      "key": "plantCode",
+      "value": "PU-1783487000001-UATA01"
+    }
+  ],
+  "item": [
+    {
+      "name": "Public (no key)",
+      "item": [
+        {
+          "name": "Data contract — traceability schema",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/data-contracts/traceability"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + schemaVersion', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.schemaVersion).to.include('DTAM_TRACEABILITY');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Event contract — trace events",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/event-contracts/trace-events"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify certificate (query form)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/verification?certificateNumber={{certNumber}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + trustStatus present', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.have.property('trustStatus');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trust public key",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/trust/public-key"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + RSA public key', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(JSON.stringify(pm.response.json())).to.include('publicKeyFingerprint');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify a signature (example shape)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/signatures/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payloadHash\": \"<sha256 hex of the envelope payload>\",\n  \"signature\": \"<base64 signature from the signed envelope>\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responds (placeholder body → valid:false is expected)', () => {",
+                  "  pm.expect([200, 400]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Partner (x-api-key)",
+      "item": [
+        {
+          "name": "RESOLVE — certificate number",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/resolve?code={{certNumber}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + CERTIFICATE + no PII', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.matched.entityType).to.eql('CERTIFICATE');",
+                  "  pm.expect(JSON.stringify(b)).to.not.include('applicantName');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "RESOLVE — plant QR/code → ล็อต/แปลง/จำนวนต้น/ฟาร์ม",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/resolve?code={{plantCode}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + PLANT_UNIT + full provenance', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const p = pm.response.json().provenance;",
+                  "  pm.expect(p).to.have.property('plot');   // แปลงไหน",
+                  "  pm.expect(p).to.have.property('cycle');  // รอบนี้ปลูกกี่ต้น (plantedCount)",
+                  "  pm.expect(p).to.have.property('batch');  // ล็อตเก็บเกี่ยว",
+                  "  pm.expect(p).to.have.property('lots');   // ล็อตบรรจุ",
+                  "  pm.expect(p).to.have.property('farm');   // ฟาร์มอะไร",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "RESOLVE — legacy LOT-prefixed batch number",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/resolve?code={{batchNumber}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + HARVEST_BATCH (LOT- legacy fallback)', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().matched.entityType).to.eql('HARVEST_BATCH');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "RESOLVE — bare UUID (TraceQrSecurity index)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/resolve?code={{batchQrUuid}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + seal/matched present', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().resolved).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "RESOLVE — full scanned URL",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/resolve?code=https%3A%2F%2Fgacpth.com%2Fverify%2F{{certNumber}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "resolve"
+              ],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "https%3A%2F%2Fgacpth.com%2Fverify%2F{{certNumber}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + CERTIFICATE from URL', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().matched.entityType).to.eql('CERTIFICATE');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "RESOLVE — unknown code → 404 with probe trail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/resolve?code=totally-unknown-junk"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('404 + resolved:false + probed[]', () => {",
+                  "  pm.response.to.have.status(404);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.resolved).to.eql(false);",
+                  "  pm.expect(b.probed).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "RESOLVE — without key → 401 (fail-closed)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/resolve?code={{certNumber}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('401 PARTNER_KEY_MISSING', () => {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().code).to.eql('PARTNER_KEY_MISSING');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trace events — certificate",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/trace/events/CERTIFICATE/{{certNumber}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + events[]', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.events).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trace events — harvest batch (by batchNumber)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/trace/events/HARVEST_BATCH/{{batchNumber}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trust registry (page 1)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/trust/registry?page=1&limit=5"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + pagination', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.have.property('pagination');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revocation feed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/trust/revocations?limit=5"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E-certificate (signed envelope, no public key)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/certificates/{{certNumber}}/e-certificate"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 + signature block', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(JSON.stringify(pm.response.json())).to.include('signature');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Signed envelope (with public key)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/certificates/{{certNumber}}/signed-envelope"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

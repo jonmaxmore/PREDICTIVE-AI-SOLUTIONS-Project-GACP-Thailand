@@ -1,0 +1,10 @@
+Agent J10 — Golden Scenario E2E Results
+Date: 2026-03-16T12:48:12.171Z
+Pass: 5 | Fail: 0 | Skip: 1 | Rate: 83.3%
+
+PASS | API health check | status: 200
+SKIP | Golden Scenario (E2E disabled) | Production mode — testing public APIs
+PASS | API version check | v3.0.0
+PASS | API metrics | status: 200
+PASS | GACP standards | status: 200
+PASS | Master data | status: 200

@@ -1,0 +1,16 @@
+Agent F11 — Navigation & Sidebar Results
+Date: 2026-03-13T13:19:56.571Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Health sidebar home | HTTP 200
+PASS | Health sidebar apps | HTTP 200
+PASS | Health sidebar track | HTTP 200
+PASS | Health sidebar certs | HTTP 200
+PASS | Health sidebar docs | HTTP 200
+PASS | Health sidebar profile | HTTP 200
+PASS | Provider sidebar home | HTTP 200
+PASS | Provider sidebar audits | HTTP 200
+PASS | Provider sidebar apps | HTTP 200
+PASS | Provider sidebar certs | HTTP 200
+PASS | Provider sidebar settings | HTTP 200
+PASS | Provider sidebar profile | HTTP 200

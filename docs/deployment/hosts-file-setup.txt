@@ -1,0 +1,29 @@
+# ============================================================
+# GACP Platform - Hosts File for Local Development
+# ============================================================
+# Add these lines to your hosts file:
+#
+# Windows: C:\Windows\System32\drivers\etc\hosts
+# Mac/Linux: /etc/hosts
+#
+# Replace YOUR_SERVER_IP with your actual server IP
+# ============================================================
+
+# For local development (Docker on same machine)
+127.0.0.1  Applicant.gacp.local
+127.0.0.1  api.gacp.local
+127.0.0.1  provider.gacp.local
+127.0.0.1  gacp.local
+
+# For DigitalOcean server (replace with your server IP)
+# YOUR_SERVER_IP  Applicant.gacp.local
+# YOUR_SERVER_IP  api.gacp.local
+# YOUR_SERVER_IP  provider.gacp.local
+# YOUR_SERVER_IP  gacp.local
+
+# ============================================================
+# IMPORTANT: After editing hosts file, you may need to:
+# - Windows: ipconfig /flushdns
+# - Mac: sudo dscacheutil -flushcache
+# - Linux: sudo systemd-resolve --flush-caches
+# ============================================================

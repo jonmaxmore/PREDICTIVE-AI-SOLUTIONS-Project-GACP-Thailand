@@ -1,0 +1,15 @@
+# Test configuration for the GACP mobile app.
+#
+# The `live` tag marks integration tests that hit the real backend over the
+# network. They are SKIPPED in the default `flutter test` run (so unit/widget
+# tests stay hermetic and offline).
+#
+# ⚠️ To actually run them you MUST pass BOTH flags — `--tags live` alone
+# selects the tests but does NOT override the skip (proven: it prints
+# "All tests skipped." and exits 0):
+#
+#   flutter test --tags live --run-skipped test/integration/
+#
+tags:
+  live:
+    skip: "network integration test — run explicitly with: flutter test --tags live --run-skipped"

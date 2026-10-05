@@ -1,0 +1,17 @@
+criterion,category,weight,min_score,aws,gcp,azure,digitalocean,notes
+managed_edge,edge,10,4,5,5,5,4,See docs/provider-evaluation-evidence-2026-03-08.md
+waf_cdn,edge,8,4,5,5,5,2,See docs/provider-evaluation-evidence-2026-03-08.md
+multi_failure_domain_app,compute,10,4,5,5,4,2,See docs/provider-evaluation-evidence-2026-03-08.md
+managed_postgres_ha,data,10,4,5,5,4,4,See docs/provider-evaluation-evidence-2026-03-08.md
+managed_redis_ha,data,8,4,5,5,4,3,See docs/provider-evaluation-evidence-2026-03-08.md
+object_storage,data,6,4,5,5,5,4,See docs/provider-evaluation-evidence-2026-03-08.md
+observability,operations,7,3,5,5,5,3,See docs/provider-evaluation-evidence-2026-03-08.md
+iac_support,operations,7,4,5,5,5,4,See docs/provider-evaluation-evidence-2026-03-08.md
+rollout_and_rollback,operations,7,4,5,5,4,3,See docs/provider-evaluation-evidence-2026-03-08.md
+dns_tls,edge,5,4,5,5,5,4,See docs/provider-evaluation-evidence-2026-03-08.md
+identity_and_secrets,security,6,4,5,5,5,2,See docs/provider-evaluation-evidence-2026-03-08.md
+compliance_controls,security,8,4,5,5,5,3,See docs/provider-evaluation-evidence-2026-03-08.md
+cost_visibility,finance,4,3,4,4,4,5,See docs/provider-evaluation-evidence-2026-03-08.md
+team_familiarity,delivery,4,2,2,2,2,4,Local inference from current repo and operating model; see evidence doc
+migration_complexity,delivery,5,2,3,3,2,5,Local inference from current repo and operating model; see evidence doc
+regional_fit,delivery,5,3,5,4,4,3,See docs/provider-evaluation-evidence-2026-03-08.md

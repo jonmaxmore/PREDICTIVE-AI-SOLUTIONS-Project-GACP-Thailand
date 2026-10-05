@@ -1,0 +1,594 @@
+<title>ใบเสนอราคาถึงใบเสร็จ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --ground:    #E7ECE8;
+    --ground-2:  #DCE3DE;
+    --paper:     #FCFCFA;
+    --ink:       #16211F;
+    --ink-soft:  #4C5B57;
+    --ink-faint: #7B8985;
+    --accent:    #0F5F6B;
+    --accent-2:  #0C4A54;
+    --accent-wash:#DDEBEC;
+    --seal:      #A8551F;
+    --seal-wash: #F4E7DC;
+    --rule:      #C7D2CC;
+    --rule-soft: #DEE6E1;
+    --shadow:    0 1px 2px rgba(22,33,31,.06), 0 12px 28px -14px rgba(22,33,31,.28);
+
+    --f-page: "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif;
+    --f-doc:  "Sarabun", "TH Sarabun New", "Noto Sans Thai", sans-serif;
+    --f-num:  "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+
+    --step--1: clamp(.78rem, .76rem + .12vw, .84rem);
+    --step-0:  clamp(.95rem, .92rem + .16vw, 1.03rem);
+    --step-1:  clamp(1.14rem, 1.06rem + .38vw, 1.32rem);
+    --step-2:  clamp(1.45rem, 1.28rem + .82vw, 1.95rem);
+    --step-3:  clamp(1.95rem, 1.6rem + 1.7vw, 3.05rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:    #101614;
+      --ground-2:  #18211E;
+      --paper:     #EFEEE8;
+      --ink:       #E6EDE9;
+      --ink-soft:  #A3B2AD;
+      --ink-faint: #7C8B86;
+      --accent:    #5FBECB;
+      --accent-2:  #8AD5DF;
+      --accent-wash:#16302F;
+      --seal:      #D98A4E;
+      --seal-wash: #2C1F14;
+      --rule:      #2B3733;
+      --rule-soft: #222C29;
+      --shadow:    0 1px 2px rgba(0,0,0,.5), 0 14px 32px -16px rgba(0,0,0,.75);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:    #101614;
+    --ground-2:  #18211E;
+    --paper:     #EFEEE8;
+    --ink:       #E6EDE9;
+    --ink-soft:  #A3B2AD;
+    --ink-faint: #7C8B86;
+    --accent:    #5FBECB;
+    --accent-2:  #8AD5DF;
+    --accent-wash:#16302F;
+    --seal:      #D98A4E;
+    --seal-wash: #2C1F14;
+    --rule:      #2B3733;
+    --rule-soft: #222C29;
+    --shadow:    0 1px 2px rgba(0,0,0,.5), 0 14px 32px -16px rgba(0,0,0,.75);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-page);
+    font-size: var(--step-0);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 78rem; margin: 0 auto; padding: clamp(2rem, 5vw, 5rem) clamp(1.1rem, 4vw, 3rem) 6rem; }
+
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  /* ── masthead ─────────────────────────────────────────────── */
+  .masthead { display: flex; flex-direction: column; gap: .9rem; padding-bottom: 2rem; border-bottom: 1px solid var(--rule); }
+  .eyebrow {
+    font-size: var(--step--1); letter-spacing: .16em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 600; font-family: var(--f-num);
+  }
+  h1 { font-size: var(--step-3); line-height: 1.08; margin: 0; font-weight: 700; text-wrap: balance; letter-spacing: -.015em; }
+  .standfirst { max-width: 62ch; color: var(--ink-soft); font-size: var(--step-1); line-height: 1.5; margin: 0; text-wrap: pretty; }
+  .meta { display: flex; flex-wrap: wrap; gap: .5rem 1.6rem; font-family: var(--f-num); font-size: var(--step--1); color: var(--ink-faint); }
+  .meta b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ── section chrome ───────────────────────────────────────── */
+  section { margin-top: clamp(3rem, 7vw, 5.5rem); }
+  h2 { font-size: var(--step-2); margin: 0 0 .5rem; font-weight: 700; letter-spacing: -.01em; text-wrap: balance; }
+  h3 { font-size: var(--step-1); margin: 0 0 .35rem; font-weight: 600; }
+  .lede { max-width: 64ch; color: var(--ink-soft); margin: 0 0 2rem; text-wrap: pretty; }
+
+  /* ── the sequence ─────────────────────────────────────────── */
+  .specimens { display: flex; flex-direction: column; gap: clamp(2.5rem, 5vw, 4rem); }
+
+  .specimen { display: grid; grid-template-columns: 3.2rem minmax(0, 1fr); gap: 0 clamp(1rem, 2.5vw, 2rem); }
+  @media (max-width: 46rem) { .specimen { grid-template-columns: 1fr; } }
+
+  .spine { display: flex; flex-direction: column; align-items: center; gap: .75rem; }
+  @media (max-width: 46rem) { .spine { flex-direction: row; align-items: baseline; gap: 1rem; } }
+  .spine-num {
+    font-family: var(--f-num); font-size: var(--step-1); font-weight: 500;
+    color: var(--accent); line-height: 1; padding-top: .3rem;
+  }
+  .spine-line { flex: 1; width: 1px; background: var(--rule); }
+  @media (max-width: 46rem) { .spine-line { display: none; } }
+  .spine-weight {
+    writing-mode: vertical-rl; font-size: var(--step--1); letter-spacing: .1em;
+    color: var(--ink-faint); text-transform: uppercase; font-family: var(--f-num);
+  }
+  @media (max-width: 46rem) { .spine-weight { writing-mode: horizontal-tb; } }
+
+  .specimen-body { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: clamp(1.25rem, 3vw, 2.25rem); align-items: start; }
+  @media (max-width: 62rem) { .specimen-body { grid-template-columns: 1fr; } }
+
+  /* ── the paper ────────────────────────────────────────────── */
+  .sheet {
+    background: var(--paper); color: #16211F;
+    border: 1px solid var(--rule); border-radius: 2px;
+    box-shadow: var(--shadow);
+    font-family: var(--f-doc);
+    padding: clamp(1.1rem, 2.4vw, 1.9rem);
+    font-size: .84rem; line-height: 1.55;
+    overflow-x: auto;
+  }
+  .sheet-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+  .issuer { font-size: .82rem; }
+  .issuer strong { display: block; font-size: .95rem; font-weight: 700; }
+  .issuer span { color: #4C5B57; display: block; }
+  .doc-id { text-align: right; font-family: var(--f-num); font-size: .76rem; color: #4C5B57; }
+  .doc-id b { display: block; color: #16211F; font-weight: 500; font-size: .84rem; }
+
+  .doc-title { text-align: center; margin: 1.1rem 0 .2rem; font-size: 1.15rem; font-weight: 700; letter-spacing: .01em; }
+  .doc-title small { display: block; font-size: .7rem; letter-spacing: .18em; color: #7B8985; font-weight: 500; font-family: var(--f-num); margin-top: .15rem; }
+
+  .sheet hr { border: 0; border-top: 1px solid #D9E0DB; margin: 1rem 0; }
+
+  .party { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .15rem 1.2rem; font-size: .8rem; }
+  .party dt { color: #7B8985; }
+  .party dd { margin: 0; }
+
+  table.lines { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: .4rem; }
+  table.lines th, table.lines td { padding: .38rem .3rem; text-align: left; border-bottom: 1px solid #E4EAE6; vertical-align: top; }
+  table.lines th { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: #7B8985; font-weight: 600; font-family: var(--f-page); }
+  table.lines .num { text-align: right; font-family: var(--f-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.lines .sub { display: block; color: #7B8985; font-size: .74rem; }
+
+  .totals { margin-left: auto; width: min(19rem, 100%); margin-top: .6rem; font-size: .82rem; }
+  .totals div { display: flex; justify-content: space-between; gap: 1.5rem; padding: .22rem 0; }
+  .totals .num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+  .totals .grand { border-top: 2px solid #16211F; margin-top: .3rem; padding-top: .4rem; font-weight: 700; font-size: .95rem; }
+  .in-words { text-align: right; color: #4C5B57; font-size: .76rem; margin-top: .15rem; }
+
+  .footblock { margin-top: 1.1rem; padding-top: .8rem; border-top: 1px dashed #C7D2CC; font-size: .78rem; display: grid; gap: .3rem; }
+  .footblock .k { color: #7B8985; }
+  .stamp {
+    display: inline-flex; align-items: center; gap: .45rem; margin-top: .4rem;
+    border: 1px solid #A8551F; color: #A8551F; background: #F4E7DC;
+    border-radius: 2px; padding: .22rem .55rem; font-size: .72rem; font-family: var(--f-num);
+  }
+  .cta-ghost {
+    display: inline-block; margin-top: .5rem; border: 1px solid #0F5F6B; color: #0F5F6B;
+    border-radius: 3px; padding: .3rem .7rem; font-size: .76rem; font-family: var(--f-page); font-weight: 600;
+  }
+
+  /* ── annotation ───────────────────────────────────────────── */
+  .note { display: grid; gap: .9rem; align-content: start; }
+  .note-title { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+  .chip {
+    font-family: var(--f-num); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+    background: var(--accent-wash); color: var(--accent-2); border-radius: 2px; padding: .16rem .45rem; white-space: nowrap;
+  }
+  .chip.legal { background: var(--seal-wash); color: var(--seal); }
+  .note p { margin: 0; color: var(--ink-soft); max-width: 46ch; text-wrap: pretty; }
+  .note ul { margin: 0; padding-left: 1.05rem; display: grid; gap: .45rem; color: var(--ink-soft); max-width: 46ch; }
+  .note li::marker { color: var(--accent); }
+  .note strong { color: var(--ink); font-weight: 600; }
+
+  /* ── tables on the page itself ────────────────────────────── */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--ground-2); }
+  table.grid { width: 100%; border-collapse: collapse; font-size: var(--step--1); min-width: 42rem; }
+  table.grid th, table.grid td { padding: .7rem .85rem; text-align: left; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  table.grid thead th {
+    font-size: .7rem; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-faint);
+    font-weight: 600; background: var(--ground); position: sticky; top: 0;
+  }
+  table.grid tbody tr:last-child td { border-bottom: 0; }
+  table.grid code, code { font-family: var(--f-num); font-size: .92em; background: var(--accent-wash); color: var(--accent-2); padding: .06rem .3rem; border-radius: 2px; }
+  .tag { font-family: var(--f-num); font-size: .7rem; color: var(--seal); white-space: nowrap; }
+
+  /* ── callout ──────────────────────────────────────────────── */
+  .callout {
+    border-left: 3px solid var(--seal); background: var(--ground-2);
+    padding: 1rem 1.2rem; border-radius: 0 3px 3px 0; display: grid; gap: .5rem;
+  }
+  .callout h3 { margin: 0; font-size: var(--step-0); font-weight: 700; }
+  .callout p { margin: 0; color: var(--ink-soft); max-width: 68ch; }
+
+  .questions { display: grid; gap: 1rem; counter-reset: q; }
+  .question { display: grid; grid-template-columns: 2rem minmax(0,1fr); gap: 0 .9rem; padding: 1rem 0; border-top: 1px solid var(--rule-soft); }
+  .question::before {
+    counter-increment: q; content: counter(q);
+    font-family: var(--f-num); color: var(--seal); font-size: var(--step-0);
+  }
+  .question p { margin: .2rem 0 0; color: var(--ink-soft); max-width: 62ch; }
+  .question.decided::before { color: var(--accent); }
+  .question h3 { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+
+  footer { margin-top: 5rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: var(--step--1); }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">ร่างเพื่อขออนุมัติ · 2026-09-05</p>
+    <h1>ใบเสนอราคาถึงใบเสร็จ</h1>
+    <p class="standfirst">
+      เอกสารการเงินสามใบที่ผู้ยื่นคำขอ GACP จะได้รับตามลำดับ ออกแบบใหม่ให้ตรงกับมติ W14
+      ที่ให้บริษัทเป็นผู้ออกเอกสารรายเดียว
+    </p>
+    <div class="meta">
+      <span><b>แทนที่</b> finance-design-system-2026-05-16</span>
+      <span><b>อ้างอิง</b> fee-model-2026-09-05</span>
+      <span><b>ชั้นความเสี่ยง</b> Tier C — operator merge</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>ทำไมต้องออกแบบใหม่</h2>
+    <p class="lede">
+      ระบบออก PDF ได้ครบอยู่แล้ว แต่โครงของเอกสารยังเป็นของโมเดลที่มีผู้ออกสองราย
+      ซึ่งคำสั่ง W14 เมื่อ 22 สิงหาคม 2569 ยกเลิกไปแล้ว นี่คือสิ่งที่ยังอยู่ในโค้ดวันนี้
+    </p>
+
+    <div class="scroll">
+      <table class="grid">
+        <thead>
+          <tr><th>พบจริงในโค้ด</th><th>ตำแหน่ง</th><th>ทำไมเป็นปัญหา</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>generateQuotationPdf({ issuerSide })</code> รับค่า <code>DTAM</code> หรือ <code>PLATFORM</code> และประตูส่งค่าจากผู้เรียก</td>
+            <td><code>invoice-template-service.js:1042</code><br><code>quotations.js:278</code></td>
+            <td>ยังขอใบเสนอราคา “ฝั่งกรมฯ” ได้ผ่านพารามิเตอร์ <code>:issuerType</code> บน URL และ <code>resolveAllowedIssuerSides</code> ให้ทุก role ที่ไม่ใช่ account_dtam/account_platform เข้าถึงทั้งสองฝั่ง — รวมถึงเกษตรกรเจ้าของคำขอเอง</td>
+          </tr>
+          <tr>
+            <td>template <code>government-revenue-receipt.html</code> — ใบเสร็จเงินรายได้แผ่นดิน ไม่มีบรรทัด VAT</td>
+            <td><code>invoice-template-service.js:755</code></td>
+            <td>ใบเสร็จในนามกรมฯ ที่ W14 เลิกออก ยังถูกเลือกใช้อัตโนมัติเมื่อ serviceType เป็น STATE</td>
+          </tr>
+          <tr>
+            <td>คืน VAT = 0 เมื่อผู้ออกเป็นฝั่ง DTAM</td>
+            <td><code>quotation-line-items.js:144</code></td>
+            <td>จุดยืน “ส่วนรัฐยกเว้นภาษี” ที่เลิกใช้แล้ว ยังฝังอยู่ในการคำนวณบรรทัด</td>
+          </tr>
+          <tr>
+            <td>key namespace แยก <code>DTAM</code> / <code>PLATFORM</code> สำหรับผนึกลายเซ็น</td>
+            <td><code>receipt-auto-sign-service.js:100</code></td>
+            <td>ผนึกสองชุดสำหรับผู้ออกเอกสารที่เหลือรายเดียว</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>เอกสารสามใบ</h2>
+    <p class="lede">
+      ลำดับนี้ไม่ใช่การจัดหมวด แต่เป็นน้ำหนักทางกฎหมายที่เพิ่มขึ้นทีละขั้น
+      จากข้อเสนอที่ยังไม่ผูกพัน ไปสู่การเรียกเก็บ และจบที่หลักฐานว่าเงินเข้าแล้ว
+    </p>
+
+    <div class="specimens">
+
+      <!-- 1 ─ QUOTATION -->
+      <article class="specimen">
+        <div class="spine">
+          <div class="spine-num">01</div>
+          <div class="spine-line"></div>
+          <div class="spine-weight">ข้อเสนอ</div>
+        </div>
+        <div class="specimen-body">
+          <div class="sheet">
+            <div class="sheet-head">
+              <div class="issuer">
+                <strong>บริษัท พรีดิกทีฟ เอไอ โซลูชัน จำกัด</strong>
+                <span>(สำนักงานใหญ่) เลขประจำตัวผู้เสียภาษี 0105568045932</span>
+                <span>429/69 หมู่บ้านพรีเมี่ยมเพลส ถนนสุคนธสวัสดิ์</span>
+                <span>แขวงลาดพร้าว เขตลาดพร้าว กรุงเทพมหานคร 10230</span>
+              </div>
+              <div class="doc-id">
+                เลขที่<b>QT-2569-000184</b>
+                วันที่<b>5 กันยายน 2569</b>
+              </div>
+            </div>
+
+            <div class="doc-title">ใบเสนอราคา<small>QUOTATION</small></div>
+            <hr>
+
+            <dl class="party">
+              <dt>ลูกค้า</dt><dd>นายสมชาย ใจดี</dd>
+              <dt>คำขอเลขที่</dt><dd>APP-2569-MTBZ8WCX</dd>
+              <dt>สถานที่</dt><dd>ต.สุเทพ อ.เมือง จ.เชียงใหม่</dd>
+              <dt>งวด</dt><dd>ที่ 1 — ตรวจเอกสาร</dd>
+            </dl>
+
+            <table class="lines">
+              <thead><tr><th>#</th><th>รายการ</th><th class="num">จำนวน</th><th class="num">ราคา</th><th class="num">รวม</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td>ค่าบริการดำเนินการรับรองมาตรฐาน GACP<span class="sub">ราคาเต็ม · งวดที่ 1 ตรวจเอกสาร</span></td>
+                  <td class="num">1</td><td class="num">5,000.00</td><td class="num">5,000.00</td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td>ค่าบริการแพลตฟอร์ม 10%<span class="sub">คิดจากราคาเต็ม</span></td>
+                  <td class="num">1</td><td class="num">500.00</td><td class="num">500.00</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="totals">
+              <div><span>รวมเป็นเงิน</span><span class="num">5,500.00</span></div>
+              <div><span>ภาษีมูลค่าเพิ่ม 7%</span><span class="num">385.00</span></div>
+              <div class="grand"><span>จำนวนเงินรวมทั้งสิ้น</span><span class="num">5,885.00</span></div>
+            </div>
+            <p class="in-words">(ห้าพันแปดร้อยแปดสิบห้าบาทถ้วน)</p>
+
+            <div class="footblock">
+              <div><span class="k">ยืนราคาถึงวันที่</span> 15 กันยายน 2569</div>
+              <div><span class="k">เงื่อนไขการชำระเงิน</span> ฉบับที่ 1.1 (28 สิงหาคม 2569)</div>
+              <span class="cta-ghost">ยอมรับใบเสนอราคานี้</span>
+            </div>
+          </div>
+
+          <div class="note">
+            <div class="note-title"><h3>ยังไม่ก่อหนี้</h3><span class="chip">ไม่ผนึกลายเซ็น</span></div>
+            <p>
+              ใบเสนอราคาเป็นข้อเสนอ ผู้ยื่นกด “ยอมรับ” จึงผูกพัน จนกว่าจะกด
+              เอกสารนี้ยังไม่ใช่หลักฐานทางการเงิน จึงไม่ผนึกลายเซ็นดิจิทัล
+            </p>
+            <ul>
+              <li><strong>ราคาถูกแช่แข็งไว้ในใบ</strong> พร้อมค่า hash เมื่อกดยอมรับ การแก้ตารางค่าธรรมเนียมหลังจากนั้นไม่ย้อนกลับมาแก้ใบที่รับแล้ว และการชำระที่ยอดไม่ตรง snapshot จะถูกปฏิเสธ</li>
+              <li><strong>ยืนราคา 7 วันทำการ · หมดอายุแล้วต้องออกใบใหม่</strong> ไม่ใช่ต่ออายุเงียบ ๆ — ป.พ.พ. ม.357 คำสนองที่มาช้ากว่ากำหนดไม่เกิดผล และราคาที่ยืดออกไปโดยไม่มีใครเห็นคือราคาที่ไม่มีใครตกลง</li>
+              <li>เลขเวอร์ชันเงื่อนไขที่ผู้ยื่นกดยอมรับ ถูกบันทึกคู่กับคำสั่งซื้อ</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- 2 ─ INVOICE -->
+      <article class="specimen">
+        <div class="spine">
+          <div class="spine-num">02</div>
+          <div class="spine-line"></div>
+          <div class="spine-weight">เรียกเก็บ</div>
+        </div>
+        <div class="specimen-body">
+          <div class="sheet">
+            <div class="sheet-head">
+              <div class="issuer">
+                <strong>บริษัท พรีดิกทีฟ เอไอ โซลูชัน จำกัด</strong>
+                <span>(สำนักงานใหญ่) เลขประจำตัวผู้เสียภาษี 0105568045932</span>
+              </div>
+              <div class="doc-id">
+                เลขที่<b>INV-2569-000184</b>
+                วันที่<b>5 กันยายน 2569</b>
+              </div>
+            </div>
+
+            <div class="doc-title">ใบวางบิล / ใบแจ้งหนี้<small>INVOICE</small></div>
+            <hr>
+
+            <dl class="party">
+              <dt>ลูกค้า</dt><dd>นายสมชาย ใจดี</dd>
+              <dt>อ้างอิงใบเสนอราคา</dt><dd>QT-2569-000184</dd>
+              <dt>คำขอเลขที่</dt><dd>APP-2569-MTBZ8WCX</dd>
+              <dt>กำหนดชำระ</dt><dd>19 กันยายน 2569</dd>
+            </dl>
+
+            <table class="lines">
+              <thead><tr><th>#</th><th>รายการ</th><th class="num">จำนวน</th><th class="num">ราคา</th><th class="num">รวม</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>ค่าบริการดำเนินการรับรองมาตรฐาน GACP<span class="sub">ราคาเต็ม · งวดที่ 1 ตรวจเอกสาร</span></td><td class="num">1</td><td class="num">5,000.00</td><td class="num">5,000.00</td></tr>
+                <tr><td>2</td><td>ค่าบริการแพลตฟอร์ม 10%</td><td class="num">1</td><td class="num">500.00</td><td class="num">500.00</td></tr>
+              </tbody>
+            </table>
+
+            <div class="totals">
+              <div><span>รวมเป็นเงิน</span><span class="num">5,500.00</span></div>
+              <div><span>ภาษีมูลค่าเพิ่ม 7%</span><span class="num">385.00</span></div>
+              <div class="grand"><span>จำนวนเงินที่ต้องชำระ</span><span class="num">5,885.00</span></div>
+            </div>
+            <p class="in-words">(ห้าพันแปดร้อยแปดสิบห้าบาทถ้วน)</p>
+
+            <div class="footblock">
+              <div><span class="k">ช่องทางชำระ</span> ชำระผ่านระบบ (PromptPay QR)</div>
+              <div><span class="k">กำหนดชำระ</span> นับเป็นวันทำการ ไม่รวมวันหยุดราชการ</div>
+            </div>
+          </div>
+
+          <div class="note">
+            <div class="note-title"><h3>ไม่มีเลขบัญชีธนาคารบนใบ</h3><span class="chip">ตั้งใจ</span></div>
+            <p>
+              ช่องทางเดียวคือผ่านระบบ ซึ่งการชำระถูกยืนยันกลับมาโดยผู้ให้บริการชำระเงิน
+              การพิมพ์เลขบัญชีลงบนใบเปิดช่องให้เกิดการโอนที่ระบบไม่รู้ แล้วต้องมากระทบยอดด้วยมือทีหลัง
+            </p>
+            <ul>
+              <li><strong>บรรทัดเหมือนใบเสนอราคาทุกตัวอักษร</strong> ผู้ยื่นเทียบสองใบได้ทีละบรรทัด ไม่ต้องเดาว่ายอดเปลี่ยนตรงไหน</li>
+              <li><strong>กำหนดชำระนับเป็นวันทำการ</strong> จากปฏิทินเดียวกับที่ใช้ทั้งระบบ กำหนดที่ตกวันหยุดคือกำหนดที่ไม่เป็นธรรมตั้งแต่วันที่ตั้ง</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- 3 ─ RECEIPT -->
+      <article class="specimen">
+        <div class="spine">
+          <div class="spine-num">03</div>
+          <div class="spine-line"></div>
+          <div class="spine-weight">หลักฐาน</div>
+        </div>
+        <div class="specimen-body">
+          <div class="sheet">
+            <div class="sheet-head">
+              <div class="issuer">
+                <strong>บริษัท พรีดิกทีฟ เอไอ โซลูชัน จำกัด</strong>
+                <span>(สำนักงานใหญ่) เลขประจำตัวผู้เสียภาษี 0105568045932</span>
+              </div>
+              <div class="doc-id">
+                เลขที่<b>TAX-PRD-2569-000184</b>
+                วันที่<b>5 กันยายน 2569</b>
+              </div>
+            </div>
+
+            <div class="doc-title">ใบเสร็จรับเงิน / ใบกำกับภาษี<small>TAX INVOICE · RECEIPT</small></div>
+            <hr>
+
+            <dl class="party">
+              <dt>ผู้ซื้อ</dt><dd>นายสมชาย ใจดี</dd>
+              <dt>เลขประจำตัวผู้เสียภาษี</dt><dd>1234567890123</dd>
+              <dt>อ้างอิงใบแจ้งหนี้</dt><dd>INV-2569-000184</dd>
+              <dt>ชำระเมื่อ</dt><dd>5 กันยายน 2569</dd>
+            </dl>
+
+            <table class="lines">
+              <thead><tr><th>#</th><th>รายการ</th><th class="num">จำนวน</th><th class="num">ราคา</th><th class="num">รวม</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>ค่าบริการดำเนินการรับรองมาตรฐาน GACP<span class="sub">ราคาเต็ม · งวดที่ 1 ตรวจเอกสาร</span></td><td class="num">1</td><td class="num">5,000.00</td><td class="num">5,000.00</td></tr>
+                <tr><td>2</td><td>ค่าบริการแพลตฟอร์ม 10%</td><td class="num">1</td><td class="num">500.00</td><td class="num">500.00</td></tr>
+              </tbody>
+            </table>
+
+            <div class="totals">
+              <div><span>รวมเป็นเงิน</span><span class="num">5,500.00</span></div>
+              <div><span>ภาษีมูลค่าเพิ่ม 7%</span><span class="num">385.00</span></div>
+              <div class="grand"><span>จำนวนเงินรวมทั้งสิ้น</span><span class="num">5,885.00</span></div>
+            </div>
+            <p class="in-words">(ห้าพันแปดร้อยแปดสิบห้าบาทถ้วน)</p>
+
+            <div class="footblock">
+              <div><span class="k">วิธีชำระ</span> PromptPay QR</div>
+              <div><span class="k">อ้างอิงการชำระ</span> PAY-2569-000184</div>
+              <div><span class="k">ผู้รับเงิน</span> ลงนามอิเล็กทรอนิกส์โดยผู้มีอำนาจ</div>
+              <span class="stamp">ผนึกลายเซ็นดิจิทัล · ตรวจสอบได้</span>
+            </div>
+          </div>
+
+          <div class="note">
+            <div class="note-title"><h3>ออกได้ต่อเมื่อเงินเข้าแล้ว</h3><span class="chip legal">ม.86/4</span></div>
+            <p>
+              ใบเสร็จคือคำยืนยันว่าเงินเข้าแล้ว ระบบที่ออกใบเสร็จตอนผู้ใช้กดจ่าย
+              คือระบบที่ออกหลักฐานให้เงินที่ยังไม่มา ใบนี้จึงออกเมื่อผู้ให้บริการชำระเงินยืนยันแล้วเท่านั้น
+            </p>
+            <ul>
+              <li><strong>หนึ่งการชำระ = หนึ่งเลข</strong> ไม่มีใบที่สองสำหรับการจ่ายครั้งเดียว และไม่มีการข้ามเลข</li>
+              <li><strong>ผู้ซื้อที่จด VAT ใช้เครดิตภาษีซื้อได้</strong> จึงต้องเป็นใบกำกับภาษีเต็มรูป ไม่ใช่ใบเสร็จอย่างย่อ</li>
+              <li><strong>เลขที่เดินต่อเนื่องตาม ม.86/4</strong> เป็นกติกาของระบบออกเลข ไม่ใช่ข้อความที่พิมพ์ลงบนใบ — ใบเสร็จพูดกับลูกค้า ไม่ใช่พูดถึงตัวระบบเอง</li>
+              <li>ผนึกลายเซ็นดิจิทัลไว้ ตรวจสอบย้อนกลับได้ว่าเนื้อหาไม่ถูกแก้หลังออก</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>กติกาที่ใช้กับทั้งสามใบ</h2>
+    <p class="lede">
+      โครงหน้ากระดาษเหมือนกันทั้งสามใบ เหตุผลไม่ใช่ความสวยงาม ผู้ยื่นคนหนึ่งจะเห็นทั้งสามใบตามลำดับ
+      ถ้าโครงต่างกัน เขาต้องเรียนรู้การอ่านใหม่ทุกครั้ง และการเทียบยอดข้ามใบทำได้ยากขึ้น
+    </p>
+
+    <div class="callout">
+      <h3>ทุกบรรทัดเสียภาษี ไม่มีข้อยกเว้น</h3>
+      <p>
+        ไม่มีคอลัมน์ “ยกเว้น VAT” และไม่มีเชิงอรรถ ม.77/1(10) บนเอกสารใด
+        ใบแจ้งหนี้เคยพิมพ์ข้อยกเว้นนี้ทั้งที่เก็บ VAT ไปแล้ว — อ่านตามธงบนบรรทัด ฐานภาษีคือ 500 บาท
+        VAT ควรเป็น 35 แต่ใบเก็บ 385 ต่างกัน 350 บาทต่อใบงวดที่ 1 และ 1,750 ต่อใบงวดที่ 2
+        แก้ไปแล้วเมื่อ 5 กันยายน 2569
+      </p>
+    </div>
+
+    <div class="scroll" style="margin-top:1.5rem">
+      <table class="grid">
+        <thead><tr><th>กติกา</th><th>เหตุผล</th></tr></thead>
+        <tbody>
+          <tr><td>ชื่อบรรทัดเหมือนกันทั้งสามใบ</td><td>ผู้ยื่นเทียบใบเสนอราคากับใบเสร็จได้ทีละบรรทัด</td></tr>
+          <tr><td>เรียก <strong>“ราคาเต็ม”</strong> ไม่ใช่ “ค่าธรรมเนียมกรมฯ”</td><td>เกษตรกรซื้อบริการจากบริษัท ไม่ได้จ่ายค่าธรรมเนียมให้กรมฯ · บริษัทจ่ายกรมฯ ภายหลังในฐานะต้นทุนของตนเอง</td></tr>
+          <tr><td>จำนวนคูณตามรูปแบบการปลูก แสดงในคอลัมน์จำนวน</td><td>สองรูปแบบคือยอดคูณสอง ต้องเห็นว่าคูณจากอะไร ไม่ใช่ซ่อนไว้ในราคาต่อหน่วย</td></tr>
+          <tr><td>ตัวเลขทุกตัวมาจาก <code>FEES</code> ตัวเดียว</td><td>ไม่มีค่าคงที่ในไฟล์เอกสาร บังคับด้วย probe <code>fee-single-source</code></td></tr>
+          <tr><td>เอกสารพูดกับลูกค้า <strong>ไม่พูดถึงตัวระบบ</strong></td><td>ห้ามพิมพ์ศัพท์ภายในลงบนใบ — “ยืนยันโดย webhook”, “ลำดับต่อเนื่องตาม ม.86/4”, ชื่อ service, ชื่อ state · กติกาเหล่านั้นเป็นของระบบ ที่อยู่ของมันคือเอกสารออกแบบ ไม่ใช่กระดาษที่ลูกค้าถือ</td></tr>
+          <tr><td>ไม่มีใบเสร็จในนามกรมฯ</td><td>W14 — ผู้ออกเอกสารมีรายเดียว</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>สิ่งที่ต้องแก้ในโค้ด</h2>
+    <p class="lede">ห้าข้อ ทั้งหมดแตะเส้นเงิน จึงเป็น Tier C ที่ operator merge</p>
+    <div class="scroll">
+      <table class="grid">
+        <thead><tr><th>#</th><th>สิ่งที่ต้องทำ</th><th>ไฟล์</th><th>ความเสี่ยงถ้าไม่ทำ</th></tr></thead>
+        <tbody>
+          <tr><td class="tag">F1</td><td>เลิกรับ <code>issuerSide</code> ในตัวสร้างใบเสนอราคา</td><td><code>invoice-template-service.js</code><br><code>quotations.js</code></td><td>เกษตรกรเจ้าของคำขอเรียก <code>/quotations/DTAM/pdf</code> ได้เอง แล้วได้ใบที่ VAT = 0</td></tr>
+          <tr><td class="tag">F2</td><td>ถอด <code>government-revenue-receipt.html</code> และเส้นทางที่ route ไปหามัน</td><td><code>invoice-template-service.js:755</code></td><td>ใบเสร็จในนามกรมฯ ที่ไม่มี VAT ยังออกได้</td></tr>
+          <tr><td class="tag">F3</td><td>เลิกคืน VAT = 0 สำหรับฝั่ง DTAM</td><td><code>quotation-line-items.js:144</code></td><td>ใบเสนอราคาที่ไม่มี VAT ทั้งที่ต้องเก็บ</td></tr>
+          <tr><td class="tag">F4</td><td>เหลือ key namespace เดียวสำหรับผนึกลายเซ็น</td><td><code>receipt-auto-sign-service.js:100</code></td><td>ผนึกสองชุดสำหรับผู้ออกรายเดียว</td></tr>
+          <tr><td class="tag">F5</td><td>ปักป้ายเอกสารออกแบบเดิมว่าเลิกใช้</td><td><code>finance-design-system-2026-05-16.md</code></td><td>คนถัดไปอ่านแบบของโมเดลที่ตายแล้ว</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>มติ operator · 5 กันยายน 2569</h2>
+    <p class="lede">สามข้อที่ค้างอยู่ ตัดสินครบแล้ว</p>
+    <div class="questions">
+      <div class="question decided">
+        <div>
+          <h3>เลขที่เอกสารแยกชุดตามชนิด <span class="chip">ตัดสินแล้ว</span></h3>
+          <p>
+            <code>QT-</code> / <code>INV-</code> / <code>TAX-PRD-</code> เดินเลขคนละชุด
+            ม.86/4 บังคับความต่อเนื่องเฉพาะใบกำกับภาษี ซึ่งชุด <code>TAX-PRD-</code> รับข้อนั้นอยู่แล้ว
+            ชุดอื่นจึงไม่ถูกลากเข้าข้อบังคับที่ไม่ได้เขียนถึงมัน และเลขที่บอกชนิดเอกสารได้ในตัว
+          </p>
+        </div>
+      </div>
+      <div class="question decided">
+        <div>
+          <h3>ใบวางบิลกับใบแจ้งหนี้เป็นใบเดียวกัน <span class="chip">ตัดสินแล้ว</span></h3>
+          <p>
+            ทั้งชุดจึงมีสามใบ ไม่ใช่สี่ ใบที่สองพิมพ์หัวว่า “ใบวางบิล / ใบแจ้งหนี้”
+            ใช้ชุดเลข <code>INV-</code> ชุดเดียว ลูกค้าองค์กรที่ขอใบวางบิลได้ใบนี้
+            ไม่มีเอกสารชนิดที่สี่ และไม่มีเลขชุดที่สี่
+          </p>
+        </div>
+      </div>
+      <div class="question decided">
+        <div>
+          <h3>ยืนราคา 7 วันทำการ <span class="chip">ตัดสินแล้ว</span></h3>
+          <p>
+            กฎหมายไม่ได้กำหนดจำนวนวันไว้ ใบเสนอราคาคือ<em>คำเสนอ</em>ตาม ป.พ.พ. — <strong>ม.354</strong>
+            คำเสนอที่ระบุเวลาให้ทำคำสนอง ถอนไม่ได้ภายในเวลานั้น · <strong>ม.355</strong> คำเสนอที่ไม่ระบุเวลา
+            สิ้นผลเมื่อพ้น “เวลาอันควรคาดหมาย” ซึ่งคือการปล่อยให้ตีความทีหลัง · <strong>ม.357</strong>
+            คำสนองที่มาช้ากว่ากำหนดไม่เกิดผล ใบที่หมดอายุจึงต้องออกใหม่
+            (พ.ร.บ.จัดซื้อจัดจ้างฯ 2560 บังคับระยะยืนราคาเฉพาะเมื่อ<em>รัฐเป็นผู้ซื้อ</em> — ที่นี่บริษัทเป็นผู้ขาย)
+            นับเป็นวันทำการด้วยปฏิทินเดียวกับกำหนดชำระ และ<strong>พิมพ์เป็นวันที่จริง</strong>
+            เพราะเกษตรกรไม่ควรต้องคำนวณปฏิทินราชการเอง
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    เอกสารประกอบ · <code>docs/design/2026-09-05-finance-documents-design.md</code> ·
+    โมเดลค่าธรรมเนียม <code>docs/architecture/fee-model-2026-09-05.md</code>
+  </footer>
+
+</div>

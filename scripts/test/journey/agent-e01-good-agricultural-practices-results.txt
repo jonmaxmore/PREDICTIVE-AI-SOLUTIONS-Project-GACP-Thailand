@@ -1,0 +1,16 @@
+Agent E01 — Good Agricultural Practices Results
+Date: 2026-03-13T14:04:19.937Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Standards GAP | status: 200
+PASS | Categories | status: 200
+PASS | Methods | status: 200
+PASS | Soils | status: 200
+PASS | Plants | status: 200
+PASS | Full config | status: 200
+PASS | Step 4 GAP | status: 200
+PASS | Step 5 GAP | status: 200
+PASS | Document slots | status: 200
+PASS | Locations | status: 200
+PASS | Pricing | status: 200
+PASS | Health check | status: 200

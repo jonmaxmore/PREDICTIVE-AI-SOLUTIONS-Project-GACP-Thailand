@@ -1,0 +1,367 @@
+// Domain: Application Workflow (Refactored State & Roles)
+
+model Application {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applicationNumber String @unique
+
+  // RELATION REPAIR (ผูกกับ canonicalId ของ User)
+  healthId  String
+  applicant User   @relation(fields: [healthId], references: [canonicalId])
+
+  // Wave B Phase 66 — entity-level applicant identity. The legal applicant
+  // (INDIVIDUAL person, JURISTIC company, or COMMUNITY_ENTERPRISE) is now
+  // tracked via Entity. `entityId` is nullable during the migration window
+  // because existing rows are backfilled by `scripts/backfill-entities.js`;
+  // in Phase 5 it flips to NOT NULL once all rows are populated. The
+  // `applicant`/`healthId` pair stays in place for backward compat reads.
+  // `submitterId` records the User who clicked "submit" — useful when an
+  // agent or co-member submits on behalf of the entity (the applicant is
+  // the entity, the submitter is the human).
+  entityId    String?
+  // FIX #12 (audit 2026-07-06): onDelete Restrict (NOT SetNull). SetNull silently
+  // NULLs entityId when an Entity is deleted → the null-intolerant health read-scope
+  // (tenant-prisma-extension ANDs entityId) makes the app invisible to its own owner
+  // (unhealable orphan). Restrict blocks deleting an Entity that still owns apps —
+  // archive them first. Existing FK values are valid; entityId is never re-nulled.
+  entity      Entity? @relation(fields: [entityId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  submitterId String?
+  submitter   User?   @relation("ApplicationSubmitter", fields: [submitterId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  serviceType           String   @default("new_application")
+  areaType              String
+  certificationPurpose  String? // LEGACY: kept for migration (drop after 30 days)
+  certificationPurposes String[] @default([]) // NEW: multi-select array
+  previousCertNumber    String?
+  consentedPDPA         Boolean  @default(false)
+
+  standardCode String?
+  standard     CertificationStandard? @relation(fields: [standardCode], references: [code])
+
+  // WORKFLOW STATUS (canonical column matches actual DB column).
+  //
+  // ห้ามลิสต์ค่าซ้ำไว้ตรงนี้ — ลิสต์เดิมพิมพ์ค่าที่ถูกแบนไปแล้วสามคำ (REGISTERED,
+  // PAYMENT_PHASE_1, PAYMENT_PHASE_2 — ดู eslint-rules/no-legacy-status-vocabulary.js)
+  // และพิมพ์อีกสามคำที่ไม่เคยเป็นสถานะของคำขอเลย (UNDER_REVIEW, REVISION) ค้างไว้
+  // หลายเดือน · ที่นี่คือที่แรกที่คนเปิดอ่านเวลาถามว่า "สถานะมีอะไรบ้าง" — ลิสต์ที่
+  // ผิดตรงนี้จึงแพงกว่าที่อื่น และไม่มีเครื่องใดเตือนตอนมันล้าสมัย
+  //
+  // แหล่งเดียวของรายการสถานะ: services/workflow-transition-service.js WORKFLOW_STATES
+  // (พร้อมตารางขาที่เดินได้ ซึ่งลิสต์ในคอมเมนต์ให้ไม่ได้อยู่แล้ว)
+  status      String @default("DRAFT")
+  rejectCount Int    @default(0)
+  version     Int    @default(1)
+
+  batchId        String?
+  areaTypeIndex  Int     @default(0)
+
+  /// The number of certification scopes (ขอบข่ายการรับรอง) this application is
+  /// billed for: one per DISTINCT cultivation method the applicant declared
+  /// (OUTDOOR / INDOOR / GREENHOUSE), resolved by
+  /// feeService.resolveCultivationScopeCount and stamped by every writer as
+  /// `fees.scopeCount`. It is the price multiplier on every quotation, invoice
+  /// and receipt.
+  ///
+  /// Not `cultivationMethodCount`: once a quotation is accepted this becomes the
+  /// frozen price-of-record and is written back from `locked.scopeCount` even
+  /// when formData.cultivationMethods has changed since, so it is allowed to
+  /// disagree with the live method list.
+  /// Nullable during the expand window, deliberately: NULL is the only value
+  /// that means "the writer of this row did not state a count", which is what
+  /// storedCultivationScopeCount()'s fallback to totalAreaTypes needs to hear.
+  /// A NOT NULL default would hand an old writer's three-scope application the
+  /// value 1 and price it as one scope. Becomes NOT NULL in the contract change.
+  cultivationScopeCount Int?
+
+  /// RETIRED - replaced by cultivationScopeCount above (migration
+  /// 20260826090000_area_sqm_and_cultivation_scope_expand). It never counted
+  /// area types: it was named for a dead design in which one submission fanned
+  /// out into N sibling applications, one per area type, each carrying its
+  /// areaTypeIndex - a scheme nothing writes any more. Still written by every
+  /// writer so a rollback to the previous image prices correctly; the contract
+  /// migration drops it.
+  totalAreaTypes Int     @default(1)
+
+  // PAYMENT DATA (per-phase status + amounts).
+  /// Amount in THB (BAHT). The full Phase-1 total, charged PER CULTIVATION SCOPE:
+  ///   service fee = state fee + platform fee (10% of state)
+  ///   payable     = service fee + VAT 7% OF THE WHOLE SERVICE FEE
+  /// Sourced canonically from feeService.calculatePhase1Fee(...).phaseTotal.
+  /// Default 5885 = single-scope total (state 5,000 + platform 500 + VAT 385).
+  ///
+  /// The default carried 5535 until 2026-08-25 — the single-scope total under the
+  /// previous formula, which taxed only the platform slice and was retired on
+  /// 2026-08-22. Nothing noticed because the draft path sets this column explicitly
+  /// (application-draft-query-methods.js:70), which is precisely why it drifted: a
+  /// default nothing reads is a number nobody checks, until some path omits the
+  /// column and quietly charges the old price.
+  /// __tests__/unit/schema-fee-defaults-match-fee-service.test.js now compares this
+  /// default against what the fee service computes, so the two cannot drift again.
+  ///
+  /// UNIT NOTE: this column uses BAHT. PaymentTransaction.amount uses SATANG
+  /// (1 baht = 100 satang). Bridging code must multiply by 100 (baht->satang)
+  /// or divide by 100 (satang->baht).
+  phase1Amount    Int       @default(5885)
+  phase1Status    String    @default("PENDING") // PENDING, PROCESSING, PAID, FAILED, EXPIRED
+  phase1InvoiceId String?   @unique
+  phase1PaidAt    DateTime?
+  phase1ExpiresAt DateTime?
+
+  /// Amount in THB (BAHT). The full Phase-2 total, charged PER CULTIVATION SCOPE:
+  ///   service fee = state fee + platform fee (10% of state)
+  ///   payable     = service fee + VAT 7% OF THE WHOLE SERVICE FEE
+  /// Sourced canonically from feeService.calculatePhase2Fee(...).phaseTotal.
+  /// Default 29425 = single-scope total (state 25,000 + platform 2,500 + VAT 1,925).
+  /// Carried 27675 until 2026-08-25 — see phase1Amount for why that survived the
+  /// formula change unnoticed, and for the BAHT vs SATANG unit note.
+  phase2Amount    Int       @default(29425)
+  phase2Status    String    @default("PENDING")
+  phase2InvoiceId String?   @unique
+  phase2PaidAt    DateTime?
+  phase2ExpiresAt DateTime?
+
+  previewData    Json?
+  isPreviewReady Boolean @default(false)
+
+  // ROLE CLARIFICATION
+  // History (see docs/audit/2026-05-01-application-role-column-drift.md):
+  //   Phase 17 added Prisma relations + DB FK constraints on the four
+  //   *ProviderId columns (referencing User.providerId). Phase 21
+  //   discovered production data actually lives on a parallel *UserId
+  //   / auditorId set referencing User.id, and added those to the
+  //   schema as a hot-fix.
+  //
+  // Phase 42 (this PR, Future Phase A from the drift analysis) starts
+  // the unwind: declare three new canonical columns (reviewerId,
+  // headAuditorId, schedulerId) that match the existing `auditorId`
+  // shape. The 7 dormant columns (*ProviderId set + *UserId set) stay
+  // in place until Phase D drops them.
+  //
+  // FK constraints + named relations on the new columns land in
+  // Phase B (the next PR after this one).
+  //
+  // Denorm display fields (`auditorName`, `assignedAuditor`, `hostName`)
+  // were dropped in Phase 18.
+
+  // Canonical role assignments — id-keyed FKs to users(id). These are
+  // the only role columns on Application; the dormant *ProviderId set
+  // (Phase 17) and *UserId set (Phase 21 hot-fix) were dropped in
+  // Phase 45 / Phase D of the drift unwind documented at
+  // docs/audit/2026-05-01-application-role-column-drift.md.
+  reviewerId          String?
+  reviewer            User?   @relation("ApplicationReviewer", fields: [reviewerId], references: [id])
+  headAuditorId       String?
+  headAuditor         User?   @relation("ApplicationHeadAuditor", fields: [headAuditorId], references: [id])
+  schedulerId         String?
+  scheduler           User?   @relation("ApplicationScheduler", fields: [schedulerId], references: [id])
+  auditorId           String?
+  auditor             User?   @relation("ApplicationAuditor", fields: [auditorId], references: [id])
+  sameReviewerAuditor Boolean @default(false)
+
+  scheduledDate       DateTime?
+  auditResult         String?
+  auditNotes          String?
+  appointmentMode     String?
+  meetingUrl          String?
+  appointmentLocation String?
+  auditMode           String?
+  auditMeetingUrl     String?
+  auditLocation       String?
+
+  formData              Json?
+  personnelHygiene      Json?
+  attachments           Json?
+  workflowHistory       Json?
+  supplementaryCriteria Json?
+  supplementarySkipped  Boolean @default(false)
+
+  labResults      Json?
+  labResultStatus String?
+  labName         String?
+
+  submissionHash String?
+  idempotencyKey String? @unique
+
+  createdBy   String?
+  updatedBy   String?
+  createdByIp String?
+  updatedByIp String?
+
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  retainUntil DateTime @default(dbgenerated("(now() + '5 years'::interval)"))
+  legalHold   Boolean  @default(false)
+
+  // Relations
+  certificates         Certificate[]
+  invoices             Invoice[]
+  checkoutOrders       CheckoutOrder[]
+  quotes               Quote[]
+  // Two-issuer billing (B16-A, 2026-05-16): one Application has TWO
+  // Quotation rows (issuerType = DTAM | PLATFORM). Distinct from `quotes`,
+  // which is the legacy single-issuer stream from batch 11.
+  quotations           Quotation[]
+  postAuditTasks       PostAuditTask[]
+  revisionDeadline     RevisionDeadline?
+  scopeOfWorks         ScopeOfWork[]
+  auditChecklists      AuditChecklist[]
+  meetingRooms         MeetingRoom[]
+  paymentTransactions  PaymentTransaction[]
+  comments             ApplicationComment[]
+  workActivities       WorkActivity[]
+  documents            ApplicationDocument[]
+  waiverReopenRequests WaiverReopenRequest[]
+  // R2 M3 — per-stage correction round ledger (append-only, FINAL ข้อ 2/4)
+  correctionRounds     CorrectionRound[]
+  // R2 M7 — append-only submitted-formData history per correction round (D-6)
+  correctionSubmissionVersions CorrectionSubmissionVersion[]
+  // R2 M4 — unified terminal close-reason (the reopen-eligibility key for
+  // mechanism 2). String + CHECK (see the migration) so the vocab lives in one
+  // place and stays extensible. M4 writes ONLY 'CORRECTION_DEADLINE_EXPIRED';
+  // the other values are reserved for backlog writers (must stay unwired —
+  // guarded by __tests__/unit/closed-reason-reserved-slots.test.js).
+  closedReason         String?
+  bundleId             String?
+  bundle               ApplicationBundle?    @relation(fields: [bundleId], references: [id])
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([healthId])
+  @@index([entityId])
+  @@index([submitterId])
+  @@index([bundleId])
+  @@index([status])
+  @@index([applicationNumber])
+  // Canonical role indexes
+  @@index([reviewerId])
+  @@index([headAuditorId])
+  @@index([schedulerId])
+  @@index([auditorId])
+  @@index([organizationId])
+  // Phase 2 #2.8: rejectCount drives the analytics badge "submission #N"
+  // (apps/backend/routes/api/provider/applications.js:160) and is read on
+  // every provider list. Without this index, large reject counts would
+  // produce a sequential scan on the applications table.
+  @@index([rejectCount])
+  @@index([closedReason])
+  // DBA F-04 perf indexes (migration 20260515170000_add_performance_indexes_compound)
+  // — declared here so `prisma migrate diff` (schema vs migrations) is drift-free.
+  @@index([status, isDeleted], map: "applications_status_isDeleted_idx")
+  @@index([healthId, isDeleted, status], map: "applications_healthId_isDeleted_status_idx")
+  @@index([workflowHistory], type: Gin, map: "applications_workflowHistory_gin_idx")
+  // DB-06: index FK column
+  @@index([standardCode])
+  @@map("applications")
+
+  // กทล.๑ ส่วน จนท. ข้อ ๑.๑ — one verdict per document line, per round.
+  documentReviews ApplicationDocumentReview[]
+
+  // Document pre-check (2026-09-27 design, §2) — Task 5 fix round 1.
+  documentPrechecks DocumentPrecheck[]
+}
+
+model ApplicationComment {
+  id            String      @id @default(uuid())
+  createdAt     DateTime    @default(now())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  authorId      String
+  role          String
+  content       String
+  internalOnly  Boolean     @default(false)
+
+  // Soft delete (Wave A Phase 15)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([applicationId])
+  @@index([authorId])
+  @@index([isDeleted])
+  @@index([organizationId])
+  @@map("application_comments")
+}
+
+model ApplicationDraft {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastSavedAt DateTime @default(now())
+
+  // Matches the actual `application_drafts` table created by migration
+  // 20260305163000_reconcile_schema_gap_for_migrate_deploy. The wizard
+  // controller relies on (userId, status) as the unique upsert key.
+  userId      String
+  plantId     String?
+  serviceType String  @default("NEW")
+  currentStep Int     @default(0)
+  formData    Json    @default("{}")
+  status      String  @default("DRAFT")
+
+  // Optimistic concurrency control — added to prevent silent data loss
+  // when an applicant has the wizard open in two browser tabs and both
+  // tabs auto-save. Without this, last-write-wins; with this, the second
+  // save returns 409 and the UI can surface a "your other tab saved
+  // changes — reload?" prompt. Backend increments on every successful
+  // update; client must echo back the version it loaded.
+  version Int @default(1)
+
+  applicant User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Soft delete (Wave A Phase 15)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([userId, status])
+  @@index([userId])
+  @@index([isDeleted])
+  @@index([organizationId])
+  @@map("application_drafts")
+}
+
+model ApplicationBundle {
+  id           String   @id @default(uuid())
+  bundleNumber String   @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  healthId  String
+  applicant User   @relation(fields: [healthId], references: [canonicalId])
+
+  status       String        @default("DRAFT")
+  applications Application[]
+
+  // Soft delete (Wave A Phase 15)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([healthId])
+  @@index([isDeleted])
+  @@index([organizationId])
+  @@map("application_bundles")
+}

@@ -1,0 +1,255 @@
+// Domain: GACP Compliance Records
+// (Water source, growing media, seed source, fertilizer records, controlled environments)
+
+// 1. WATER SOURCE - แหล่งน้ำ (GACP: ผลตรวจน้ำ)
+
+model WaterSource {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to Plot
+  plotId String
+  plot   Plot   @relation(fields: [plotId], references: [id], onDelete: Cascade)
+
+  // Water Source Type (ประเภทแหล่งน้ำ)
+  sourceType String // BOREWELL(บ่อน้ำ), TAP_WATER(ประปา), RAIN(น้ำฝน), 
+  // RIVER(แม่น้ำ), POND(สระ), OTHER(อื่นๆ)
+
+  // Filtration System (ระบบกรองน้ำ) - Multi-select stored as JSON
+  filtrationTypes Json? // ["AGRICULTURAL_FILTER", "RO", "UV", "SEDIMENT", "CARBON", "NONE"]
+
+  // Irrigation Method (รูปแบบการให้น้ำ)
+  irrigationType String? // DRIP(น้ำหยด), SPRINKLER(สปริงเกลอร์), MANUAL(รดมือ), FLOOD(ท่วม)
+
+  // Water Quality Test (ผลตรวจคุณภาพน้ำ)
+  isTested        Boolean   @default(false)
+  testDate        DateTime?
+  testResults     Json? // { coliform: number, ph: number, turbidity: number, ec: number }
+  testDocumentUrl String? // เอกสารผลตรวจน้ำ
+
+  // Additional Info
+  description String? @db.Text
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([plotId])
+  @@index([organizationId])
+  @@map("water_sources")
+}
+
+// 2. GROWING MEDIUM - วัสดุปลูก (Flexible input per GACP standard)
+
+model GrowingMedium {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to PlantingCycle
+  cycleId String
+  cycle   PlantingCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  // Medium Type (ประเภทวัสดุปลูก) - Free text per GACP standard requirement
+  mediumType String // SOIL(ดิน), COCO_PEAT(กาบมะพร้าว), ROCKWOOL(ร็อควูล),
+  // PERLITE(เพอร์ไลท์), HYDROPONIC(ไฮโดร), AEROPONIC(แอโร), MIX(ผสม), OTHER(อื่นๆ)
+
+  // Custom input for flexibility (ไม่ต้องล็อค)
+  customType String? // กรณีเลือก OTHER หรือต้องการระบุเพิ่ม
+
+  // Brand & Supplier (ยี่ห้อและแหล่งซื้อ)
+  brand           String?
+  supplierName    String?
+  supplierAddress String?
+
+  // Organic certification
+  isOrganic      Boolean @default(false)
+  organicCertUrl String? // เอกสารรับรองอินทรีย์ (ถ้ามี)
+
+  // Notes
+  notes String? @db.Text
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([cycleId])
+  @@index([organizationId])
+  @@map("growing_media")
+}
+
+// 3. SEED SOURCE - แหล่งที่มาพันธุ์พืช (GACP: เอกสารรับรอง + ภพ.4)
+
+model SeedSource {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to PlantingCycle
+  cycleId String
+  cycle   PlantingCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  // Source Type (ประเภทแหล่งที่มา)
+  sourceType String // SEED(เมล็ด), CUTTING(กิ่งปักชำ), TISSUE_CULTURE(เพาะเนื้อเยื่อ),
+  // SEEDLING(กล้า), OTHER(อื่นๆ)
+
+  // Supplier Info (แหล่งที่ซื้อ)
+  supplierName    String?
+  supplierAddress String?
+  supplierPhone   String?
+  supplierLicense String? // ใบอนุญาตจำหน่ายพันธุ์พืช (ถ้ามี)
+
+  // Certificate (เอกสารรับรองสายพันธุ์)
+  hasCertificate  Boolean   @default(false)
+  certificateNo   String? // เลขที่ใบรับรอง
+  certificateUrl  String? // ไฟล์เอกสาร
+  certificateDate DateTime?
+
+  // Por Por 4 Registration (ภพ.4)
+  isPorPor4Registered Boolean @default(false)
+  porPor4No           String? // เลขทะเบียนภพ.4
+  porPor4Url          String? // เอกสารภพ.4
+
+  // Variety Info
+  varietyName  String? // ชื่อสายพันธุ์ที่ระบุในเอกสาร
+  lotNo        String? // Lot number (ถ้ามี)
+  purchaseDate DateTime?
+
+  // Verification
+  isVerified Boolean   @default(false)
+  verifiedBy String?
+  verifiedAt DateTime?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([cycleId])
+  @@index([certificateNo])
+  @@index([porPor4No])
+  @@index([organizationId])
+  @@map("seed_sources")
+}
+
+// 4. FERTILIZER RECORD - ทะเบียนปุ๋ย (GACP: เลข อย./ทะเบียน)
+
+model FertilizerRecord {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to PlantingCycle
+  cycleId String
+  cycle   PlantingCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  // Fertilizer Info
+  brandName      String // ชื่อการค้า
+  productName    String? // ชื่อสินค้า
+  registrationNo String // เลขทะเบียน อย. หรือ เลขปุ๋ย
+
+  // Type
+  type String // ORGANIC(อินทรีย์), CHEMICAL(เคมี), BIO(ชีวภาพ), SOIL_AMENDMENT(วัสดุปรับปรุงดิน)
+
+  // Usage
+  usageDate         DateTime
+  amount            Float
+  unit              String // kg, g, L, mL
+  applicationMethod String? // โรย, หยอด, ฉีดพ่น, ผสมน้ำ
+
+  // NPK Values (ถ้ามี)
+  npkN Float?
+  npkP Float?
+  npkK Float?
+
+  // Source
+  purchasedFrom String? // ซื้อจากที่ไหน
+  batchNo       String? // Lot/Batch number
+
+  // Safety
+  withholdingDays Int? // ระยะปลอดภัย (วัน)
+
+  // Documents
+  productLabelUrl String? // ฉลากผลิตภัณฑ์
+  msdsUrl         String? // เอกสารความปลอดภัย
+
+  // Audit
+  recordedBy String?
+  notes      String? @db.Text
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([cycleId])
+  @@index([registrationNo])
+  @@index([organizationId])
+  @@map("fertilizer_records")
+}
+
+// 5. CONTROLLED ENVIRONMENT - อาคารควบคุม (GACP: รูปแบบ + อุณหภูมิ)
+
+model ControlledEnvironment {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to Plot
+  plotId String
+  plot   Plot   @relation(fields: [plotId], references: [id], onDelete: Cascade)
+
+  // Structure Type (รูปแบบอาคาร)
+  structureType String // GREENHOUSE(โรงเรือน), NET_HOUSE(โรงเรือนสุทธิ),
+  // GROW_ROOM(ห้องปลูก), PROCESSING_ROOM(ห้องแปรรูป),
+  // DRYING_ROOM(ห้องตาก), STORAGE_ROOM(ห้องจัดเก็บ)
+
+  // Dimensions
+  areaSqm Float?
+  heightM Float?
+
+  // Temperature Control (ควบคุมอุณหภูมิ)
+  hasTempControl  Boolean @default(false)
+  tempControlType String? // AIR_CON, FAN, VENTILATION, HEATER, EVAPORATIVE
+  tempRangeMin    Int? // อุณหภูมิต่ำสุด (°C)
+  tempRangeMax    Int? // อุณหภูมิสูงสุด (°C)
+  targetTemp      Int? // อุณหภูมิเป้าหมาย
+
+  // Humidity Control (ควบคุมความชื้น)
+  hasHumidityControl Boolean @default(false)
+  humidityRangeMin   Int? // %RH ต่ำสุด
+  humidityRangeMax   Int? // %RH สูงสุด
+  targetHumidity     Int? // %RH เป้าหมาย
+
+  // Light Control
+  hasLightControl  Boolean @default(false)
+  lightControlType String? // LED, HPS, NATURAL
+  lightHoursPerDay Int? // ชั่วโมงแสงต่อวัน
+
+  // Ventilation
+  hasVentilation  Boolean @default(false)
+  ventilationType String? // NATURAL, FAN, COOLING_PAD
+
+  // Construction Materials
+  roofMaterial String? // PE, PC, GLASS, NET
+  wallMaterial String? // NET, PLASTIC, CONCRETE
+
+  // Certification
+  isGmpCertified   Boolean @default(false)
+  gmpCertificateNo String?
+  gmpCertUrl       String?
+
+  // Photos
+  photos Json? // ["url1", "url2"]
+
+  // Notes
+  notes String? @db.Text
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([plotId])
+  @@index([structureType])
+  @@index([organizationId])
+  @@map("controlled_environments")
+}

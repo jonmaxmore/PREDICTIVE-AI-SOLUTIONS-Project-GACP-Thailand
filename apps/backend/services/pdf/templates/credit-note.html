@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ใบลดหนี้ — {{DOC_NUMBER}}</title>
+  <!--
+    Credit Note (ใบลดหนี้) — ม.86/10 ป.รัษฎากร
+    B22-B redesign (2026-05-16). Accent: BURGUNDY (#9F1239).
+
+    B22-B trade-dress fix: removed the diagonal corner triangle and the
+    centred logo inside the signature block (FlowAccount-clone elements).
+    Replaced with the typographic-chip pattern (Direction 3): the English
+    type name is a rounded pill inline with the Thai title; page number
+    is plain text in the top-right corner.
+
+    B20-A single-issuer: PLATFORM only. Issued by Predictive AI Solution
+    Co., Ltd. against a previously issued PLATFORM full tax invoice.
+    STATE-fee corrections flow through the กรมบัญชีกลาง refund process;
+    this template NEVER renders a DTAM issuer block.
+
+    Required ม.86/10 fields preserved:
+      1. {{ORIGINAL_INVOICE_NUMBER}} / {{ORIGINAL_INVOICE_DATE}}
+         — "ออกอ้างอิงใบกำกับภาษีเลขที่ X" reference line.
+      2. {{REASON}} — เหตุที่ออกใบลดหนี้ (Thai free-text).
+      3. {{SUBTOTAL_TH}} / {{VAT_TH}} / {{TOTAL_TH}} — separate amounts.
+      4. {{ISSUER_*}} from PLATFORM_ISSUER.
+      5. {{DOC_NUMBER}} (CN-PRD-{yearAD}-{seq6}) / {{RECEIPT_NUMBER_TH}}.
+  -->
+  <style>
+    /* Sarabun is embedded locally, not imported.
+       The vendored woff2 faces in assets/fonts/sarabun are base64-inlined as
+       data: URIs and injected into <head> by pdf-generator.service.js, so this
+       template needs no font URL. The @import that used to pull Sarabun from a
+       foreign font CDN on every render was removed 2026-07-25 so the render has
+       no remote font dependency; the renderer now allows only data: + about:blank, so any
+       remote @import re-added here would be aborted and silently fall back. */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Accent — Credit Note = BURGUNDY (B22-B palette, rose-800). */
+      --accent: #9F1239;
+      --accent-strong: #881337;
+      --accent-bg: #FFF1F2;
+      --accent-border: #FECDD3;
+
+      --text-primary: #111827;
+      --text-secondary: #4B5563;
+      --text-muted: #9CA3AF;
+      --text-soft: #6B7280;
+      --border: #E5E7EB;
+      --border-strong: #D1D5DB;
+      --surface-alt: #F9FAFB;
+
+      /* Reason highlight (amber) — distinct from accent. */
+      --reason-bg: #FFFBEB;
+      --reason-border: #FDE68A;
+      --reason-strong: #92400E;
+    }
+
+    body {
+      font-family: 'Sarabun', 'Noto Sans Thai', Tahoma, sans-serif;
+      font-size: 13px;
+      color: var(--text-primary);
+      background: #fff;
+      padding: 20mm 18mm;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      position: relative;
+    }
+
+    /* B22-B page indicator — replaces the diagonal corner triangle. */
+    .page-indicator {
+      position: absolute;
+      top: 12mm; right: 12mm;
+      font-size: 10.5px; font-weight: 500;
+      color: var(--text-soft); letter-spacing: 0.3px;
+    }
+    .page-indicator strong { color: var(--accent-strong); font-weight: 700; }
+
+    .issuer-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
+    .issuer-logo { width: 56px; height: 56px; flex-shrink: 0; object-fit: contain; }
+    .issuer-text h1 { font-size: 14px; font-weight: 800; color: var(--text-primary); line-height: 1.4; margin-bottom: 2px; }
+    .issuer-text p { font-size: 11px; color: var(--text-secondary); line-height: 1.55; }
+    .issuer-text p.tax-id { color: var(--text-soft); font-weight: 500; }
+
+    .title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+    /* B22-B typographic chip pattern. */
+    .doc-title-row {
+      display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px;
+      margin-bottom: 4px;
+    }
+    .doc-title-block .doc-title { font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1.15; }
+    .doc-type-chip {
+      display: inline-block; padding: 4px 12px;
+      background: var(--accent-bg); color: var(--accent-strong);
+      border: 1px solid var(--accent-border); border-radius: 14px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .doc-title-block .doc-subtitle { font-size: 11px; color: var(--text-secondary); font-weight: 500; letter-spacing: 0.5px; }
+    .legal-badge {
+      display: inline-block; margin-top: 6px;
+      background: var(--accent); color: #fff;
+      font-size: 11px; font-weight: 700;
+      padding: 3px 10px; border-radius: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    .meta-box {
+      border: 1px solid var(--accent-border);
+      background: var(--accent-bg);
+      border-radius: 6px;
+      padding: 10px 14px;
+      min-width: 240px;
+      font-size: 12px;
+    }
+    .meta-box .meta-row { display: flex; justify-content: space-between; padding: 3px 0; line-height: 1.5; }
+    .meta-box .meta-row + .meta-row { border-top: 1px dashed var(--accent-border); }
+    .meta-box .label { color: var(--accent-strong); font-weight: 500; }
+    .meta-box .value { color: var(--text-primary); font-weight: 600; text-align: right; }
+
+    /*
+      Reference-to-original box — REQUIRED by ม.86/10. The auditor must
+      be able to walk from CN → original tax invoice in one step.
+    */
+    .reference-box {
+      border: 1.5px solid var(--accent);
+      background: var(--accent-bg);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+    }
+    .reference-box .section-label {
+      font-size: 11px; font-weight: 700; color: var(--accent-strong);
+      letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .reference-box .ref-line { font-size: 13px; color: var(--text-primary); line-height: 1.6; }
+    .reference-box .ref-line strong { color: var(--accent-strong); }
+
+    /* Reason box — ม.86/10 mandates the reason be on the document. */
+    .reason-box {
+      border: 1px solid var(--reason-border);
+      background: var(--reason-bg);
+      border-left: 4px solid var(--reason-strong);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+    }
+    .reason-box .section-label {
+      font-size: 11px; font-weight: 700; color: var(--reason-strong);
+      letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .reason-box .reason-text { font-size: 13px; color: var(--text-primary); line-height: 1.6; }
+
+    .issuer-detail-box {
+      border: 1px solid var(--accent-border);
+      background: var(--accent-bg);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+    }
+    .issuer-detail-box .section-label {
+      font-size: 11px; font-weight: 700; color: var(--accent-strong);
+      letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .issuer-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; font-size: 12px; }
+    .issuer-detail-grid .lbl { color: var(--text-soft); font-size: 11px; }
+    .issuer-detail-grid .val { font-weight: 600; color: var(--text-primary); }
+    .issuer-detail-grid .full { grid-column: 1 / -1; }
+
+    .customer-block {
+      margin-bottom: 16px; padding: 10px 14px;
+      border: 1px solid var(--border); border-radius: 6px; background: var(--surface-alt);
+    }
+    .customer-block .section-label {
+      font-size: 11px; font-weight: 700; color: var(--accent-strong);
+      letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .customer-block .customer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; }
+    .customer-block .field span.lbl { font-size: 11px; color: var(--text-soft); }
+    .customer-block .field span.val { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .customer-block .field.full { grid-column: 1 / -1; }
+
+    .items-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 12.5px; }
+    .items-table thead th {
+      background: var(--surface-alt);
+      border-bottom: 2px solid var(--accent);
+      padding: 10px 8px;
+      font-size: 11px; font-weight: 600; color: var(--text-secondary);
+      text-align: left; letter-spacing: 0.3px;
+    }
+    .items-table thead th.r { text-align: right; }
+    .items-table tbody td { padding: 12px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .items-table tbody td.r { text-align: right; white-space: nowrap; }
+
+    .totals-wrapper { display: flex; justify-content: flex-end; margin: 14px 0; }
+    .totals-table { min-width: 320px; font-size: 13px; border-collapse: collapse; }
+    .totals-table td { padding: 5px 0 5px 12px; }
+    .totals-table tr td:first-child { color: var(--text-secondary); padding-right: 28px; }
+    .totals-table tr td:last-child { text-align: right; white-space: nowrap; font-weight: 500; color: var(--text-primary); }
+    .totals-table tr.vat-row td { color: var(--accent-strong); font-weight: 600; }
+    .totals-table tr.grand td { border-top: 2px solid var(--accent); font-weight: 700; color: var(--accent); font-size: 15px; padding-top: 10px; }
+    /* "ลดยอด" — Credit-Note hallmark prefix. Required for visual cue at-a-glance. */
+    .totals-table tr.grand td:last-child::before { content: "(ลดยอด) "; font-size: 11px; font-weight: 600; color: var(--accent); }
+
+    .amount-in-words {
+      margin: 12px 0 18px;
+      padding: 8px 12px;
+      font-style: italic;
+      color: var(--text-secondary);
+      font-size: 12px;
+      background: var(--accent-bg);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 4px 4px 0;
+    }
+    .amount-in-words strong { color: var(--text-primary); font-style: normal; }
+
+    .approver-box {
+      border: 1px solid var(--accent-border);
+      background: var(--accent-bg);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+    }
+    .approver-box .section-label {
+      font-size: 11px; font-weight: 700; color: var(--accent-strong);
+      letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .approver-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; font-size: 12px; }
+    .approver-grid .lbl { color: var(--text-soft); font-size: 11px; }
+    .approver-grid .val { font-weight: 600; color: var(--text-primary); }
+
+    /* B22-B signature row — no centred logo, wider gap. */
+    .signature-block { display: flex; justify-content: space-between; align-items: stretch; gap: 60px; margin-top: 40px; }
+    .signature-block .signer { flex: 1; text-align: center; max-width: 240px; }
+    .signature-block .signer .line { border-top: 1px solid var(--text-primary); margin-bottom: 6px; padding-top: 36px; }
+    .signature-block .signer .role { font-size: 11.5px; color: var(--text-secondary); font-weight: 600; }
+    .signature-block .signer .name { font-size: 11px; color: var(--text-soft); margin-top: 2px; }
+
+    .doc-footer {
+      margin-top: 20px; padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 10.5px; color: var(--text-muted); text-align: center; line-height: 1.55;
+    }
+
+    @media print {
+      body { padding: 14mm 12mm; }
+      .page-indicator { top: 8mm; right: 8mm; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-indicator">หน้า <strong>1</strong> / 1</div>
+
+  <!--
+    Issuer header — SINGLE-ISSUER PLATFORM (B17). A credit note can only
+    be issued by the same legal entity that issued the original tax invoice;
+    for the platform that means Predictive AI Solution Co., Ltd. No DTAM
+    identity ever appears here — state-fee corrections flow through Treasury.
+  -->
+  <div class="issuer-header">
+    <img src="{{ISSUER_LOGO_DATA_URL}}" class="issuer-logo" alt="โลโก้ผู้ออกใบลดหนี้" />
+    <div class="issuer-text">
+      <h1>{{ISSUER_NAME_TH}}</h1>
+      <p class="tax-id">เลขประจำตัวผู้เสียภาษีอากร / Tax ID: {{ISSUER_TAX_ID}}</p>
+      <p>{{ISSUER_ADDRESS}}</p>
+      <p>{{COMPANY_CONTACT_LINE}}</p>
+    </div>
+  </div>
+
+  <div class="title-row">
+    <div class="doc-title-block">
+      <div class="doc-title-row">
+        <h1 class="doc-title">ใบลดหนี้</h1>
+        <span class="doc-type-chip">CREDIT NOTE</span>
+        <span class="doc-subtitle">ต้นฉบับ / ORIGINAL</span>
+      </div>
+      <div class="legal-badge">ม.86/10 ป.รัษฎากร</div>
+    </div>
+    <div class="meta-box">
+      <div class="meta-row"><span class="label">เลขที่ / No.</span><span class="value">{{RECEIPT_NUMBER_TH}}</span></div>
+      <div class="meta-row"><span class="label">วันที่ออก / Date</span><span class="value">{{ISSUE_DATE_TH}}</span></div>
+      <div class="meta-row"><span class="label">ปีภาษี / Tax Year</span><span class="value">{{YEAR_BE_TH}}</span></div>
+    </div>
+  </div>
+
+  <!--
+    Reference to ORIGINAL invoice — REQUIRED by ม.86/10 ป.รัษฎากร. The
+    auditor must be able to walk from CN → original tax invoice in one
+    step; the literal "ออกอ้างอิงใบกำกับภาษีเลขที่" string is the legally
+    required prefix.
+  -->
+  <div class="reference-box">
+    <div class="section-label">อ้างอิงใบกำกับภาษีเดิม / Reference to Original Tax Invoice</div>
+    <div class="ref-line">
+      ออกอ้างอิงใบกำกับภาษีเลขที่ <strong>{{ORIGINAL_INVOICE_NUMBER}}</strong>
+      ลงวันที่ <strong>{{ORIGINAL_INVOICE_DATE}}</strong>
+    </div>
+  </div>
+
+  <!--
+    Reason for the credit note — REQUIRED by ม.86/10. The free-text Thai
+    description from CreditNote.reason prints verbatim.
+  -->
+  <div class="reason-box">
+    <div class="section-label">เหตุที่ออกใบลดหนี้ / Reason for Credit Note</div>
+    <div class="reason-text">{{REASON}}</div>
+  </div>
+
+  <div class="issuer-detail-box">
+    <div class="section-label">ข้อมูลผู้ออกใบลดหนี้ / Credit Note Issuer</div>
+    <div class="issuer-detail-grid">
+      <div>
+        <span class="lbl">ชื่อผู้ออก / Issuer</span><br>
+        <span class="val">{{ISSUER_NAME_TH}}</span>
+      </div>
+      <div>
+        <span class="lbl">เลขประจำตัวผู้เสียภาษีอากร / Tax ID</span><br>
+        <span class="val">{{ISSUER_TAX_ID}}</span>
+      </div>
+      <div>
+        <span class="lbl">สาขา / Branch</span><br>
+        <span class="val">{{ISSUER_BRANCH}}</span>
+      </div>
+      <div class="full">
+        <span class="lbl">ที่อยู่ / Address</span><br>
+        <span class="val">{{ISSUER_ADDRESS}}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="customer-block">
+    <div class="section-label">ผู้ซื้อ/ผู้รับบริการ / Buyer</div>
+    <div class="customer-grid">
+      <!-- Payer labels + printed id by Entity.type — from utils/applicant-resolver.js
+           (operator rule 2026-09-27); never a national ID. -->
+      <div class="field">
+        <span class="lbl">{{PAYER_NAME_LABEL}}</span><br>
+        <span class="val">{{PAYER_NAME}}</span>
+      </div>
+      <div class="field">
+        <span class="lbl">{{PAYER_ID_LABEL}}</span><br>
+        <span class="val">{{PAYER_ID_TH}}</span>
+      </div>
+      <div class="field full">
+        <span class="lbl">ที่อยู่ / Address</span><br>
+        <span class="val">{{PAYER_ADDRESS}}</span>
+      </div>
+    </div>
+  </div>
+
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 38px;">#</th>
+        <th>รายการที่ลดยอด / Description (Reduced)</th>
+        <th class="r" style="width: 110px;">มูลค่าที่ลด<br>Reduced Amount</th>
+        <th class="r" style="width: 90px;">VAT ลด</th>
+        <th class="r" style="width: 120px;">รวมลด<br>Total Reduced</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{TAX_ITEMS_ROWS}}
+    </tbody>
+  </table>
+
+  <!--
+    Totals — single-issuer PLATFORM only. The amounts are POSITIVE
+    numbers; the "(ลดยอด)" prefix on the grand-total row signals that
+    this value REDUCES the original invoice. No DTAM revenue line.
+  -->
+  <div class="totals-wrapper">
+    <table class="totals-table">
+      <tbody>
+        <tr>
+          <td>ค่าบริการ (ลดยอด, Before VAT)</td>
+          <td>{{SUBTOTAL_TH}} บาท</td>
+        </tr>
+        <tr class="vat-row">
+          <td>ภาษีมูลค่าเพิ่ม 7% ที่ลดลง</td>
+          <td>{{VAT_TH}} บาท</td>
+        </tr>
+        <tr class="grand">
+          <td>ยอดที่ลดทั้งสิ้น</td>
+          <td>{{TOTAL_TH}} บาท</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="amount-in-words">
+    <strong>จำนวนเงิน (ตัวอักษร): </strong>{{TOTAL_AMOUNT_TEXT}}
+  </div>
+
+  <!--
+    Approver block — auto-signed by ACCOUNT_PLATFORM per Batch-16
+    receipt-auto-sign pattern. Embedded INSIDE the SHA-256 pre-image so
+    tamper invalidates the RSA signature.
+  -->
+  <div class="approver-box">
+    <div class="section-label">ผู้อนุมัติ / Approver (Digitally Signed)</div>
+    <div class="approver-grid">
+      <div>
+        <span class="lbl">ชื่อ-สกุล / Name</span><br>
+        <span class="val">{{APPROVER_NAME}}</span>
+      </div>
+      <div>
+        <span class="lbl">ตำแหน่ง / Position</span><br>
+        <span class="val">{{APPROVER_POSITION}}</span>
+      </div>
+      <div>
+        <span class="lbl">บทบาท / Role</span><br>
+        <span class="val">{{APPROVER_ROLE}}</span>
+      </div>
+      <div>
+        <span class="lbl">วันเวลาที่ลงนาม / Signed At</span><br>
+        <span class="val">{{APPROVER_SIGNED_AT_TH}}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="signature-block">
+    <div class="signer">
+      <div class="line"></div>
+      <div class="role">ผู้ขาย / Seller</div>
+      <div class="name">{{ISSUER_NAME_TH}}</div>
+      {{APPROVER_SIGNER_LINE_HTML}}
+    </div>
+    <div class="signer">
+      <div class="line"></div>
+      <div class="role">ผู้ซื้อ / Buyer</div>
+      <div class="name">{{PAYER_NAME}}</div>
+      <div class="name">วันที่ ......./......./.......</div>
+    </div>
+  </div>
+
+  <div class="doc-footer">
+    เอกสารนี้ออกตาม ม.86/10 ป.รัษฎากร · Reference Number {{DOC_NUMBER}} · Issued {{ISSUE_DATE}} · Original Invoice {{ORIGINAL_INVOICE_NUMBER}}
+  </div>
+
+</body>
+</html>

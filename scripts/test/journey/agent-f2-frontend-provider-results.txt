@@ -1,0 +1,16 @@
+Agent F2 — Frontend Provider Results
+Date: 2026-03-16T12:48:25.020Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Provider login | HTTP 307
+PASS | Provider home | HTTP 307
+PASS | Provider dashboard | HTTP 307
+PASS | Applications list | HTTP 307
+PASS | Audits list | HTTP 307
+PASS | Certificates | HTTP 307
+PASS | Accounting | HTTP 307
+PASS | Receipts | HTTP 307
+PASS | Analytics | HTTP 307
+PASS | Calendar | HTTP 307
+PASS | Settings | HTTP 307
+PASS | Public trace page | HTTP 200

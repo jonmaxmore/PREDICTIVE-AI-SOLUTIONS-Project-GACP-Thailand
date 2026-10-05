@@ -1,0 +1,11 @@
+# GACP Platform — daily Postgres backup
+# Owned by scripts/backup/install-cron.sh (re-run to update)
+#
+# Install path: /etc/cron.d/gacp-backup  (mode 0644, owner root:root)
+# Output log:   /var/log/gacp-backup.log (rotated by gacp-platform.conf)
+#
+# Schedule: 02:17 every day. Minute 17 (not :00) avoids the Internet-wide
+# top-of-hour load spike that hits every cron service simultaneously.
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+17 2 * * * root /opt/gacp-platform/scripts/backup/pg-backup.sh >> /var/log/gacp-backup.log 2>&1

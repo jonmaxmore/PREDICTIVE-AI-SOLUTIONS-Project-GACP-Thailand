@@ -1,0 +1,188 @@
+// Domain: Multi-Tenancy (ADR-014)
+//
+// PHASE 3b status: nullable organizationId is in place on every tenant-
+// scoped table, a FK constraint to organizations(id) exists at the DB
+// level (migration 20260427120300_add_organization_fk_constraints), and
+// the corresponding `@relation` declarations are wired in both directions
+// so that `prisma generate` exposes the relation from each tenant-scoped
+// model and the reverse collections on `Organization`.
+//
+// The NOT NULL alteration is the next step (Phase 3b PR D in
+// docs/adr/ADR-014-phase-3-handoff.md). RLS is the final step (Phase 3c
+// PR E).
+//
+// Source of truth for the tenant-scoped model list is
+// apps/backend/services/tenant-prisma-extension.js → TENANT_SCOPED_MODELS.
+//
+// Global / platform-level models (do NOT gain organizationId):
+//   Organization (this file), SystemConfig, MasterDataCategory,
+//   DocumentTemplate when scope = 'PLATFORM',
+//   SystemTerminology, PlantSpecies (reference data).
+
+model Organization {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Identity
+  name String // display name, e.g. "กรมส่งเสริมการเกษตร เชียงใหม่"
+  slug String @unique // URL-safe, used for subdomain routing: "doa-chiangmai"
+  code String @unique // short internal code: "DOA_CMI"
+
+  // Classification
+  type String @default("PRIVATE_CERTIFIER")
+  // GOVERNMENT       — รัฐ (กรมส่งเสริมฯ, อย., จังหวัด)
+  // PRIVATE_CERTIFIER — certifier เอกชน
+  // COOPERATIVE      — สหกรณ์การเกษตร
+  // FOREIGN_STANDARD — มาตรฐานต่างประเทศ (EU-GAP, ASEAN-GAP)
+  // INTERNAL         — platform's own ops tenant (default org)
+
+  // Isolation tier — see ADR-014
+  isolationTier String @default("SHARED") // SHARED | DEDICATED
+
+  // Lifecycle
+  status String @default("ACTIVE") // ACTIVE | SUSPENDED | ARCHIVED
+
+  // Localization
+  locale   String @default("th-TH")
+  timezone String @default("Asia/Bangkok")
+
+  // Contact / billing identity
+  contactEmail String?
+  legalName    String?
+  taxId        String?
+  taxIdHash    String? @unique
+
+  // Per-tenant configuration bag (branding, feature flags, workflow overrides
+  // — kept as JSON in Phase 1; promoted to dedicated tables only when usage
+  // patterns justify it)
+  settings Json @default("{}")
+
+  // Audit
+  createdBy String?
+  updatedBy String?
+
+  // Soft delete + legal retention (PDPA)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+  retainUntil  DateTime  @default(dbgenerated("(now() + '5 years'::interval)"))
+  legalHold    Boolean   @default(false)
+
+  // Tenant-scoped reverse relations (ADR-014 Phase 3b — see PR C).
+  // One entry per model in TENANT_SCOPED_MODELS in
+  // apps/backend/services/tenant-prisma-extension.js. The forward relation
+  // lives on each child model as `organization Organization?`. Pure naming
+  // collection — no behavior change. Cascade rules (RESTRICT on delete,
+  // CASCADE on update) are enforced at the SQL level by migration
+  // 20260427120300_add_organization_fk_constraints.
+
+  // auth
+  users                        User[]
+  userConsents                 UserConsent[]
+  // application
+  applications                 Application[]
+  applicationComments          ApplicationComment[]
+  applicationDrafts            ApplicationDraft[]
+  applicationBundles           ApplicationBundle[]
+  // farm + cultivation
+  farms                        Farm[]
+  siteAnalyses                 SiteAnalysis[]
+  trainingRecords              TrainingRecord[]
+  plots                        Plot[]
+  plantingCycles               PlantingCycle[]
+  plantingCyclePlots           PlantingCyclePlot[]
+  careLogs                     CareLog[]
+  cultivationLogs              CultivationLog[]
+  // gacp compliance
+  waterSources                 WaterSource[]
+  growingMedia                 GrowingMedium[]
+  seedSources                  SeedSource[]
+  fertilizerRecords            FertilizerRecord[]
+  controlledEnvironments       ControlledEnvironment[]
+  // harvest + trace
+  harvestBatches               HarvestBatch[]
+  batchLabResults           BatchLabResult[]
+  dryingTemperatures           DryingTemperature[]
+  dryingHumidities             DryingHumidity[]
+  dryingDarkRooms              DryingDarkRoom[]
+  curingProcesses              CuringProcess[]
+  packagingDetails             PackagingDetail[]
+  dryingProcesses              DryingProcess[]
+  lots                         Lot[]
+  traceQrSecurities            TraceQrSecurity[]
+  traceQrScans                 TraceQrScan[]
+  consumerFeedback             ConsumerFeedback[]
+  // survey (C05F680149 ต้นแบบที่ 2 — ระบบสำรวจความต้องการ)
+  surveyTemplates              SurveyTemplate[]
+  surveyQuestions              SurveyQuestion[]
+  surveyResponses              SurveyResponse[]
+  surveyAnswers                SurveyAnswer[]
+  expertInterviews             ExpertInterview[]
+  // certification
+  certificates                 Certificate[]
+  certificateRevisions         CertificateRevision[]
+  // billing
+  invoices                     Invoice[]
+  invoiceLineItems             InvoiceLineItem[]
+  quotes                       Quote[]
+  // Two-issuer billing (B16-A, 2026-05-16) — see prisma/schema/billing.prisma
+  quotations                   Quotation[]
+  paymentTransactions          PaymentTransaction[]
+  checkoutOrders               CheckoutOrder[]
+  checkoutDocuments            CheckoutDocument[]
+  paymentReminderLogs          PaymentReminderLog[]
+  bankAccounts                 BankAccount[]
+  // audit
+  auditLogs                    AuditLog[]
+  postAuditTasks               PostAuditTask[]
+  assignmentLedgerEntries      AssignmentLedgerEntry[]
+  revisionDeadlines            RevisionDeadline[]
+  // R2 M3 — per-stage correction round ledger
+  correctionRounds             CorrectionRound[]
+  // R2 M7 — append-only submitted-formData history per correction round (D-6)
+  correctionSubmissionVersions CorrectionSubmissionVersion[]
+  // system / provider (tenant-scoped parts)
+  notifications                Notification[]
+  reportSubmissions            ReportSubmission[]
+  sopDocuments                 SOPDocument[]
+  scopeOfWorks                 ScopeOfWork[]
+  auditChecklists              AuditChecklist[]
+  meetingRooms                 MeetingRoom[]
+  // ADR-016 Phase 1A — BPMN-aligned work activities
+  workActivities               WorkActivity[]
+  // ADR-016 Phase 1C — multi-group user memberships
+  userGroupMemberships         UserGroupMembership[]
+  // Wave 2 — per-permission GRANT/REVOKE overrides
+  userPermissionGrants         UserPermissionGrant[]
+  // Wave A Phase 32 / G1 — polymorphic attachments
+  attachments                  Attachment[]
+  // Wave B Phase 62 — legal applicant entities and memberships
+  entities                     Entity[]
+  entityMemberships            EntityMembership[]
+  // Wave C — entity context switch audit trail
+  entityContextSwitches        EntityContextSwitch[]
+  // Wave D — entity membership lifecycle audit trail
+  entityMembershipEvents       EntityMembershipEvent[]
+  // Farm-worker Wave B — per-member permission GRANT/REVOKE overrides
+  entityMemberPermissionGrants EntityMemberPermissionGrant[]
+  // Phase B (cert-integrity fix, 2026-08-16) — onsite audit photo evidence.
+  // FarmAuditChecklistItem is deliberately NOT listed: it carries no
+  // organizationId column (see prisma/schema/audit-onsite-evidence.prisma).
+  farmAuditPhotos              FarmAuditPhoto[]
+  // 2026-08-19 — GPS start-marker (F-ONSITE-GPS-CHECKIN-UNREACHABLE fix).
+  gpsVerificationLogs          GpsVerificationLog[]
+
+  @@index([status])
+  @@index([type])
+  @@index([isolationTier])
+  @@map("organizations")
+
+  applicationDocumentReviews ApplicationDocumentReview[]
+
+  // Document pre-check (2026-09-27 design, §2) — Task 5.
+  documentPrechecks     DocumentPrecheck[]
+  documentPrecheckFlags DocumentPrecheckFlag[]
+}

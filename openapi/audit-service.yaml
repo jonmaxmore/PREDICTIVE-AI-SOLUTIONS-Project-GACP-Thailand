@@ -1,0 +1,748 @@
+﻿openapi: 3.0.3
+info:
+  title: GACP Audit Service API
+  description: |
+    GACP immutable audit logging and compliance service.
+
+    **Features:**
+    - Immutable audit logs (blockchain-like hash chain)
+    - 6 event categories
+    - 4 severity levels
+    - 7-year retention (Thai tax law)
+    - GDPR compliance (anonymization on user deletion)
+    - Full-text search (Elasticsearch)
+    - Timeline reconstruction
+
+    **Event Categories:**
+    1. AUTHENTICATION - Login, logout, password changes
+    2. APPLICATION - Application lifecycle events
+    3. PAYMENT - Payment and refund events
+    4. CERTIFICATE - Certificate generation and revocation
+    5. ADMIN - Administrative actions
+    6. SECURITY - Security-related events
+
+    **Severity Levels:**
+    - INFO: Informational events
+    - WARNING: Warning events
+    - ERROR: Error events
+    - CRITICAL: Critical security events
+
+    **Immutability:**
+    - Each log entry hashed with SHA-256
+    - Previous hash included in next entry
+    - Tampering detected immediately
+    - Chain verification on read
+
+    **Research Base:**
+    - ISO 27001 (Information Security Management)
+    - Thai Revenue Department 7-year retention
+    - GDPR Article 17 (Right to erasure)
+    - NIST SP 800-92 (Log Management)
+  version: 1.0.0
+  contact:
+    name: GACP Platform API Support
+    email: api-support@gacp.platform
+
+servers:
+  - url: https://api.gacp.platform/v1/audit
+    description: Production server
+  - url: https://staging-api.gacp.platform/v1/audit
+    description: Staging server
+  - url: http://localhost:3005/v1/audit
+    description: Development server
+
+tags:
+  - name: Logs
+    description: Audit log operations
+  - name: Search
+    description: Log search and filtering
+  - name: Timeline
+    description: Event timeline reconstruction
+
+paths:
+  /logs:
+    post:
+      tags:
+        - Logs
+      summary: Create audit log (Internal)
+      description: |
+        Create new audit log entry.
+
+        **Note:** This endpoint is for internal service-to-service calls only.
+        Each microservice calls this to log events.
+
+        **Authorization:** Service accounts only (M2M token)
+
+        **Immutability:**
+        - Entry hashed with SHA-256
+        - Previous hash included
+        - Tampering detectable
+      operationId: createAuditLog
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAuditLogRequest'
+      responses:
+        '201':
+          description: Audit log created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    get:
+      tags:
+        - Logs
+      summary: List audit logs
+      description: |
+        Get list of audit logs with filtering.
+
+        **Authorization:**
+        - Applicant: Can only see their own logs
+        - DTAM/ADMIN: Can see all logs
+
+        **Filters:**
+        - category: Event category
+        - severity: Severity level
+        - userId: User ID
+        - startDate/endDate: Date range
+        - search: Full-text search
+      operationId: listAuditLogs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [AUTHENTICATION, APPLICATION, PAYMENT, CERTIFICATE, ADMIN, SECURITY]
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [INFO, WARNING, ERROR, CRITICAL]
+        - name: userId
+          in: query
+          schema:
+            type: string
+          description: Filter by user ID (DTAM/ADMIN only)
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Full-text search query
+      responses:
+        '200':
+          description: Audit logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /logs/{logId}:
+    get:
+      tags:
+        - Logs
+      summary: Get audit log details
+      description: |
+        Get detailed audit log entry.
+
+        **Authorization:** DTAM/ADMIN only
+      operationId: getAuditLog
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: logId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit log retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogDetailResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /logs/search:
+    post:
+      tags:
+        - Search
+      summary: Advanced search
+      description: |
+        Advanced search with complex filters.
+
+        **Search Capabilities:**
+        - Full-text search (Elasticsearch)
+        - Multiple filters combined with AND/OR
+        - Date range queries
+        - Aggregations (count by category, severity)
+
+        **Authorization:** DTAM/ADMIN only
+      operationId: searchAuditLogs
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchAuditLogsRequest'
+      responses:
+        '200':
+          description: Search results returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogSearchResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /timeline/{resourceType}/{resourceId}:
+    get:
+      tags:
+        - Timeline
+      summary: Get resource timeline
+      description: |
+        Get chronological timeline for a specific resource.
+
+        **Resource Types:**
+        - application: Application lifecycle
+        - payment: Payment history
+        - certificate: Certificate events
+        - user: User activity
+
+        **Authorization:**
+        - Resource owner can see own timeline
+        - DTAM/ADMIN can see any timeline
+      operationId: getResourceTimeline
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: resourceType
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [application, payment, certificate, user]
+        - name: resourceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Timeline retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelineResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /verify/chain:
+    post:
+      tags:
+        - Logs
+      summary: Verify hash chain integrity
+      description: |
+        Verify audit log hash chain integrity.
+
+        **Verification Process:**
+        1. Retrieve all logs in sequence
+        2. Recalculate each hash
+        3. Verify each hash includes previous hash
+        4. Detect any tampering
+
+        **Authorization:** ADMIN only
+      operationId: verifyHashChain
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startDate:
+                  type: string
+                  format: date-time
+                  description: Start date for verification
+                endDate:
+                  type: string
+                  format: date-time
+                  description: End date for verification
+      responses:
+        '200':
+          description: Verification complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChainVerificationResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateAuditLogRequest:
+      type: object
+      required:
+        - category
+        - action
+        - severity
+        - actorId
+        - actorType
+      properties:
+        category:
+          type: string
+          enum: [AUTHENTICATION, APPLICATION, PAYMENT, CERTIFICATE, ADMIN, SECURITY]
+          example: AUTHENTICATION
+        action:
+          type: string
+          example: USER_LOGIN
+        severity:
+          type: string
+          enum: [INFO, WARNING, ERROR, CRITICAL]
+          example: INFO
+        actorId:
+          type: string
+          description: User or service ID
+          example: 6523f9876543210fedcba000
+        actorType:
+          type: string
+          enum: [USER, SERVICE, SYSTEM]
+          example: USER
+        actorEmail:
+          type: string
+          format: email
+          example: Applicant@example.com
+        actorRole:
+          type: string
+          enum: [Applicant, DTAM, ADMIN, SERVICE]
+          example: Applicant
+        resourceType:
+          type: string
+          enum: [APPLICATION, PAYMENT, CERTIFICATE, USER]
+          example: USER
+        resourceId:
+          type: string
+          example: 6523f9876543210fedcba000
+        ipAddress:
+          type: string
+          format: ipv4
+          example: '103.9.xxx.xxx'
+        userAgent:
+          type: string
+          example: Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+        metadata:
+          type: object
+          description: Additional event data
+          example:
+            loginMethod: password
+            mfaUsed: false
+        result:
+          type: string
+          enum: [SUCCESS, FAILURE]
+          default: SUCCESS
+        errorCode:
+          type: string
+          description: Error code if result is FAILURE
+        errorMessage:
+          type: string
+          description: Error message if result is FAILURE
+
+    AuditLog:
+      type: object
+      properties:
+        logId:
+          type: string
+          example: 6523f9876543210fedcba001
+        category:
+          type: string
+          example: AUTHENTICATION
+        action:
+          type: string
+          example: USER_LOGIN
+        severity:
+          type: string
+          example: INFO
+        actorId:
+          type: string
+          example: 6523f9876543210fedcba000
+        actorType:
+          type: string
+          example: USER
+        actorEmail:
+          type: string
+          example: Applicant@example.com
+        actorRole:
+          type: string
+          example: Applicant
+        resourceType:
+          type: string
+          example: USER
+        resourceId:
+          type: string
+          example: 6523f9876543210fedcba000
+        ipAddress:
+          type: string
+          example: 103.9.xxx.xxx
+        result:
+          type: string
+          example: SUCCESS
+        timestamp:
+          type: string
+          format: date-time
+          example: '2025-10-16T10:00:00.000Z'
+        hash:
+          type: string
+          description: SHA-256 hash of this entry
+          example: a3f5d8c9e7b4f2a1d6c8e9b7a4f3d2c1e9b8a7f6d5c4e3b2a1f9e8d7c6b5a4
+        previousHash:
+          type: string
+          description: Hash of previous entry (blockchain-like)
+          example: e9b8a7f6d5c4e3b2a1f9e8d7c6b5a4f3d2c1e9b8a7f6d5c4e3b2a1f9e8d7c6
+
+    AuditLogResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Audit log created successfully
+        data:
+          $ref: '#/components/schemas/AuditLog'
+
+    AuditLogListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            logs:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditLog'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+
+    AuditLogDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          allOf:
+            - $ref: '#/components/schemas/AuditLog'
+            - type: object
+              properties:
+                metadata:
+                  type: object
+                  description: Additional event data
+                userAgent:
+                  type: string
+                errorCode:
+                  type: string
+                errorMessage:
+                  type: string
+                hashVerified:
+                  type: boolean
+                  description: Whether hash chain is valid
+                  example: true
+
+    SearchAuditLogsRequest:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Full-text search query
+        categories:
+          type: array
+          items:
+            type: string
+            enum: [AUTHENTICATION, APPLICATION, PAYMENT, CERTIFICATE, ADMIN, SECURITY]
+        severities:
+          type: array
+          items:
+            type: string
+            enum: [INFO, WARNING, ERROR, CRITICAL]
+        userIds:
+          type: array
+          items:
+            type: string
+        resourceTypes:
+          type: array
+          items:
+            type: string
+            enum: [APPLICATION, PAYMENT, CERTIFICATE, USER]
+        resourceIds:
+          type: array
+          items:
+            type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        result:
+          type: string
+          enum: [SUCCESS, FAILURE]
+        page:
+          type: integer
+          minimum: 1
+          default: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+
+    AuditLogSearchResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            logs:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditLog'
+            aggregations:
+              type: object
+              properties:
+                totalCount:
+                  type: integer
+                  example: 1234
+                byCategory:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                  example:
+                    AUTHENTICATION: 500
+                    APPLICATION: 300
+                    PAYMENT: 200
+                    CERTIFICATE: 150
+                    ADMIN: 50
+                    SECURITY: 34
+                bySeverity:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                  example:
+                    INFO: 1000
+                    WARNING: 150
+                    ERROR: 70
+                    CRITICAL: 14
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+
+    TimelineResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            resourceType:
+              type: string
+              example: application
+            resourceId:
+              type: string
+              example: 6523f9876543210fedcba987
+            events:
+              type: array
+              items:
+                type: object
+                properties:
+                  logId:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+                  category:
+                    type: string
+                  action:
+                    type: string
+                  actorEmail:
+                    type: string
+                  actorRole:
+                    type: string
+                  description:
+                    type: string
+                    example: Application submitted by Applicant@example.com
+                  severity:
+                    type: string
+                  result:
+                    type: string
+
+    ChainVerificationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Hash chain verified successfully
+        data:
+          type: object
+          properties:
+            verified:
+              type: boolean
+              example: true
+            totalLogs:
+              type: integer
+              example: 1234
+            verifiedLogs:
+              type: integer
+              example: 1234
+            tamperedLogs:
+              type: integer
+              example: 0
+            startDate:
+              type: string
+              format: date-time
+            endDate:
+              type: string
+              format: date-time
+            verifiedAt:
+              type: string
+              format: date-time
+            issues:
+              type: array
+              items:
+                type: object
+                properties:
+                  logId:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+                  issue:
+                    type: string
+                    example: Hash mismatch detected
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 1234
+        pages:
+          type: integer
+          example: 62
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            field:
+              type: string
+            details:
+              type: object
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

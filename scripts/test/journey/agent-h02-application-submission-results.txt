@@ -1,0 +1,16 @@
+Agent H02 — Application Submission Results
+Date: 2026-03-13T14:03:36.565Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Login as health user | Token acquired
+PASS | Create draft | status: 200
+PASS | Update draft | status: 200
+PASS | Pre-submit check | status: 200
+PASS | My applications | status: 200
+PASS | Document slots | status: 200
+PASS | Categories | status: 200
+PASS | Methods | status: 200
+PASS | Standards | status: 200
+PASS | Pricing calc | status: 200
+PASS | Locations | status: 200
+PASS | Plants | status: 200

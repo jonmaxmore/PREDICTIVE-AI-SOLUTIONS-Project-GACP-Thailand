@@ -1,0 +1,167 @@
+# ============================================================
+# GACP Platform — Blue/Green deploy overlay
+# ============================================================
+# Used WITH docker-compose.production.yml as a second compose file:
+#
+#   docker compose \
+#       --env-file .env.production \
+#       -f docker-compose.production.yml \
+#       -f docker-compose.bluegreen.yml \
+#       up -d backend-green frontend-green
+#
+# Strategy:
+#   - production compose declares `backend` + `frontend` (the live services)
+#   - this overlay adds `backend-blue` + `backend-green` (and frontend
+#     equivalents) running in parallel on different internal ports
+#   - nginx upstream config picks one color as ACTIVE; the other is the
+#     candidate for the next deploy
+#   - cutover = atomic nginx upstream rewrite + reload (zero downtime)
+#   - rollback = flip nginx back (~3 seconds)
+#
+# IMAGE_TAG selection:
+#   - BLUE_IMAGE_TAG controls the blue stack's image
+#   - GREEN_IMAGE_TAG controls the green stack's image
+#   - The deploy script flips one of these to the new tag, brings up that
+#     color, smoke-tests, then updates nginx to route traffic to it.
+#
+# Persistent state:
+#   - Both colors share the same postgres / redis / minio / volumes —
+#     they are stateful services run only once.
+#   - Migrations are applied to the shared DB before either color sees
+#     traffic. The deploy script enforces this.
+
+services:
+  # ------------------------------------------------------------
+  # Backend — Blue
+  # ------------------------------------------------------------
+  backend-blue:
+    image: ${BACKEND_IMAGE:-ghcr.io/jonmaxmore/gacp-backend}:${BLUE_IMAGE_TAG:-deploy-production-latest}
+    container_name: gacp-backend-blue
+    profiles: ["blue", "all"]
+    restart: always
+    deploy:
+      resources:
+        limits: { cpus: '1.00', memory: 1G }
+        reservations: { cpus: '0.25', memory: 256M }
+    environment:
+      - DEPLOY_COLOR=blue
+      # Inherit all env vars from the live `backend` service via this anchor:
+      <<: &backend_env
+        NODE_ENV: production
+        PORT: 8000
+        DATABASE_URL: postgresql://${APP_DB_USER:-${DB_USER:-gacp}}:${APP_DB_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD_required}}@postgres:5432/${DB_NAME:-gacp_db}?schema=public
+        REDIS_URL: redis://:${REDIS_PASSWORD:-gacp_redis_2026}@redis:6379
+        HEALTH_JWT_SECRET: ${HEALTH_JWT_SECRET:?HEALTH_JWT_SECRET_required}
+        PROVIDER_JWT_SECRET: ${PROVIDER_JWT_SECRET:?PROVIDER_JWT_SECRET_required}
+        ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY_required}
+        QR_SIGNATURE_FALLBACK_SECRET: ${QR_SIGNATURE_FALLBACK_SECRET:?required}
+        PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:?required}
+        COOKIE_SECURE: ${COOKIE_SECURE:-true}
+        COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+        REQUIRE_MFA_FOR_PRIVILEGED: ${REQUIRE_MFA_FOR_PRIVILEGED:-false}
+        HMAC_KEY: ${HMAC_KEY:-}
+        MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-}
+        SESSION_SECRET: ${SESSION_SECRET:-}
+        BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+        TRACE_BASE_URL: ${TRACE_BASE_URL:-}
+        APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
+        PUBLIC_TRACE_URL: ${PUBLIC_TRACE_URL:-}
+        FRONTEND_URL: ${FRONTEND_URL:-}
+        CORS_ORIGIN: ${CORS_ORIGIN:-}
+        CORS_ORIGINS: ${CORS_ORIGINS:-}
+        PARTNER_TRACE_API_KEY: ${PARTNER_TRACE_API_KEY:-}
+        TRUST_PRIVATE_PROXY_RANGES: ${TRUST_PRIVATE_PROXY_RANGES:-true}
+        TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+        STORAGE_PROVIDER: ${STORAGE_PROVIDER:-minio}
+        S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+        S3_REGION: ${S3_REGION:-ap-southeast-1}
+        S3_BUCKET: ${S3_BUCKET:-gacp-uploads}
+        S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+        S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+    volumes:
+      - gacp_uploads:/app/apps/backend/public/uploads
+      - gacp_storage:/app/storage
+    networks:
+      - gacp-network
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  # ------------------------------------------------------------
+  # Backend — Green
+  # ------------------------------------------------------------
+  backend-green:
+    image: ${BACKEND_IMAGE:-ghcr.io/jonmaxmore/gacp-backend}:${GREEN_IMAGE_TAG:-deploy-production-latest}
+    container_name: gacp-backend-green
+    profiles: ["green", "all"]
+    restart: always
+    deploy:
+      resources:
+        limits: { cpus: '1.00', memory: 1G }
+        reservations: { cpus: '0.25', memory: 256M }
+    environment:
+      - DEPLOY_COLOR=green
+      <<: *backend_env
+    volumes:
+      - gacp_uploads:/app/apps/backend/public/uploads
+      - gacp_storage:/app/storage
+    networks:
+      - gacp-network
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  # ------------------------------------------------------------
+  # Frontend — Blue / Green
+  # ------------------------------------------------------------
+  frontend-blue:
+    image: ${FRONTEND_IMAGE:-ghcr.io/jonmaxmore/gacp-frontend}:${BLUE_IMAGE_TAG:-deploy-production-latest}
+    container_name: gacp-frontend-blue
+    profiles: ["blue", "all"]
+    restart: always
+    environment:
+      - DEPLOY_COLOR=blue
+      - NODE_ENV=production
+      - PORT=3000
+    networks:
+      - gacp-network
+    depends_on:
+      - backend-blue
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  frontend-green:
+    image: ${FRONTEND_IMAGE:-ghcr.io/jonmaxmore/gacp-frontend}:${GREEN_IMAGE_TAG:-deploy-production-latest}
+    container_name: gacp-frontend-green
+    profiles: ["green", "all"]
+    restart: always
+    environment:
+      - DEPLOY_COLOR=green
+      - NODE_ENV=production
+      - PORT=3000
+    networks:
+      - gacp-network
+    depends_on:
+      - backend-green
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s

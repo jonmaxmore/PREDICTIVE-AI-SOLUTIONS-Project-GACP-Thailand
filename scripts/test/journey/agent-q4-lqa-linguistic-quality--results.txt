@@ -1,0 +1,10 @@
+Agent Q4 — LQA (Linguistic Quality) Results
+Date: 2026-03-16T11:26:10.062Z
+Pass: 6 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Files scanned | 441 TypeScript files
+PASS | Mixed language check | 13 mixed Thai/English boundaries
+PASS | Long string check | 4342 strings >100 chars
+PASS | Hardcoded Thai strings | 2434 found (consider i18n)
+PASS | i18n dictionaries | 1 files found
+PASS | Error message patterns | 25 error references found

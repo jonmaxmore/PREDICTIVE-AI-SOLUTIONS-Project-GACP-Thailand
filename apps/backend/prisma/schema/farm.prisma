@@ -1,0 +1,290 @@
+// Domain: Farm & Land Management
+
+model Farm {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Owner
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id])
+
+  // Wave B Phase 66 — entity-level ownership. The legal owner of the farm
+  // is the Entity (INDIVIDUAL / JURISTIC / COMMUNITY_ENTERPRISE), with
+  // multiple Users able to co-manage via EntityMembership. `entityId` is
+  // nullable during the backfill window (`scripts/backfill-entities.js`
+  // populates it from `ownerId` -> the user's personal INDIVIDUAL Entity).
+  // Flips to NOT NULL in Phase 5; `ownerId` retires shortly after.
+  entityId String?
+  // FIX #12 (audit 2026-07-06): onDelete Restrict (NOT SetNull). SetNull silently
+  // NULLs entityId when an Entity is deleted → the null-intolerant read-scope makes
+  // the farm invisible to its own owner. Restrict blocks deleting an Entity that still
+  // owns farms — archive them first. Existing FK values are valid; never re-nulled.
+  entity   Entity? @relation(fields: [entityId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Farm Info
+  farmName    String
+  farmType    String // CULTIVATION, PROCESSING, BOTH
+  address     String
+  province    String
+  district    String
+  subDistrict String
+  postalCode  String
+
+  // GPS
+  latitude  Float?
+  longitude Float?
+
+  // Area
+  totalArea       Float
+  cultivationArea Float
+  areaUnit        String @default("sqm")
+
+  // Relation to Plots
+  plots Plot[]
+
+  // Cultivation
+  cultivationMethod String
+  irrigationType    String?
+  soilType          String?
+  waterSource       String?
+
+  // Status
+  status            String    @default("DRAFT")
+  verificationNotes String?
+  verifiedBy        String?
+  verifiedAt        DateTime?
+  rejectionReason   String?
+  submittedAt       DateTime?
+
+  // Land Documents (JSON)
+  landDocuments Json?
+
+  // GACP Sanitation & Facilities (JSON) [NEW for Standard]
+  // Structure: { hasToilet: boolean, toiletDistance: number, hasHandWashing: boolean, wasteManagement: string }
+  sanitationInfo Json?
+
+  // GACP Site History (JSON) [NEW for Standard]
+  // Structure: { previousLandUse: string, hasChemicalHistory: boolean, riskAssessment: string }
+  siteHistory Json?
+
+  // Soft Delete
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Relations
+  harvestBatches  HarvestBatch[]
+  plantingCycles  PlantingCycle[]
+  siteAnalyses    SiteAnalysis[]
+  trainingRecords TrainingRecord[]
+
+  // T-010 (subtask 1c) — back-relation for the FK added on
+  // Certificate.farmId. Certificates are legal records (validity
+  // period, audit trail); ON DELETE Restrict on the FK side prevents
+  // accidental farm deletion before certificates are archived.
+  certificates Certificate[]
+
+  // Phase 7 Relations
+  dryingTemperatures DryingTemperature[]
+  dryingHumidities   DryingHumidity[]
+  dryingDarkRooms    DryingDarkRoom[]
+  curingProcesses    CuringProcess[]
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([ownerId])
+  @@index([entityId])
+  @@index([status])
+  @@index([province])
+  @@index([isDeleted])
+  @@index([organizationId])
+  @@map("farms")
+}
+
+model SiteAnalysis {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to Farm
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  // Analysis Date
+  analysisDate DateTime @default(now())
+  analysisType String // INITIAL, ANNUAL, FOLLOW_UP
+
+  // Land History (ประวัติการใช้ที่ดิน)
+  previousLandUse    String? // ใช้ทำอะไรมาก่อน
+  yearsOfHistory     Int? // ย้อนหลังกี่ปี
+  hasChemicalHistory Boolean @default(false) // เคยใช้สารเคมีอันตรายหรือไม่
+  chemicalDetails    String? // รายละเอียดสารเคมีที่เคยใช้
+
+  // Soil Analysis (การวิเคราะห์ดิน)
+  soilPH          Float? // ค่า pH ของดิน (5.5-7.5)
+  soilOrganic     Float? // อินทรียวัตถุ (%)
+  soilNitrogen    Float? // ไนโตรเจน (%)
+  soilPhosphorus  Float? // ฟอสฟอรัส (ppm)
+  soilPotassium   Float? // โพแทสเซียม (ppm)
+  soilHeavyMetals Json? // { lead: 0.5, mercury: 0.1, cadmium: 0.2 }
+  soilReportUrl   String? // URL รายงานจาก Lab
+
+  // Water Analysis (การวิเคราะห์น้ำ)
+  waterPH          Float? // ค่า pH ของน้ำ
+  waterEC          Float? // ค่าการนำไฟฟ้า (dS/m)
+  waterColiform    Float? // Coliform bacteria (MPN/100ml)
+  waterHeavyMetals Json? // โลหะหนักในน้ำ
+  waterReportUrl   String? // URL รายงานจาก Lab
+
+  // Environment (สภาพแวดล้อม)
+  bufferZoneMeters Int? // ระยะห่างจากแหล่งมลพิษ (เมตร)
+  nearbyPollution  String? // แหล่งมลพิษใกล้เคียง
+  floodRisk        String? // ความเสี่ยงน้ำท่วม (LOW, MEDIUM, HIGH)
+
+  // Risk Assessment (การประเมินความเสี่ยง)
+  riskLevel      String? // LOW, MEDIUM, HIGH
+  riskDetails    String? // รายละเอียดความเสี่ยง
+  mitigationPlan String? // แผนลดความเสี่ยง
+
+  // Certification
+  passedCriteria Boolean   @default(false)
+  verifiedBy     String?
+  verifiedAt     DateTime?
+  notes          String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([farmId])
+  @@index([analysisDate])
+  @@index([organizationId])
+  @@map("site_analyses")
+}
+
+model TrainingRecord {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to Farm
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  // Trainee Information
+  personName   String // ชื่อ-นามสกุลผู้เข้าอบรม
+  personRole   String? // ตำแหน่ง/หน้าที่
+  personIdCard String? // เลขบัตรประชาชน (encrypted)
+
+  // Training Details
+  trainingTopic    String // หัวข้อการอบรม
+  trainingType     String // GACP_BASIC, HYGIENE, SAFETY, PESTICIDE, HARVEST, OTHER
+  trainingDate     DateTime
+  trainingHours    Float? // จำนวนชั่วโมง
+  trainingLocation String? // สถานที่อบรม
+  trainedBy        String? // ผู้จัดอบรม/วิทยากร
+  organizerName    String? // หน่วยงานที่จัด
+
+  // Certificate
+  hasCertificate Boolean   @default(false)
+  certificateNo  String? // เลขที่ใบรับรอง
+  certificateUrl String? // URL ไฟล์ใบรับรอง
+  expiryDate     DateTime? // วันหมดอายุ
+
+  // Assessment
+  preTestScore  Float? // คะแนนก่อนอบรม
+  postTestScore Float? // คะแนนหลังอบรม
+  passed        Boolean @default(true)
+
+  // Notes
+  notes      String?
+  recordedBy String? // ผู้บันทึก
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([farmId])
+  @@index([trainingDate])
+  @@index([trainingType])
+  @@index([organizationId])
+  @@map("training_records")
+}
+
+model Plot {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to Farm
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  // The permanent identifier of this piece of land.
+  //
+  // มกษ. 3502-2561 ข้อ 8(1) requires recording "รหัสแปลงปลูกและข้อมูลประจำแปลงปลูก"
+  // (docs/standards/tas-3502-2561-records-and-traceability.md). Until this column the
+  // platform had no plot code at all: the trace QR hangs off PlantingCyclePlot, which is
+  // unique per (cycle, plot), so the identifier was reborn every season.
+  //
+  // Two things depend on it outliving the season. A sign can stay in the field instead of
+  // being reprinted every cycle — with five harvests a year that is five signs a year per
+  // plot, and a post carrying several stale QR codes is how a farmer records into the wrong
+  // round. And the same land registered twice can be detected, which is the control that
+  // stops one certificate covering a neighbour's crop.
+  //
+  // Nullable while the existing rows are backfilled; the contract migration makes it
+  // required. Format and reasoning: shared/plot-code.js.
+  plotCode    String?   @unique
+  qrIssuedAt  DateTime? // first time a sign was printed for this plot
+  qrRevokedAt DateTime? // set when a sign is lost or copied; reprinting keeps the same code
+
+  // Plot Details
+  name String
+
+  /// The plot's size in square metres. The unit is in the name because it used
+  /// to be in a sibling column, and this platform has twice read that pair wrong
+  /// by a factor of 1,600 - shared/area-utils.js:1-23 records both incidents.
+  ///
+  /// Nullable only for the expand window: the backfill in migration
+  /// 20260826090000_area_sqm_and_cultivation_scope_expand refuses to guess at a
+  /// row whose stored unit it cannot read and leaves it NULL, so those rows can
+  /// be counted and repaired by hand. The contract migration makes it required
+  /// once that count is zero.
+  areaSqm Float?
+
+  /// RETIRED - replaced by areaSqm above (same migration). Still written by
+  /// every plot writer and still readable, so a rollback to the previous image
+  /// keeps working; the contract migration drops both.
+  area     Float
+  areaUnit String @default("sqm")
+
+  // Cultivation System (Solar System)
+  solarSystem String @default("OUTDOOR") // OUTDOOR, INDOOR, GREENHOUSE
+
+  // Coordinates (Optional for specific plot location)
+  latitude  Float?
+  longitude Float?
+
+  // Relations
+  plantingCycles   PlantingCycle[]
+  cycleAssignments PlantingCyclePlot[]
+  cultivationLogs  CultivationLog[]
+
+  // GACP Thai Requirements
+  waterSources           WaterSource[]
+  controlledEnvironments ControlledEnvironment[]
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([farmId])
+  @@index([organizationId])
+  @@map("plots")
+}

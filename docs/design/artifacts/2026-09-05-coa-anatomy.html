@@ -1,0 +1,400 @@
+<title>กายวิภาคของใบผลวิเคราะห์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sarabun:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --ground:   #E2E5E9;
+    --ground-2: #D6DAE0;
+    --paper:    #FCFCFD;
+    --ink:      #15181D;
+    --ink-soft: #4A5058;
+    --ink-faint:#7D848D;
+    --accent:   #8E2F62;
+    --accent-2: #6E2049;
+    --accent-wash:#F1E3EB;
+    --pass:     #2E6B4A;
+    --pass-wash:#DEEBE3;
+    --fail:     #B3352E;
+    --fail-wash:#F4E0DE;
+    --rule:     #C3C8CF;
+    --rule-soft:#D9DDE3;
+
+    --f-display:"Anuphan","Noto Sans Thai",system-ui,sans-serif;
+    --f-body:   "Sarabun","Noto Sans Thai",system-ui,sans-serif;
+    --f-mono:   "IBM Plex Mono",ui-monospace,monospace;
+
+    --s--2: .72rem;
+    --s--1: clamp(.78rem,.76rem + .1vw,.84rem);
+    --s-0:  clamp(.95rem,.92rem + .16vw,1.03rem);
+    --s-1:  clamp(1.12rem,1.04rem + .36vw,1.3rem);
+    --s-2:  clamp(1.42rem,1.24rem + .84vw,1.95rem);
+    --s-3:  clamp(1.95rem,1.5rem + 2vw,3.1rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:   #0F1114;
+      --ground-2: #171A1F;
+      --paper:    #F0EFEC;
+      --ink:      #E4E7EB;
+      --ink-soft: #A3A9B2;
+      --ink-faint:#7A8189;
+      --accent:   #DE8FB6;
+      --accent-2: #EDB3D0;
+      --accent-wash:#331428;
+      --pass:     #6FBE92;
+      --pass-wash:#15291F;
+      --fail:     #E5867E;
+      --fail-wash:#301715;
+      --rule:     #2A2F36;
+      --rule-soft:#20242A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:   #0F1114;
+    --ground-2: #171A1F;
+    --paper:    #F0EFEC;
+    --ink:      #E4E7EB;
+    --ink-soft: #A3A9B2;
+    --ink-faint:#7A8189;
+    --accent:   #DE8FB6;
+    --accent-2: #EDB3D0;
+    --accent-wash:#331428;
+    --pass:     #6FBE92;
+    --pass-wash:#15291F;
+    --fail:     #E5867E;
+    --fail-wash:#301715;
+    --rule:     #2A2F36;
+    --rule-soft:#20242A;
+  }
+
+  *,*::before,*::after { box-sizing: border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:var(--f-body); font-size:var(--s-0); line-height:1.65; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:80rem; margin:0 auto; padding:clamp(2rem,5vw,4.5rem) clamp(1.1rem,4vw,3rem) 6rem; }
+
+  .eyebrow { font-family:var(--f-mono); font-size:var(--s--1); letter-spacing:.15em; text-transform:uppercase; color:var(--ink-faint); }
+  h1 { font-family:var(--f-display); font-size:var(--s-3); font-weight:700; line-height:1.1; margin:.6rem 0 0; text-wrap:balance; }
+  .standfirst { max-width:60ch; color:var(--ink-soft); font-size:var(--s-1); line-height:1.55; margin:.9rem 0 0; text-wrap:pretty; }
+  header.masthead { padding-bottom:1.6rem; border-bottom:1px solid var(--rule); }
+
+  .disclaimer {
+    margin-top:1.4rem; border:2px solid var(--accent); background:var(--accent-wash);
+    color:var(--accent-2); border-radius:3px; padding:.85rem 1.05rem;
+    display:grid; gap:.3rem; font-size:var(--s--1);
+  }
+  .disclaimer b { font-family:var(--f-display); font-size:var(--s-0); }
+
+  section { margin-top:clamp(2.5rem,6vw,4.5rem); }
+  h2 { font-family:var(--f-display); font-size:var(--s-2); font-weight:600; margin:0 0 .5rem; text-wrap:balance; }
+  h3 { font-family:var(--f-display); font-size:var(--s-1); font-weight:600; margin:0 0 .35rem; }
+  .lede { max-width:64ch; color:var(--ink-soft); margin:0 0 1.8rem; text-wrap:pretty; }
+
+  /* ── the specimen + its annotation rail ───────────────────── */
+  .anatomy { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:clamp(1.1rem,2.5vw,2rem); align-items:start; }
+  @media (max-width:64rem){ .anatomy { grid-template-columns:1fr; } }
+
+  .sheet {
+    background:var(--paper); color:#15181D; border:1px solid var(--rule); border-radius:2px;
+    box-shadow:0 1px 2px rgba(21,24,29,.07), 0 14px 30px -16px rgba(21,24,29,.3);
+    padding:clamp(1rem,2.2vw,1.7rem); font-size:.82rem; line-height:1.5; overflow-x:auto;
+    position:relative;
+  }
+  .watermark {
+    position:absolute; inset:0; display:grid; place-items:center; pointer-events:none;
+    font-family:var(--f-display); font-size:clamp(1.5rem,5vw,3rem); font-weight:700;
+    color:rgba(142,47,98,.09); transform:rotate(-24deg); letter-spacing:.08em; text-align:center;
+  }
+  .sheet > * { position:relative; }
+
+  .lab-head { display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; align-items:flex-start; border-bottom:2px solid #15181D; padding-bottom:.7rem; }
+  .lab-id strong { display:block; font-size:.95rem; font-weight:700; }
+  .lab-id span { display:block; color:#4A5058; font-size:.76rem; }
+  .rep-id { text-align:right; font-family:var(--f-mono); font-size:.73rem; color:#4A5058; }
+  .rep-id b { display:block; color:#15181D; font-weight:600; font-size:.82rem; }
+
+  .doc-title { text-align:center; margin:.9rem 0 .1rem; font-size:1.08rem; font-weight:700; }
+  .doc-title small { display:block; font-size:.66rem; letter-spacing:.18em; color:#7D848D; font-family:var(--f-mono); font-weight:500; margin-top:.12rem; }
+
+  .blk { margin-top:.95rem; }
+  .blk-h { font-size:.66rem; letter-spacing:.12em; text-transform:uppercase; color:#7D848D; font-weight:700; font-family:var(--f-display); border-bottom:1px solid #DDE1E6; padding-bottom:.2rem; margin-bottom:.4rem; }
+  dl.kv { display:grid; grid-template-columns:auto minmax(0,1fr); gap:.15rem .8rem; margin:0; font-size:.78rem; }
+  dl.kv dt { color:#7D848D; white-space:nowrap; }
+  dl.kv dd { margin:0; }
+
+  table.res { width:100%; border-collapse:collapse; font-size:.75rem; }
+  table.res th, table.res td { padding:.3rem .28rem; text-align:left; border-bottom:1px solid #E4E7EB; vertical-align:top; }
+  table.res th { font-size:.62rem; letter-spacing:.08em; text-transform:uppercase; color:#7D848D; font-weight:700; font-family:var(--f-display); }
+  table.res .n { text-align:right; font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  table.res .grp td { background:#EFF1F4; font-weight:700; font-size:.7rem; letter-spacing:.04em; }
+  .v { font-family:var(--f-mono); font-size:.65rem; padding:.06rem .3rem; border-radius:2px; font-weight:600; }
+  .v.p { background:#DEEBE3; color:#2E6B4A; }
+  .v.f { background:#F4E0DE; color:#B3352E; }
+
+  .sign { margin-top:1.1rem; padding-top:.8rem; border-top:1px solid #DDE1E6; display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; align-items:flex-end; }
+  .sign .who { font-size:.76rem; }
+  .sign .who span { display:block; color:#7D848D; font-size:.7rem; }
+  .sign .line { border-bottom:1px solid #15181D; width:11rem; height:1.8rem; }
+  .fineprint { margin-top:.8rem; font-size:.66rem; color:#7D848D; line-height:1.45; }
+
+  /* ── annotation rail ──────────────────────────────────────── */
+  .rail { display:grid; gap:.75rem; align-content:start; }
+  .ann { background:var(--ground-2); border:1px solid var(--rule); border-left:3px solid var(--accent); border-radius:0 3px 3px 0; padding:.7rem .85rem; display:grid; gap:.28rem; }
+  .ann h4 { margin:0; font-family:var(--f-display); font-size:.92rem; font-weight:600; }
+  .ann p { margin:0; font-size:.82rem; color:var(--ink-soft); }
+  .ann .chips { display:flex; gap:.35rem; flex-wrap:wrap; margin-top:.2rem; }
+  .chip { font-family:var(--f-mono); font-size:.62rem; letter-spacing:.05em; padding:.1rem .34rem; border-radius:2px; background:var(--accent-wash); color:var(--accent-2); }
+  .chip.pub { background:var(--pass-wash); color:var(--pass); }
+  .chip.no { background:var(--fail-wash); color:var(--fail); }
+
+  .scroll { overflow-x:auto; border:1px solid var(--rule); border-radius:3px; background:var(--ground-2); }
+  table.grid { width:100%; border-collapse:collapse; font-size:var(--s--1); min-width:38rem; }
+  table.grid th, table.grid td { padding:.65rem .8rem; text-align:left; border-bottom:1px solid var(--rule-soft); vertical-align:top; }
+  table.grid thead th { font-size:.68rem; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; background:var(--ground); position:sticky; top:0; }
+  table.grid tbody tr:last-child td { border-bottom:0; }
+  code { font-family:var(--f-mono); font-size:.9em; background:var(--accent-wash); color:var(--accent-2); padding:.06rem .3rem; border-radius:2px; word-break:break-word; }
+
+  .callout { border-left:3px solid var(--accent); background:var(--ground-2); padding:1rem 1.2rem; border-radius:0 3px 3px 0; display:grid; gap:.5rem; }
+  .callout h3 { margin:0; font-size:var(--s-0); font-family:var(--f-body); font-weight:700; }
+  .callout p { margin:0; color:var(--ink-soft); max-width:68ch; }
+
+  footer { margin-top:4rem; padding-top:1.3rem; border-top:1px solid var(--rule); color:var(--ink-faint); font-size:var(--s--1); }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">แบบสำหรับออกแบบระบบ · 2026-09-05</p>
+    <h1>กายวิภาคของใบผลวิเคราะห์</h1>
+    <p class="standfirst">
+      ใบ COA ของกัญชามีอะไรอยู่ในนั้นบ้าง ระบบเราต้องอ่านช่องไหน เก็บช่องไหน
+      และช่องไหนขึ้นหน้าสแกนที่ใครก็เปิดดูได้
+    </p>
+  </header>
+
+  <div class="disclaimer">
+    <b>เอกสารนี้เป็นตัวอย่างสำหรับออกแบบระบบ ไม่ใช่ใบผลวิเคราะห์จริง</b>
+    <span>
+      ชื่อห้องปฏิบัติการ เลขที่รายงาน ผู้ลงนาม และตัวเลขผลทั้งหมดเป็นค่าสมมติ
+      โครงเอกสารอ้างอิงรูปแบบที่ห้องปฏิบัติการรับรอง ISO/IEC 17025 ในไทยออกให้ตามปกติ
+      แต่<strong>ตั้งใจไม่ใช้ชื่อและตราของห้องแล็บจริง</strong> เพื่อไม่ให้หน้านี้กลายเป็นใบผลแล็บปลอมที่ถูกนำไปใช้ต่อได้
+    </span>
+    <span>
+      <strong>ค่าเกณฑ์ในคอลัมน์ “เกณฑ์” ต้องมาจากมาตรฐานที่ห้องแล็บอ้างอิงเสมอ ไม่ใช่จากระบบเรา</strong> —
+      แพลตฟอร์มไม่ตัดสินว่าผ่านหรือไม่ผ่าน หน้าที่นั้นเป็นของห้องแล็บ เราเก็บและแสดงสิ่งที่เขาเขียนมา
+    </span>
+  </div>
+
+  <section>
+    <h2>แผ่นตัวอย่าง พร้อมคำอธิบายรายบล็อก</h2>
+    <p class="lede">ทางขวาบอกว่าระบบเราทำอะไรกับแต่ละบล็อก</p>
+
+    <div class="anatomy">
+
+      <div class="sheet">
+        <div class="watermark">ตัวอย่างเพื่อการออกแบบ<br>ไม่ใช่เอกสารจริง</div>
+
+        <div class="lab-head">
+          <div class="lab-id">
+            <strong>ห้องปฏิบัติการวิเคราะห์ (ตัวอย่าง)</strong>
+            <span>Analytical Laboratory — SPECIMEN, not a real issuer</span>
+            <span>ทะเบียนรับรองความสามารถ ISO/IEC 17025 เลขที่ ▪▪▪▪</span>
+            <span>ที่อยู่ห้องปฏิบัติการ · โทร ▪▪▪ · อีเมล ▪▪▪</span>
+          </div>
+          <div class="rep-id">
+            เลขที่รายงาน<b>TR-SPECIMEN-0000</b>
+            วันที่ออกรายงาน<b>15 กันยายน 2569</b>
+            หน้า<b>1 / 1</b>
+          </div>
+        </div>
+
+        <div class="doc-title">ใบรายงานผลการวิเคราะห์<small>CERTIFICATE OF ANALYSIS</small></div>
+
+        <div class="blk">
+          <div class="blk-h">ผู้ขอรับบริการ</div>
+          <dl class="kv">
+            <dt>ชื่อ</dt><dd>สวนสมุนไพรลุงมี</dd>
+            <dt>ที่อยู่</dt><dd>ต.สุเทพ อ.เมือง จ.เชียงใหม่</dd>
+            <dt>อ้างอิงคำขอ</dt><dd>APP-2569-MTBZ8WCX</dd>
+          </dl>
+        </div>
+
+        <div class="blk">
+          <div class="blk-h">รายละเอียดตัวอย่าง</div>
+          <dl class="kv">
+            <dt>ชื่อตัวอย่าง</dt><dd>ช่อดอกกัญชาแห้ง (Cannabis sativa L., dried inflorescence)</dd>
+            <dt>รหัสตัวอย่างของผู้ส่ง</dt><dd><strong>HB-2569-0184</strong> · QR ② ที่ติดมากับถุงตัวอย่าง</dd>
+            <dt>สายพันธุ์</dt><dd>▪▪▪</dd>
+            <dt>ลักษณะตัวอย่าง</dt><dd>แห้ง บรรจุถุงซีล สภาพสมบูรณ์</dd>
+            <dt>ปริมาณที่รับ</dt><dd>50 กรัม</dd>
+            <dt>วันที่รับตัวอย่าง</dt><dd>3 กันยายน 2569</dd>
+            <dt>วันที่วิเคราะห์</dt><dd>4 – 12 กันยายน 2569</dd>
+            <dt>ผู้เก็บตัวอย่าง</dt><dd>ผู้ขอรับบริการเป็นผู้ส่งตัวอย่างเอง</dd>
+          </dl>
+        </div>
+
+        <div class="blk">
+          <div class="blk-h">ผลการวิเคราะห์</div>
+          <table class="res">
+            <thead>
+              <tr><th>รายการ</th><th class="n">ผล</th><th class="n">หน่วย</th><th>เกณฑ์</th><th>วิธีทดสอบ</th><th>สรุป</th></tr>
+            </thead>
+            <tbody>
+              <tr class="grp"><td colspan="6">สารสำคัญ · Cannabinoid profile</td></tr>
+              <tr><td>Δ9-THC</td><td class="n">0.14</td><td class="n">% w/w</td><td>ตามมาตรฐานอ้างอิง</td><td>HPLC-DAD</td><td><span class="v p">ผ่าน</span></td></tr>
+              <tr><td>THCA</td><td class="n">0.32</td><td class="n">% w/w</td><td>รายงานค่า</td><td>HPLC-DAD</td><td>—</td></tr>
+              <tr><td>Total THC</td><td class="n">0.42</td><td class="n">% w/w</td><td>ตามมาตรฐานอ้างอิง</td><td>คำนวณ</td><td><span class="v p">ผ่าน</span></td></tr>
+              <tr><td>CBD</td><td class="n">7.85</td><td class="n">% w/w</td><td>รายงานค่า</td><td>HPLC-DAD</td><td>—</td></tr>
+              <tr><td>CBDA</td><td class="n">2.10</td><td class="n">% w/w</td><td>รายงานค่า</td><td>HPLC-DAD</td><td>—</td></tr>
+
+              <tr class="grp"><td colspan="6">โลหะหนัก · Heavy metals</td></tr>
+              <tr><td>ตะกั่ว (Pb)</td><td class="n">&lt; 0.05</td><td class="n">mg/kg</td><td>ตามมาตรฐานอ้างอิง</td><td>ICP-MS</td><td><span class="v p">ผ่าน</span></td></tr>
+              <tr><td>แคดเมียม (Cd)</td><td class="n">&lt; 0.02</td><td class="n">mg/kg</td><td>ตามมาตรฐานอ้างอิง</td><td>ICP-MS</td><td><span class="v p">ผ่าน</span></td></tr>
+              <tr><td>สารหนู (As)</td><td class="n">&lt; 0.05</td><td class="n">mg/kg</td><td>ตามมาตรฐานอ้างอิง</td><td>ICP-MS</td><td><span class="v p">ผ่าน</span></td></tr>
+              <tr><td>ปรอท (Hg)</td><td class="n">&lt; 0.01</td><td class="n">mg/kg</td><td>ตามมาตรฐานอ้างอิง</td><td>ICP-MS</td><td><span class="v p">ผ่าน</span></td></tr>
+
+              <tr class="grp"><td colspan="6">สารกำจัดศัตรูพืชตกค้าง · Pesticide residues</td></tr>
+              <tr><td>กลุ่มที่ตรวจ (▪▪ รายการ)</td><td class="n">ไม่พบ</td><td class="n">mg/kg</td><td>ตามมาตรฐานอ้างอิง</td><td>LC-MS/MS · GC-MS/MS</td><td><span class="v p">ผ่าน</span></td></tr>
+
+              <tr class="grp"><td colspan="6">จุลินทรีย์ · Microbiological</td></tr>
+              <tr><td>ยีสต์และรา</td><td class="n">1.2 × 10³</td><td class="n">CFU/g</td><td>ตามมาตรฐานอ้างอิง</td><td>ISO 21527</td><td><span class="v p">ผ่าน</span></td></tr>
+              <tr><td>E. coli</td><td class="n">ไม่พบ</td><td class="n">/g</td><td>ตามมาตรฐานอ้างอิง</td><td>ISO 16649</td><td><span class="v p">ผ่าน</span></td></tr>
+              <tr><td>Salmonella spp.</td><td class="n">ไม่พบ</td><td class="n">/25 g</td><td>ตามมาตรฐานอ้างอิง</td><td>ISO 6579</td><td><span class="v p">ผ่าน</span></td></tr>
+
+              <tr class="grp"><td colspan="6">สารพิษจากเชื้อรา และคุณลักษณะทั่วไป</td></tr>
+              <tr><td>อะฟลาทอกซินรวม</td><td class="n">&lt; 2.0</td><td class="n">µg/kg</td><td>ตามมาตรฐานอ้างอิง</td><td>HPLC-FLD</td><td><span class="v p">ผ่าน</span></td></tr>
+              <tr><td>ความชื้น</td><td class="n">9.8</td><td class="n">% w/w</td><td>ตามมาตรฐานอ้างอิง</td><td>Gravimetric</td><td><span class="v p">ผ่าน</span></td></tr>
+              <tr><td>สิ่งแปลกปลอม</td><td class="n">ไม่พบ</td><td class="n">—</td><td>ตามมาตรฐานอ้างอิง</td><td>Visual</td><td><span class="v p">ผ่าน</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sign">
+          <div class="who">
+            <div class="line"></div>
+            ผู้มีอำนาจลงนาม (ตัวอย่าง)
+            <span>ตำแหน่ง · วันที่ลงนาม</span>
+          </div>
+          <div class="rep-id" style="text-align:right">
+            รหัสตรวจสอบรายงาน<b>▪▪▪▪-▪▪▪▪</b>
+          </div>
+        </div>
+
+        <p class="fineprint">
+          ผลการทดสอบนี้เกี่ยวข้องเฉพาะกับตัวอย่างที่ได้รับเท่านั้น ·
+          ห้ามทำสำเนารายงานนี้บางส่วนโดยไม่ได้รับอนุญาตเป็นลายลักษณ์อักษรจากห้องปฏิบัติการ ·
+          <strong>เอกสารตัวอย่างเพื่อการออกแบบระบบ ไม่ใช่รายงานผลจริง</strong>
+        </p>
+      </div>
+
+      <div class="rail">
+        <div class="ann">
+          <h4>หัวกระดาษ — ผู้ออกและเลขที่รายงาน</h4>
+          <p>ระบบเก็บ <strong>ชื่อห้องแล็บ</strong> · <strong>เลขที่รายงาน</strong> · <strong>วันที่ออก</strong> เป็นฟิลด์แยก เพื่อใช้แสดงและใช้ค้น ที่เหลืออยู่ในไฟล์</p>
+          <div class="chips"><span class="chip">เก็บเป็นฟิลด์</span><span class="chip pub">ขึ้นหน้าสแกน</span></div>
+        </div>
+
+        <div class="ann">
+          <h4>ผู้ขอรับบริการ</h4>
+          <p>ไม่ต้องกรอกซ้ำ — ระบบรู้อยู่แล้วว่าใครอัปโหลด · แต่ตรวจว่าตรงกับเจ้าของรุ่นหรือไม่ ถ้าไม่ตรงให้เตือน ไม่ใช่ปฏิเสธเงียบ</p>
+          <div class="chips"><span class="chip">ตรวจให้ตรงกัน</span></div>
+        </div>
+
+        <div class="ann" style="border-left-color:var(--pass)">
+          <h4>รหัสตัวอย่างของผู้ส่ง — จุดเชื่อมทั้งระบบ</h4>
+          <p>
+            ช่องนี้คือที่ที่ <strong>QR ②</strong> ไปโผล่ · เกษตรกรแปะ QR รุ่นบนถุงตัวอย่าง
+            ห้องแล็บพิมพ์รหัสนั้นลงในรายงาน ⇒ ระบบจับคู่ COA กับรุ่นได้อัตโนมัติ
+            ไม่ต้องให้ใครเลือกจากรายการยาว ๆ แล้วเลือกผิด
+          </p>
+          <div class="chips"><span class="chip">คีย์จับคู่</span><span class="chip pub">ขึ้นหน้าสแกน</span></div>
+        </div>
+
+        <div class="ann">
+          <h4>ตารางผล</h4>
+          <p>
+            <strong>ไม่มีช่องให้พิมพ์ค่าเอง</strong> ตามมติ 5 ก.ย. — ระบบเก็บไฟล์ ไม่แกะตัวเลขออกมาเก็บซ้ำ
+            ตัวเลขที่พิมพ์มือคือตัวเลขที่พิมพ์ผิดได้ และเมื่อขัดกับไฟล์จะไม่มีใครรู้ว่าอันไหนจริง
+          </p>
+          <div class="chips"><span class="chip no">ไม่แกะเป็นฟิลด์</span><span class="chip pub">เปิดไฟล์ให้ดู</span></div>
+        </div>
+
+        <div class="ann">
+          <h4>คอลัมน์ “เกณฑ์” และ “สรุป”</h4>
+          <p>
+            <strong>ห้องแล็บเป็นผู้ตัดสินผ่าน/ไม่ผ่าน ไม่ใช่แพลตฟอร์ม</strong> ·
+            ระบบไม่คำนวณ ไม่เทียบเกณฑ์เอง และไม่สรุปแทน — ถ้าเราสรุปเอง เราก็รับผิดชอบผลนั้นทั้งที่ไม่ได้ตรวจ
+          </p>
+          <div class="chips"><span class="chip no">ไม่ตัดสินเอง</span></div>
+        </div>
+
+        <div class="ann">
+          <h4>ลายเซ็นและรหัสตรวจสอบรายงาน</h4>
+          <p>
+            ห้องแล็บหลายแห่งใส่รหัสให้ผู้รับไปตรวจกับต้นทางได้ · ถ้ามี ให้เก็บและแสดงคู่กับไฟล์
+            เพราะมันคือทางเดียวที่ผู้ซื้อจะยืนยันว่าไฟล์ที่เห็นเป็นของจริง
+          </p>
+          <div class="chips"><span class="chip">เก็บถ้ามี</span><span class="chip pub">ขึ้นหน้าสแกน</span></div>
+        </div>
+
+        <div class="ann">
+          <h4>ข้อความท้ายรายงาน</h4>
+          <p>“ผลเกี่ยวข้องเฉพาะตัวอย่างที่ได้รับ” เป็นข้อจำกัดที่ต้องอยู่กับไฟล์เสมอ ⇒ แสดงไฟล์เต็ม ไม่ตัดมาเฉพาะตาราง</p>
+          <div class="chips"><span class="chip">แสดงไฟล์เต็ม</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>ระบบเก็บอะไร</h2>
+    <p class="lede">โมเดล <code>BatchLabResult</code> (T9) — ผูกกับ<strong>รุ่นเก็บเกี่ยว</strong> ไม่ใช่ล็อต</p>
+    <div class="scroll">
+      <table class="grid">
+        <thead><tr><th>ฟิลด์</th><th>มาจากไหน</th><th>ขึ้นหน้าสแกน</th></tr></thead>
+        <tbody>
+          <tr><td><code>harvestBatchId</code></td><td>รหัสตัวอย่างของผู้ส่ง = QR ② — จับคู่อัตโนมัติ</td><td>ทางอ้อม</td></tr>
+          <tr><td><code>fileUrl</code></td><td>ไฟล์ COA ที่อัปโหลด (PDF)</td><td>✅ เปิดให้ดาวน์โหลด (มติ 5 ก.ย.)</td></tr>
+          <tr><td><code>labName</code></td><td>หัวกระดาษ — เกษตรกรกรอกหรือเลือกจากรายการ</td><td>✅</td></tr>
+          <tr><td><code>reportNumber</code></td><td>เลขที่รายงาน</td><td>✅</td></tr>
+          <tr><td><code>reportedAt</code></td><td>วันที่ออกรายงาน</td><td>✅</td></tr>
+          <tr><td><code>verificationCode</code></td><td>รหัสตรวจสอบของห้องแล็บ ถ้ามี</td><td>✅</td></tr>
+          <tr><td><code>uploadedBy</code> · <code>uploadedAt</code></td><td>ระบบบันทึกเอง</td><td>ไม่ — แสดงเป็นป้าย “อัปโหลดโดยเกษตรกร”</td></tr>
+          <tr><td><code>verificationStatus</code></td><td><code>FARMER_UPLOADED</code> เป็นค่าตั้งต้น · รองรับ <code>OFFICER_VERIFIED</code> ภายหน้า</td><td>✅ แสดงตามจริง</td></tr>
+          <tr><td style="color:var(--fail)">ค่า THC / CBD / โลหะหนัก …</td><td style="color:var(--fail)"><strong>ไม่เก็บเป็นฟิลด์</strong> — อยู่ในไฟล์</td><td>ผ่านไฟล์</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout" style="margin-top:1.5rem;border-left-color:var(--fail)">
+      <h3>บนหน้าสแกน ต้องแยกสองบรรทัดให้ขาด</h3>
+      <p>
+        มติ 5 ก.ย. สั่งให้ “เห็นว่าฟาร์มนี้มีผลตรวจ” — แต่ถ้าเขียนแค่บรรทัดเดียวว่า
+        <em>“ฟาร์มนี้มีผลตรวจ”</em> คนที่ถือถุงซึ่ง<strong>ยังไม่มี</strong> COA จะอ่านว่าถุงในมือผ่านการตรวจแล้ว
+        ทั้งที่ไม่ใช่ · นั่นคือการทำให้เข้าใจผิดด้วยประโยคที่แต่ละประโยคเป็นความจริง
+        ซึ่งแย่กว่าการไม่บอกอะไรเลย
+      </p>
+      <p>
+        <strong>ล็อตนี้: มีผลตรวจ / ยังไม่มีผลตรวจ</strong> + ปุ่มเปิดไฟล์ — มาก่อนและเด่นกว่าเสมอ ·
+        <strong>ฟาร์มนี้: มีผลตรวจแล็บ N ฉบับ</strong> — ต้องมีคำว่า “ฟาร์มนี้” ติดทุกครั้ง ห้ามพูดลอย ๆ
+      </p>
+    </div>
+
+    <div class="callout" style="margin-top:1.2rem">
+      <h3>ป้ายที่ต้องติดทุกใบจนกว่าเจ้าหน้าที่จะตรวจ</h3>
+      <p>
+        “อัปโหลดโดยเกษตรกร — ยังไม่ผ่านการตรวจสอบโดยเจ้าหน้าที่” ·
+        ตรงไปตรงมาแบบเดียวกับป้ายบนหน้า verify ที่มีอยู่แล้ว ·
+        คนสแกนควรรู้ว่ากำลังดูเอกสารที่ใครเป็นคนใส่เข้ามา ไม่ใช่ให้เดาเอง
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    เอกสารประกอบ · <code>docs/design/2026-09-05-tnt-loop-and-farmer-updates.md</code> §4.5 ·
+    ตัวอย่างเพื่อการออกแบบระบบ ไม่ใช่ใบผลวิเคราะห์จริง
+  </footer>
+
+</div>

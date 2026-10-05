@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ใบเสนอราคา — {{DOC_NUMBER}}</title>
+  <!--
+    ใบเสนอราคา (Quotation) — replicates the OFFICIAL DTAM กองกัญชาทางการแพทย์
+    quotation form 1:1 (owner-supplied template, 2026-06-05). This is the
+    client's OWN government document — copied faithfully (I-010 trade-dress
+    applies only to competitors). Per-phase: Phase 1 = ค่าตรวจสอบและประเมิน;
+    Phase 2 = ค่ารับรองผล. One line per cultivation type (Indoor/Greenhouse/
+    Outdoor). Issuer fields ({{ISSUER_*}}, {{SIGNATORY_*}}, {{BANK_*}}) are
+    resolved per side by generateQuotationPdf so the same template serves the
+    DTAM (state) and PLATFORM quotations.
+  -->
+  <style>
+    /* Sarabun is embedded locally, not imported.
+       The vendored woff2 faces in assets/fonts/sarabun are base64-inlined as
+       data: URIs and injected into <head> by pdf-generator.service.js, so this
+       template needs no font URL. The @import that used to pull Sarabun from a
+       foreign font CDN on every render was removed 2026-07-25 so the render has
+       no remote font dependency; the renderer now allows only data: + about:blank, so any
+       remote @import re-added here would be aborted and silently fall back. */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Sukhumvit Set', 'Sarabun', 'Noto Sans Thai', Tahoma, sans-serif;
+      font-size: 13px; color: #111; background: #fff; padding: 14mm 12mm;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .head { display: flex; align-items: flex-start; gap: 14px; }
+    .head .logo { width: 70px; height: 70px; object-fit: contain; flex-shrink: 0; }
+    .head .org { flex: 1; }
+    .head .org .division { font-size: 17px; font-weight: 700; color: #006633; line-height: 1.3; }
+    .head .org .dept { font-size: 15px; font-weight: 700; color: #006633; line-height: 1.3; }
+    .head .org .addr { font-size: 11.5px; color: #333; margin-top: 4px; line-height: 1.5; }
+    .head .org .contact { font-size: 11.5px; color: #555; }
+    .head .doctype { text-align: center; flex-shrink: 0; }
+    .head .doctype .box { border: 1.5px solid #111; padding: 8px 18px; font-size: 17px; font-weight: 700; }
+    .head .doctype .rev { font-size: 9.5px; color: #777; margin-top: 4px; }
+
+    .billto { border: 1.5px solid #111; padding: 10px 14px; margin-top: 14px; display: flex; gap: 16px; }
+    .billto .left { flex: 1; line-height: 1.95; font-size: 12.5px; }
+    .billto .right { width: 200px; line-height: 1.95; font-size: 12.5px; }
+    .billto .fill { display: inline-block; border-bottom: 1px dotted #888; min-width: 180px; padding: 0 4px; font-weight: 600; }
+    .billto .fill.sm { min-width: 90px; }
+    .intro { font-size: 12.5px; line-height: 1.7; margin-top: 6px; }
+
+    table.items { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12.5px; }
+    table.items th, table.items td { border: 1px solid #111; padding: 7px 8px; vertical-align: top; }
+    table.items thead th { background: #d9d9d9; text-align: center; font-weight: 700; }
+    table.items td.c { text-align: center; }
+    table.items td.r { text-align: right; white-space: nowrap; }
+    table.items .words { font-weight: 700; }
+    table.items tfoot td { font-weight: 700; }
+
+    .confirm-note { font-size: 12.5px; margin: 12px 0; }
+
+    .sign { display: flex; border: 1.5px solid #111; margin-top: 6px; }
+    .sign .col { flex: 1; padding: 14px 12px; text-align: center; font-size: 12px; line-height: 1.8; }
+    .sign .col.divider { border-left: 1.5px solid #111; }
+    .sign .col .title { font-weight: 700; margin-bottom: 30px; }
+    .sign .col .nm { margin-top: 4px; }
+
+    .remark { font-size: 11.5px; line-height: 1.8; margin-top: 14px; }
+    .remark .lbl { font-weight: 700; }
+    .pay { font-size: 11.5px; line-height: 1.85; margin-top: 6px; }
+    .pay .hl { font-weight: 700; }
+    .pay-grid { display: flex; justify-content: space-between; align-items: flex-end; }
+    .pay-grid .qr { text-align: center; }
+    .pay-grid .qr img { width: 92px; height: 92px; object-fit: contain; }
+    .pay-grid .qr .cap { font-size: 11px; font-weight: 600; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="head">
+    <!-- ใบเสนอราคาออกในนามบริษัท รูปนี้จึงเป็นโลโก้บริษัท ไม่ใช่ตราของกระทรวง
+         (เหมือน invoice/receipt/tax-invoice ที่เขียน alt กลาง ๆ ไว้แล้ว) -->
+    <img src="{{ISSUER_LOGO_DATA_URL}}" class="logo" alt="โลโก้ผู้ออกเอกสาร" />
+    <div class="org">
+      <div class="division">{{ISSUER_DIVISION}}</div>
+      <div class="dept">{{ISSUER_NAME_TH}}</div>
+      <div class="addr">{{ISSUER_ADDRESS}}</div>
+      <div class="contact">{{ISSUER_CONTACT}}</div>
+    </div>
+    <div class="doctype">
+      <div class="box">ใบเสนอราคา</div>
+      <div class="rev">{{DOC_REV}}</div>
+    </div>
+  </div>
+
+  <div class="billto">
+    <div class="left">
+      เรียน <span class="fill">{{CUSTOMER_COMPANY}}</span><br>
+      หน่วยงานผู้รับบริการ: <span class="fill">{{CUSTOMER_ORG}}</span><br>
+      {{CUSTOMER_TAXID_LABEL}}: <span class="fill">{{CUSTOMER_TAXID}}</span><br>
+      ที่อยู่: <span class="fill">{{CUSTOMER_ADDRESS}}</span><br>
+      ผู้ประสานงาน: <span class="fill sm">{{CUSTOMER_CONTACT}}</span> โทรศัพท์: <span class="fill sm">{{CUSTOMER_PHONE}}</span>
+      <div class="intro">
+        {{QUOTATION_INTRO}}
+      </div>
+    </div>
+    <div class="right">
+      เลขที่เอกสาร: <span class="fill sm">{{DOC_NUMBER}}</span><br>
+      วันที่เอกสาร: <span class="fill sm">{{DOC_DATE}}</span><br>
+      ยืนราคาถึงวันที่: <span class="fill sm">{{VALID_UNTIL}}</span>
+    </div>
+  </div>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th style="width: 56px;">ลำดับที่</th>
+        <th>รายการ</th>
+        <th style="width: 54px;">จำนวน</th>
+        <th style="width: 64px;">หน่วย</th>
+        <th style="width: 92px;">ราคา/<br>หน่วย</th>
+        <th style="width: 104px;">จำนวนเงิน<br>(บาท)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{ITEMS_ROWS}}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2" class="words">({{AMOUNT_WORDS}})</td>
+        <td colspan="3" class="r">จำนวนเงินทั้งสิ้น</td>
+        <td class="r">{{GRAND_TOTAL}}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="confirm-note">ทั้งนี้ท่านได้ตรวจสอบรายการจำนวนและราคาข้างต้นเรียบร้อยแล้ว</div>
+
+  <div class="sign">
+    <div class="col">
+      <div class="title">ยืนยันคำขอรับการตรวจสอบและประเมิน</div>
+      <div>(....................................)</div>
+      <div class="nm">ตำแหน่ง........................................</div>
+      <div class="nm">วันที่........../........../..........</div>
+      <div class="nm">ผู้อนุมัติคำขอ</div>
+    </div>
+    <div class="col divider">
+      <div class="title">{{SIGNATORY_ORG}}</div>
+      <div>({{SIGNATORY_NAME}})</div>
+      <div class="nm">ตำแหน่ง {{SIGNATORY_TITLE_1}}</div>
+      <div class="nm">{{SIGNATORY_TITLE_2}}</div>
+      <div class="nm">วันที่........../........../..........</div>
+      <div class="nm">(ผู้เสนอราคา)</div>
+    </div>
+  </div>
+
+  <div class="remark">
+    <span class="lbl">หมายเหตุ:</span> เนื่องจาก <span class="fill sm">{{CUSTOMER_COMPANY}}</span> ยื่นเอกสารเมื่อวันที่ <span class="fill sm">{{SUBMIT_DATE}}</span> จึงเสนอราคาตามประกาศอัตราค่าบริการ {{RATE_AUTHORITY}} ณ วันที่ <span class="fill sm">{{RATE_DATE}}</span>
+  </div>
+
+  <!-- Stripe-only (operator 2026-09-06: "เราจ่ายเงินผ่าน strip เท่านั้น"). The retired
+       block named a bank account + a Google Form + postal submission + a scan-to-transfer
+       QR — none of which this flow uses. Payment is on the system's payment page, settled
+       by the webhook. The intro and the pay line come from
+       invoice-template-service.js buildQuotationCopy, the same wording the quotation API
+       serves the web (fix/web-quotation-truth). -->
+  <div class="pay">
+    <span class="hl">การชำระเงิน :</span> {{PAYMENT_NOTE}}
+    <div>
+      เลขประจำตัวผู้เสียภาษี (ผู้ออกเอกสาร) {{ISSUER_TAX_ID}}<br>
+      ใบเสร็จรับเงินจะออกให้อัตโนมัติเมื่อการชำระเงินสำเร็จ
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,421 @@
+<title>สามชั้นในกล่องเดียว</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Sarabun:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --ground:    #E6E8EC;
+    --ground-2:  #DCDFE5;
+    --card:      #F7F8FA;
+    --ink:       #191C22;
+    --ink-soft:  #4E535D;
+    --ink-faint: #82868F;
+    --accent:    #8C2F39;
+    --accent-2:  #6E222B;
+    --accent-wash:#F3E2E3;
+    --due:       #A06A0F;
+    --due-wash:  #F6EBD6;
+    --quiet:     #5B7C99;
+    --quiet-wash:#E1E9F0;
+    --rule:      #C8CCD4;
+    --rule-soft: #DBDEE4;
+
+    --f-display: "Bai Jamjuree", "Noto Sans Thai", system-ui, sans-serif;
+    --f-body:    "Sarabun", "Noto Sans Thai", system-ui, sans-serif;
+    --f-mono:    "IBM Plex Mono", ui-monospace, monospace;
+
+    --s--1: clamp(.78rem, .76rem + .1vw, .84rem);
+    --s-0:  clamp(.95rem, .92rem + .16vw, 1.03rem);
+    --s-1:  clamp(1.12rem, 1.04rem + .36vw, 1.3rem);
+    --s-2:  clamp(1.42rem, 1.24rem + .84vw, 1.95rem);
+    --s-3:  clamp(2rem, 1.55rem + 2vw, 3.15rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:    #101216;
+      --ground-2:  #171A20;
+      --card:      #1A1D23;
+      --ink:       #E6E8EC;
+      --ink-soft:  #A6AAB3;
+      --ink-faint: #7B7F88;
+      --accent:    #E08E96;
+      --accent-2:  #F0B3B9;
+      --accent-wash:#38191D;
+      --due:       #D8A64A;
+      --due-wash:  #33270F;
+      --quiet:     #8FB3CE;
+      --quiet-wash:#182530;
+      --rule:      #2C3038;
+      --rule-soft: #22262C;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:    #101216;
+    --ground-2:  #171A20;
+    --card:      #1A1D23;
+    --ink:       #E6E8EC;
+    --ink-soft:  #A6AAB3;
+    --ink-faint: #7B7F88;
+    --accent:    #E08E96;
+    --accent-2:  #F0B3B9;
+    --accent-wash:#38191D;
+    --due:       #D8A64A;
+    --due-wash:  #33270F;
+    --quiet:     #8FB3CE;
+    --quiet-wash:#182530;
+    --rule:      #2C3038;
+    --rule-soft: #22262C;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--f-body); font-size: var(--s-0); line-height: 1.7; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 74rem; margin: 0 auto; padding: clamp(2rem,5vw,5rem) clamp(1.1rem,4vw,3rem) 6rem; }
+  a { color: var(--accent); }
+
+  .eyebrow { font-family: var(--f-mono); font-size: var(--s--1); letter-spacing: .15em; text-transform: uppercase; color: var(--ink-faint); }
+  h1 { font-family: var(--f-display); font-size: var(--s-3); font-weight: 700; line-height: 1.08; margin: .6rem 0 0; text-wrap: balance; letter-spacing: -.01em; }
+  .standfirst { max-width: 60ch; color: var(--ink-soft); font-size: var(--s-1); line-height: 1.55; margin: .9rem 0 0; text-wrap: pretty; }
+  header.masthead { padding-bottom: 2rem; border-bottom: 1px solid var(--rule); }
+  .meta { display: flex; flex-wrap: wrap; gap: .4rem 1.6rem; font-family: var(--f-mono); font-size: var(--s--1); color: var(--ink-faint); margin-top: 1.1rem; }
+  .meta b { color: var(--ink-soft); font-weight: 500; }
+
+  section { margin-top: clamp(3rem, 7vw, 5.5rem); }
+  h2 { font-family: var(--f-display); font-size: var(--s-2); font-weight: 600; margin: 0 0 .5rem; text-wrap: balance; }
+  h3 { font-family: var(--f-display); font-size: var(--s-1); font-weight: 600; margin: 0 0 .35rem; }
+  .lede { max-width: 64ch; color: var(--ink-soft); margin: 0 0 2rem; text-wrap: pretty; }
+
+  /* ── the two inboxes ──────────────────────────────────────── */
+  .compare { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: clamp(1rem,3vw,2rem); align-items: start; }
+  @media (max-width: 54rem) { .compare { grid-template-columns: 1fr; } }
+  .panel { display: grid; gap: .7rem; }
+  .panel-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+  .panel-head h3 { margin: 0; }
+  .stamp { font-family: var(--f-mono); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; padding: .14rem .45rem; border-radius: 2px; }
+  .stamp.now { background: var(--ground-2); color: var(--ink-faint); }
+  .stamp.next { background: var(--accent-wash); color: var(--accent-2); }
+  .inbox { background: var(--card); border: 1px solid var(--rule); border-radius: 3px; padding: .55rem; display: grid; gap: .4rem; }
+
+  .note { display: grid; grid-template-columns: 1.6rem minmax(0,1fr); gap: 0 .6rem; padding: .6rem .55rem; border-radius: 2px; background: var(--ground-2); border-left: 3px solid transparent; }
+  .note .dot { width: 1.1rem; height: 1.1rem; border-radius: 50%; margin-top: .18rem; display: grid; place-items: center; font-size: .62rem; font-weight: 700; }
+  .note .t { font-weight: 600; font-size: .87rem; line-height: 1.35; }
+  .note .m { font-size: .78rem; color: var(--ink-faint); line-height: 1.4; }
+  .note .tagline { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .3rem; }
+  .tag { font-family: var(--f-mono); font-size: .62rem; letter-spacing: .05em; padding: .1rem .34rem; border-radius: 2px; }
+
+  /* today: everything identical */
+  .note.same { border-left-color: var(--quiet); }
+  .note.same .dot { background: var(--quiet-wash); color: var(--quiet); }
+
+  /* proposed: three ranks */
+  .note.official { border-left-color: var(--accent); background: var(--accent-wash); }
+  .note.official .dot { background: var(--accent); color: var(--card); }
+  .note.official .tag { background: var(--accent); color: var(--card); }
+  .note.due { border-left-color: var(--due); background: var(--due-wash); }
+  .note.due .dot { background: var(--due); color: var(--card); }
+  .note.due .tag { background: var(--due); color: var(--card); }
+  .note.plain { border-left-color: var(--rule); }
+  .note.plain .dot { background: var(--ground); color: var(--ink-faint); }
+  .note.plain .tag { background: var(--ground); color: var(--ink-faint); }
+
+  .verdict { font-size: .84rem; color: var(--ink-soft); border-top: 1px dashed var(--rule); padding-top: .6rem; }
+  .verdict b { color: var(--ink); }
+
+  /* ── generic ──────────────────────────────────────────────── */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); }
+  table.grid { width: 100%; border-collapse: collapse; font-size: var(--s--1); min-width: 40rem; }
+  table.grid th, table.grid td { padding: .68rem .85rem; text-align: left; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  table.grid thead th { font-size: .69rem; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; background: var(--ground-2); position: sticky; top: 0; }
+  table.grid tbody tr:last-child td { border-bottom: 0; }
+  code { font-family: var(--f-mono); font-size: .9em; background: var(--quiet-wash); color: var(--quiet); padding: .06rem .3rem; border-radius: 2px; word-break: break-word; }
+  .no { color: var(--accent); font-weight: 600; }
+  .ok { color: var(--quiet); font-weight: 600; }
+  .tier { font-family: var(--f-mono); font-size: .72rem; color: var(--accent); }
+  .tier.b { color: var(--ink-faint); }
+
+  pre.code { margin: 0; padding: .95rem 1.05rem; background: var(--ground-2); border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 0 3px 3px 0; font-family: var(--f-mono); font-size: .77rem; line-height: 1.6; overflow-x: auto; }
+  pre.code b { color: var(--accent); font-weight: 500; }
+
+  .gaps { display: grid; gap: 0; }
+  .gap { display: grid; grid-template-columns: 2.2rem minmax(0,1fr); gap: 0 .9rem; padding: 1.15rem 0; border-top: 1px solid var(--rule-soft); }
+  .gap-n { font-family: var(--f-mono); font-size: var(--s-0); color: var(--accent); }
+  .gap p { margin: .25rem 0 0; color: var(--ink-soft); max-width: 66ch; }
+  .gap .src { font-family: var(--f-mono); font-size: .73rem; color: var(--ink-faint); margin-top: .35rem; }
+
+  .callout { border-left: 3px solid var(--accent); background: var(--ground-2); padding: 1rem 1.2rem; border-radius: 0 3px 3px 0; display: grid; gap: .5rem; }
+  .callout h3 { margin: 0; font-size: var(--s-0); font-family: var(--f-body); font-weight: 700; }
+  .callout p { margin: 0; color: var(--ink-soft); max-width: 68ch; }
+
+  footer { margin-top: 5rem; padding-top: 1.4rem; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: var(--s--1); }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">ร่างเพื่อขออนุมัติ · 2026-09-05</p>
+    <h1>สามชั้นในกล่องเดียว</h1>
+    <p class="standfirst">
+      กล่องจดหมายของเกษตรกรมีของสามอย่างที่ต่างกันโดยสิ้นเชิง — หนังสือราชการที่เริ่มนับเวลา
+      งานที่มีเส้นตาย และเรื่องแจ้งให้ทราบ วันนี้ทั้งสามอย่างหน้าตาเหมือนกันหมด
+    </p>
+    <div class="meta">
+      <span><b>หลังบ้าน</b> เขียนครบแล้วทั้ง priority และ kind</span>
+      <span><b>หน้าจอ</b> ไม่อ่านทั้งสองตัว</span>
+      <span><b>ช่องทาง</b> in-app อย่างเดียว</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>ของจริง เทียบกับที่ควรเป็น</h2>
+    <p class="lede">
+      สามใบเดียวกัน ข้อมูลชุดเดียวกัน ต่างกันแค่หน้าจออ่านฟิลด์ที่หลังบ้านส่งมาให้อยู่แล้วหรือไม่
+    </p>
+
+    <div class="compare">
+
+      <div class="panel">
+        <div class="panel-head"><h3>วันนี้</h3><span class="stamp now">ของจริงในโค้ด</span></div>
+        <div class="inbox">
+          <div class="note same">
+            <span class="dot">i</span>
+            <span>
+              <span class="t">หนังสือแจ้งผลการพิจารณาคำขอ</span>
+              <span class="m">คำขอเลขที่ APP-2569-MTBZ8WCX ไม่ผ่านการพิจารณา</span>
+            </span>
+          </div>
+          <div class="note same">
+            <span class="dot">i</span>
+            <span>
+              <span class="t">ต้องแก้ไขเอกสาร</span>
+              <span class="m">เจ้าหน้าที่ขอเอกสารเพิ่ม 2 รายการ</span>
+            </span>
+          </div>
+          <div class="note same">
+            <span class="dot">i</span>
+            <span>
+              <span class="t">ชำระเงินสำเร็จ</span>
+              <span class="m">รับชำระค่าบริการงวดที่ 1 เรียบร้อย</span>
+            </span>
+          </div>
+        </div>
+        <p class="verdict">
+          ทุกใบตกลงที่ <code>default</code> เพราะหน้าจอ <code>switch</code> บน
+          <code>type</code> โดยรอค่า <code>SUCCESS·WARNING·DANGER</code>
+          ซึ่ง<b>หลังบ้านไม่เคยเขียน</b> — มันเขียนชื่อเหตุการณ์อย่าง
+          <code>APPLICATION_REJECTED</code>
+        </p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>ที่เสนอ</h3><span class="stamp next">สามชั้น</span></div>
+        <div class="inbox">
+          <div class="note official">
+            <span class="dot">✦</span>
+            <span>
+              <span class="t">หนังสือแจ้งผลการพิจารณาคำขอ</span>
+              <span class="m">คำขอเลขที่ APP-2569-MTBZ8WCX ไม่ผ่านการพิจารณา</span>
+              <span class="tagline"><span class="tag">หนังสือราชการ</span><span class="tag">เก็บถาวร · ลบไม่ได้</span></span>
+            </span>
+          </div>
+          <div class="note due">
+            <span class="dot">!</span>
+            <span>
+              <span class="t">ต้องแก้ไขเอกสาร</span>
+              <span class="m">เจ้าหน้าที่ขอเอกสารเพิ่ม 2 รายการ</span>
+              <span class="tagline"><span class="tag">ภายใน 19 กันยายน 2569</span></span>
+            </span>
+          </div>
+          <div class="note plain">
+            <span class="dot">·</span>
+            <span>
+              <span class="t">ชำระเงินสำเร็จ</span>
+              <span class="m">รับชำระค่าบริการงวดที่ 1 เรียบร้อย</span>
+              <span class="tagline"><span class="tag">อ่านแล้วเก็บไว้ 30 วัน</span></span>
+            </span>
+          </div>
+        </div>
+        <p class="verdict">
+          ชั้นบนอ่านจาก <code>kind</code> · ชั้นกลางอ่านจาก <code>priority</code> + วันครบกำหนดใน
+          <code>metadata</code> · <b>ทั้งสองฟิลด์ถูกส่งถึงเบราว์เซอร์อยู่แล้ววันนี้</b>
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>ห้าช่องที่พบจากการอ่านโค้ด</h2>
+    <div class="gaps">
+
+      <div class="gap">
+        <span class="gap-n">01</span>
+        <div>
+          <h3>หน้าจอตัดสินหน้าตาจากฟิลด์ที่หลังบ้านไม่เคยเขียน</h3>
+          <pre class="code" style="margin:.5rem 0">type: 'INFO' | 'SUCCESS' | 'WARNING' | 'DANGER'   <b>← หน้าจอรอค่าเหล่านี้</b>
+PAYMENT_PHASE1_SUCCESS · APPLICATION_REJECTED     <b>← หลังบ้านส่งค่าเหล่านี้</b></pre>
+          <p>
+            33 ชนิดเหตุการณ์ตกลงที่ <code>default</code> ทั้งหมด ⇒ สีฟ้า ไอคอน info เหมือนกันหมด
+            และตัวที่ควรใช้ตัดสินก็มีอยู่แล้ว — <code>priority</code> 0-3 เขียนทุกใบ ส่งทุกใบ
+            <strong>และไม่มีใครอ่าน</strong>
+          </p>
+          <p class="src">client-view.tsx:28,125-141 · notification-service.js:277 · system.prisma:21</p>
+        </div>
+      </div>
+
+      <div class="gap">
+        <span class="gap-n">02</span>
+        <div>
+          <h3>หนังสือราชการที่รอดจากคำขอลบข้อมูล ยังหน้าตาเหมือนใบแจ้งทั่วไป</h3>
+          <p>
+            <code>kind = OFFICIAL_LETTER</code> ไม่ใช่ป้ายตกแต่ง หลังบ้านปฏิบัติกับมันเป็นเอกสาร
+            ทางกฎหมายแล้ว: <strong>ยกเว้นจากการลบตามคำขอ PDPA</strong> และ
+            <strong>ยกเว้นจากการกวาดล้างประจำสัปดาห์</strong> — ระบบตัดสินไปแล้วว่าของสิ่งนี้ต่างถึงขั้น
+            ยกเว้นสิทธิลบข้อมูลส่วนบุคคลให้มัน แต่บนหน้าจอผู้รับแยกไม่ออกว่าใบไหนเป็นใบไหน
+          </p>
+          <p class="src">pdpa-erasure-service.js:834 · job-scheduler.js:102 (มติ D-9, 2026-08-03)</p>
+        </div>
+      </div>
+
+      <div class="gap">
+        <span class="gap-n">03</span>
+        <div>
+          <h3>อ่านแล้ว 30 วันหาย และไม่มีที่ไหนบอก</h3>
+          <p>
+            กวาดทุกวันอาทิตย์ตี 2: เก่ากว่า 30 วัน <em>และ</em> อ่านแล้ว <em>และ</em> ไม่ใช่หนังสือราชการ
+            กติกาถูกต้องในตัวมันเอง — ใบที่ยังไม่อ่านไม่เคยถูกลบ จึงไม่มีอะไรหายโดยที่ผู้ใช้ไม่เคยเห็น
+            แต่คนที่กดอ่านแล้วกลับมาหาอีก 31 วันให้หลัง พบว่าหายไปโดยไม่มีคำอธิบาย
+          </p>
+          <p class="src">job-scheduler.js:95-104</p>
+        </div>
+      </div>
+
+      <div class="gap">
+        <span class="gap-n">04</span>
+        <div>
+          <h3>เพดานที่สอง — 50 แถว ขอเก่ากว่านั้นไม่ได้</h3>
+          <p>
+            ประตูใช้ <code>take: 50</code> เรียงใหม่สุดก่อน ไม่มี <code>skip</code> ไม่มี
+            <code>cursor</code> ⇒ ใบที่ 51 เข้าไม่ถึงตลอดกาล ไม่ว่าหน้าจอจะทำอะไร
+          </p>
+          <p class="src">routes/api/system/notifications.js:29-32</p>
+        </div>
+      </div>
+
+      <div class="gap">
+        <span class="gap-n">05</span>
+        <div>
+          <h3>ใบที่มีเส้นตาย ไม่ได้บอกวันที่</h3>
+          <p>
+            ใบขอแก้ไขเอกสารและใบเตือนชำระเงินคือใบที่สำคัญที่สุด เพราะมันเริ่มนับเวลา
+            แต่หน้าจอไม่มีที่ให้แสดงวันครบกำหนด ผู้รับต้องกดเข้าไปอ่านในคำขอเอง
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>สามชั้น ผูกกับของจริง ไม่ใช่การตกแต่ง</h2>
+    <div class="scroll">
+      <table class="grid">
+        <thead><tr><th>ชั้น</th><th>ตัดสินจาก</th><th>ผู้ใช้ทำอะไรได้</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong style="color:var(--accent)">หนังสือราชการ</strong></td>
+            <td><code>kind = OFFICIAL_LETTER</code></td>
+            <td>เปิดอ่านได้ตลอดไป · <strong>ลบไม่ได้</strong> · ดาวน์โหลดได้ · บนใบบอกว่าเก็บถาวร</td>
+          </tr>
+          <tr>
+            <td><strong style="color:var(--due)">ต้องทำ ภายในวันที่ …</strong></td>
+            <td><code>priority ≥ 2</code> + เส้นตายใน <code>metadata</code></td>
+            <td><strong>พิมพ์วันครบกำหนดเป็นวันที่จริง</strong> + ปุ่มไปทำทันที</td>
+          </tr>
+          <tr>
+            <td><strong>แจ้งให้ทราบ</strong></td>
+            <td>ที่เหลือ</td>
+            <td>อ่านแล้วจบ · บนใบบอกว่าเก็บไว้ 30 วันหลังอ่าน</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout" style="margin-top:1.5rem">
+      <h3>ทำไมไม่ใช้ <code>type</code> ตัดสินหน้าตา</h3>
+      <p>
+        33 ค่าและจะเพิ่มอีกเรื่อย ๆ · ผูกสีกับชื่อเหตุการณ์แปลว่าเหตุการณ์ใหม่ทุกตัวต้องไปแก้
+        <code>switch</code> ในหน้าจอ ซึ่งวันนี้พิสูจน์แล้วว่าไม่มีใครแก้
+        <code>priority</code> กับ <code>kind</code> เป็นชุดปิดที่เล็กและไม่โต จึงเป็นสิ่งที่หน้าจอควรอ่าน ·
+        <code>type</code> ยังใช้ต่อ แต่ใช้เลือก<strong>ข้อความและปุ่ม</strong> ไม่ใช่เลือกสี
+      </p>
+    </div>
+
+    <div class="callout" style="margin-top:1.2rem">
+      <h3>การแจ้งเตือนคือป้ายชี้ทาง ไม่ใช่ตัวบันทึก</h3>
+      <p>
+        หนึ่งใบ = หัวเรื่อง + หนึ่งประโยค + หนึ่งปุ่ม รายละเอียดอยู่ที่คำขอ/รอบปลูก/ล็อต
+        เพราะถ้ารายละเอียดอยู่ในตัวการแจ้งเตือน มันจะไม่อัปเดตตามความจริง —
+        ใบที่บอกว่า “ต้องแก้ภายใน 12 ก.ย.” จะยังบอกอย่างนั้นอยู่หลังผู้ใช้แก้เสร็จแล้ว
+      </p>
+    </div>
+
+    <div class="callout" style="margin-top:1.2rem">
+      <h3>หนังสือราชการต้องตอบได้ว่าเปิดอ่านเมื่อไร</h3>
+      <p>
+        มันเริ่มนับเวลา จึงต้องตอบได้ว่าส่งถึงเมื่อไรและเปิดเมื่อไร วันนี้มีแค่
+        <code>isRead</code> ที่บอกว่า<em>อ่านแล้ว</em> แต่ไม่บอกว่า<em>เมื่อไร</em>
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>สิ่งที่ต้องแก้ในโค้ด</h2>
+    <div class="scroll">
+      <table class="grid">
+        <thead><tr><th>#</th><th>สิ่งที่ต้องทำ</th><th>ที่ไหน</th><th>ชั้น</th></tr></thead>
+        <tbody>
+          <tr><td class="tier b">N1</td><td>อ่าน <code>priority</code> แทน <code>switch</code> บน <code>type</code> — ทั้งสองกล่องจดหมาย</td><td>client-view ทั้งสองฝั่ง</td><td class="tier b">B</td></tr>
+          <tr><td class="tier b">N2</td><td>แสดง <code>OFFICIAL_LETTER</code> ให้ต่างจริง + ลบไม่ได้ + บอกว่าเก็บถาวร</td><td>ทั้งสองกล่อง</td><td class="tier b">B</td></tr>
+          <tr><td class="tier b">N3</td><td>บอกกติกา “อ่านแล้ว 30 วันหาย” บนหน้าจอ</td><td>ทั้งสองกล่อง</td><td class="tier b">A</td></tr>
+          <tr><td class="tier b">N4</td><td>ประตูรับ <code>cursor</code> เพื่อขอใบที่เก่ากว่า 50 ใบล่าสุด</td><td><code>system/notifications.js:29</code></td><td class="tier b">B</td></tr>
+          <tr><td class="tier b">N5</td><td>ใบที่มีเส้นตาย พิมพ์วันที่จริง</td><td>ทั้งสองกล่อง + ฝั่งที่สร้าง</td><td class="tier b">B</td></tr>
+          <tr><td class="tier">N6</td><td><code>readAt</code> สำหรับหนังสือราชการ</td><td>schema + <code>notification-service.js:548</code></td><td class="tier">C</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>ที่ยังต้องตัดสิน</h2>
+    <div class="gaps">
+      <div class="gap">
+        <span class="gap-n">?</span>
+        <div>
+          <h3>30 วันพอไหม</h3>
+          <p>มาจากมติ D-9 (3 ส.ค. 2569) · ใบที่ยังไม่อ่านไม่ถูกลบเลย แต่ 30 วันหลังอ่านอาจสั้นไปสำหรับใบที่ต้องอ้างอิงย้อนหลัง</p>
+        </div>
+      </div>
+      <div class="gap">
+        <span class="gap-n">?</span>
+        <div>
+          <h3>หนังสือราชการควรออกเป็น PDF ให้ดาวน์โหลดด้วยไหม</h3>
+          <p>วันนี้เป็นข้อความในระบบอย่างเดียว ถ้าต้องใช้อ้างอิงนอกระบบ — ยื่นหน่วยงานอื่น หรือใช้เป็นพยานหลักฐาน — ข้อความในกล่องจดหมายไม่พอ</p>
+        </div>
+      </div>
+      <div class="gap">
+        <span class="gap-n">?</span>
+        <div>
+          <h3>หน้าตั้งค่าการแจ้งเตือน</h3>
+          <p>หลังบ้านรองรับการปิดรายชนิดแล้ว แต่ยังไม่มีหน้าจอ · จะให้ปิดได้ทุกชนิด หรือบางชนิด เช่นหนังสือราชการ ปิดไม่ได้</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    เอกสารประกอบ · <code>docs/design/2026-09-05-notifications-design.md</code> ·
+    นโยบายช่องทาง <code>docs/operations/notifications-inapp-only.md</code>
+  </footer>
+
+</div>

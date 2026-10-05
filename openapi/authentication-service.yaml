@@ -1,0 +1,680 @@
+﻿openapi: 3.0.3
+info:
+  title: GACP Authentication Service API
+  description: |
+    Authentication and user management service for GACP Platform.
+
+    **Features:**
+    - User registration with Thai ID validation
+    - JWT-based authentication (15-min access, 7-day refresh)
+    - Role-based access control (Applicant, DTAM, ADMIN)
+    - Rate limiting (5 attempts per 15 minutes)
+    - Account lockout after 5 failed attempts
+    - Session management with Redis
+
+    **Security:**
+    - Bcrypt password hashing (cost factor 12)
+    - Thai ID checksum validation (Mod 11 algorithm)
+    - Rate limiting per IP address
+    - Account lockout (30 minutes)
+
+    **Research Base:**
+    - OWASP Authentication Cheat Sheet
+    - NIST Digital Identity Guidelines (SP 800-63B)
+    - JWT Best Practices (RFC 8725)
+  version: 1.0.0
+  contact:
+    name: GACP Platform API Support
+    email: api-support@gacp.platform
+    url: https://docs.gacp.platform
+  license:
+    name: Proprietary
+    url: https://gacp.platform/license
+
+servers:
+  - url: https://api.gacp.platform/v1/auth
+    description: Production server
+  - url: https://staging-api.gacp.platform/v1/auth
+    description: Staging server
+  - url: http://localhost:3001/v1/auth
+    description: Development server
+
+tags:
+  - name: Authentication
+    description: User authentication operations
+  - name: Users
+    description: User management operations
+  - name: Sessions
+    description: Session management operations
+
+paths:
+  /register:
+    post:
+      tags:
+        - Authentication
+      summary: Register new user
+      description: |
+        Register a new user account with Thai ID validation.
+
+        **Validation Rules:**
+        - Email must be unique
+        - Thai ID must be valid (13 digits + Mod 11 checksum)
+        - Password must be 8-128 characters
+        - Phone number must be Thai format (10 digits)
+
+        **Rate Limit:** 5 requests per 15 minutes per IP
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              Applicant:
+                summary: Applicant registration
+                value:
+                  email: Applicant@example.com
+                  password: SecureP@ssw0rd!
+                  fullName: สมชาย ใจดี
+                  thaiId: '1234567890123'
+                  phoneNumber: '0812345678'
+                  role: Applicant
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+              examples:
+                success:
+                  value:
+                    success: true
+                    message: User registered successfully
+                    data:
+                      userId: 6523f9876543210fedcba987
+                      email: Applicant@example.com
+                      fullName: สมชาย ใจดี
+                      role: Applicant
+                      createdAt: '2025-10-16T10:00:00.000Z'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidThaiId:
+                  value:
+                    success: false
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Invalid Thai ID number
+                      field: thaiId
+                weakPassword:
+                  value:
+                    success: false
+                    error:
+                      code: VALIDATION_ERROR
+                      message: Password must contain uppercase, lowercase, number and special character
+                      field: password
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicateEmail:
+                  value:
+                    success: false
+                    error:
+                      code: USER_EXISTS
+                      message: Email already registered
+                      field: email
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                rateLimitExceeded:
+                  value:
+                    success: false
+                    error:
+                      code: RATE_LIMIT_EXCEEDED
+                      message: Too many registration attempts. Please try again in 15 minutes
+                      retryAfter: 900
+
+  /login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: |
+        Authenticate user and issue JWT tokens.
+
+        **Returns:**
+        - Access token (15 minutes expiry)
+        - Refresh token (7 days expiry)
+
+        **Security:**
+        - Rate limited: 5 attempts per 15 minutes
+        - Account lockout: 30 minutes after 5 failed attempts
+        - Failed attempts are logged for security monitoring
+
+        **Rate Limit:** 5 requests per 15 minutes per IP
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              Applicant:
+                summary: Applicant login
+                value:
+                  email: Applicant@example.com
+                  password: SecureP@ssw0rd!
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                success:
+                  value:
+                    success: true
+                    message: Login successful
+                    data:
+                      user:
+                        userId: 6523f9876543210fedcba987
+                        email: Applicant@example.com
+                        fullName: สมชาย ใจดี
+                        role: Applicant
+                      tokens:
+                        accessToken: '<ACCESS_TOKEN>'
+                        refreshToken: '<REFRESH_TOKEN>'
+                        expiresIn: 900
+                        tokenType: Bearer
+        '401':
+          description: Invalid credentials or account locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidCredentials:
+                  value:
+                    success: false
+                    error:
+                      code: INVALID_CREDENTIALS
+                      message: Invalid email or password
+                      attemptsRemaining: 3
+                accountLocked:
+                  value:
+                    success: false
+                    error:
+                      code: ACCOUNT_LOCKED
+                      message: Account locked due to too many failed login attempts
+                      lockedUntil: '2025-10-16T10:30:00.000Z'
+                      lockDuration: 1800
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh access token
+      description: |
+        Exchange refresh token for new access token.
+
+        **Token Lifecycle:**
+        - Access token expires after 15 minutes
+        - Refresh token expires after 7 days
+        - Refresh token can be used multiple times
+        - Old access token is invalidated immediately
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+            examples:
+              refresh:
+                value:
+                  refreshToken: '<REFRESH_TOKEN>'
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshTokenResponse'
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidToken:
+                  value:
+                    success: false
+                    error:
+                      code: INVALID_TOKEN
+                      message: Invalid or expired refresh token
+
+  /logout:
+    post:
+      tags:
+        - Authentication
+      summary: User logout
+      description: |
+        Invalidate current session and tokens.
+
+        **Actions:**
+        - Blacklist current access token
+        - Invalidate refresh token
+        - Remove session from Redis
+        - Log audit event
+      operationId: logoutUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Logout successful
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /me:
+    get:
+      tags:
+        - Users
+      summary: Get current user profile
+      description: Get authenticated user's profile information
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /change-password:
+    post:
+      tags:
+        - Users
+      summary: Change password
+      description: |
+        Change user password.
+
+        **Security:**
+        - Requires current password verification
+        - New password must meet complexity requirements
+        - All sessions except current are invalidated
+        - Password change is logged for audit
+      operationId: changePassword
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Password changed successfully
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT access token obtained from /login endpoint.
+
+        **Format:** Bearer {token}
+
+        **Expiry:** 15 minutes
+
+        **Example:** Bearer `<ACCESS_TOKEN>`
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - fullName
+        - thaiId
+        - phoneNumber
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email (unique)
+          example: Applicant@example.com
+          minLength: 5
+          maxLength: 100
+        password:
+          type: string
+          format: password
+          description: |
+            Password (8-128 characters, must contain uppercase, lowercase, number, special character)
+          example: SecureP@ssw0rd!
+          minLength: 8
+          maxLength: 128
+        fullName:
+          type: string
+          description: User full name (Thai or English)
+          example: สมชาย ใจดี
+          minLength: 2
+          maxLength: 100
+        thaiId:
+          type: string
+          description: Thai national ID (13 digits with Mod 11 validation)
+          example: '1234567890123'
+          pattern: '^\d{13}$'
+        phoneNumber:
+          type: string
+          description: Thai mobile phone number (10 digits)
+          example: '0812345678'
+          pattern: '^0[0-9]{9}$'
+        role:
+          type: string
+          enum: [Applicant, DTAM, ADMIN]
+          description: User role
+          example: Applicant
+
+    RegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: User registered successfully
+        data:
+          type: object
+          properties:
+            userId:
+              type: string
+              example: 6523f9876543210fedcba987
+            email:
+              type: string
+              example: Applicant@example.com
+            fullName:
+              type: string
+              example: สมชาย ใจดี
+            role:
+              type: string
+              example: Applicant
+            createdAt:
+              type: string
+              format: date-time
+              example: '2025-10-16T10:00:00.000Z'
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: Applicant@example.com
+        password:
+          type: string
+          format: password
+          example: SecureP@ssw0rd!
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Login successful
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/UserProfile'
+            tokens:
+              $ref: '#/components/schemas/TokenPair'
+
+    UserProfile:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: 6523f9876543210fedcba987
+        email:
+          type: string
+          example: Applicant@example.com
+        fullName:
+          type: string
+          example: สมชาย ใจดี
+        role:
+          type: string
+          enum: [Applicant, DTAM, ADMIN]
+          example: Applicant
+        phoneNumber:
+          type: string
+          example: '0812345678'
+        isEmailVerified:
+          type: boolean
+          example: true
+        isPhoneVerified:
+          type: boolean
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          example: '2025-10-16T10:00:00.000Z'
+
+    TokenPair:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (15 minutes)
+          example: '<ACCESS_TOKEN>'
+        refreshToken:
+          type: string
+          description: JWT refresh token (7 days)
+          example: '<REFRESH_TOKEN>'
+        expiresIn:
+          type: integer
+          description: Access token expiry in seconds
+          example: 900
+        tokenType:
+          type: string
+          description: Token type
+          example: Bearer
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: Refresh token obtained from login
+          example: '<REFRESH_TOKEN>'
+
+    RefreshTokenResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Token refreshed successfully
+        data:
+          type: object
+          properties:
+            accessToken:
+              type: string
+              example: '<ACCESS_TOKEN>'
+            expiresIn:
+              type: integer
+              example: 900
+            tokenType:
+              type: string
+              example: Bearer
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - currentPassword
+        - newPassword
+      properties:
+        currentPassword:
+          type: string
+          format: password
+          description: Current password
+          example: OldP@ssw0rd!
+        newPassword:
+          type: string
+          format: password
+          description: New password (must meet complexity requirements)
+          example: NewSecureP@ssw0rd!
+          minLength: 8
+          maxLength: 128
+
+    UserProfileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/UserProfile'
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              description: Human-readable error message
+              example: Invalid Thai ID number
+            field:
+              type: string
+              description: Field that caused the error (for validation errors)
+              example: thaiId
+            details:
+              type: object
+              description: Additional error details
+              additionalProperties: true
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingToken:
+              value:
+                success: false
+                error:
+                  code: UNAUTHORIZED
+                  message: Authentication required
+            invalidToken:
+              value:
+                success: false
+                error:
+                  code: INVALID_TOKEN
+                  message: Invalid or expired access token
+            tokenExpired:
+              value:
+                success: false
+                error:
+                  code: TOKEN_EXPIRED
+                  message: Access token has expired. Please refresh your token
+
+  examples:
+    ApplicantRegistration:
+      value:
+        email: Applicant@example.com
+        password: SecureP@ssw0rd!
+        fullName: สมชาย ใจดี
+        thaiId: '1234567890123'
+        phoneNumber: '0812345678'
+        role: Applicant
+
+    DTAMRegistration:
+      value:
+        email: dtam@gacp.platform
+        password: Admin@12345
+        fullName: วิชัย สมบูรณ์
+        thaiId: '9876543210987'
+        phoneNumber: '0821234567'
+        role: DTAM

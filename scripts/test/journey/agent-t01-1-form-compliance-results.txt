@@ -1,0 +1,16 @@
+Agent T01 — กทล.1 Form Compliance Results
+Date: 2026-03-13T14:03:49.512Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Pre-submit validate | status: 200
+PASS | Standards verify | status: 200
+PASS | Categories verify | status: 200
+PASS | Document slots | status: 200
+PASS | Plants | status: 200
+PASS | Methods | status: 200
+PASS | Soil types | status: 200
+PASS | Step 4 docs | status: 200
+PASS | Step 5 docs | status: 200
+PASS | Full config | status: 200
+PASS | Pricing fees | status: 200
+PASS | Health check | status: 200

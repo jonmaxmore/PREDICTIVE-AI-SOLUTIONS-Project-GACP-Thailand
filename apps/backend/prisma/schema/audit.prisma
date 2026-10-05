@@ -1,0 +1,155 @@
+// Domain: Audit & Compliance
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("timestamp")
+
+  // Log ID
+  logId          String @unique
+  // Per-tenant monotonic sequence. The uniqueness is scoped to the tenant via
+  // @@unique([organizationId, sequenceNumber]) below — NOT a global @unique —
+  // so each organization owns an independent hash chain (ADR-014). A global
+  // @unique would force one shared sequence across all tenants and let one
+  // tenant's volume gap-fill another's chain.
+  sequenceNumber Int
+
+  // Event Classification
+  category String // AUTHENTICATION, APPLICATION, PAYMENT, CERTIFICATE, ADMIN, SECURITY, SYSTEM, DATA_ACCESS
+  action   String
+  severity String @default("INFO") // INFO, WARNING, ERROR, CRITICAL
+
+  // Actor (no FK - can be User or Provider or SYSTEM)
+  actorId    String // UUID of actor (User.id or Provider user id)
+  actorType  String  @default("USER") // USER, PROVIDER, SERVICE, SYSTEM
+  actorEmail String?
+  actorRole  String
+
+  // Resource
+  resourceType String // USER, APPLICATION, INVOICE, PAYMENT, CERTIFICATE, DOCUMENT, SYSTEM, FARM
+  resourceId   String
+
+  // Context
+  ipAddress String
+  userAgent String
+
+  // Event Data (JSON)
+  metadata Json?
+
+  // Result
+  result       String  @default("SUCCESS") // SUCCESS, FAILURE
+  errorCode    String?
+  errorMessage String?
+
+  // Hash Chain (Immutable) — note: chain is per-tenant once organizationId is
+  // populated; verification routines must scope by organizationId (ADR-014)
+  previousHash  String
+  currentHash   String @unique
+  hashAlgorithm String @default("SHA-256")
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Per-tenant hash-chain integrity (ADR-014): the sequence is unique WITHIN a
+  // tenant, so getLastHash / verifyChain scope by organizationId and each
+  // tenant's chain is independent + gap-free.
+  @@unique([organizationId, sequenceNumber])
+  @@index([actorId])
+  @@index([resourceType, resourceId])
+  @@index([category, severity])
+  @@index([createdAt(sort: Desc)])
+  @@index([metadata], type: Gin)
+  @@index([organizationId])
+  // DBA F-04 perf indexes (migration 20260515170000) — declared so migrate diff is drift-free.
+  // NOTE: createdAt is @map("timestamp"); Prisma names the index from the field (createdAt).
+  @@index([actorId, createdAt(sort: Desc)], map: "audit_logs_actorId_createdAt_idx")
+  @@index([resourceType, resourceId, createdAt(sort: Desc)], map: "audit_logs_resourceType_resourceId_createdAt_idx")
+  @@map("audit_logs")
+}
+
+// USER CONSENT MODEL (PDPA Compliance)
+
+model PostAuditTask {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  // Task Details
+  description String @db.Text
+  status      String @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, OVERDUE
+
+  // Documents (JSON array: { fileUrl, fileName, uploadedAt, uploadedBy })
+  documents Json?
+
+  // Deadline
+  dueDate     DateTime
+  completedAt DateTime?
+
+  // Assignment
+  assignedTo String?
+  assignedBy String?
+
+  // Audit
+  createdBy String?
+  updatedBy String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([applicationId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([organizationId])
+  @@map("post_audit_tasks")
+}
+
+// Revision Deadline Tracking
+
+model RevisionDeadline {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  applicationId String      @unique
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  // Deadline Info
+  revisionDue   DateTime
+  revisionCount Int      @default(0)
+  status        String   @default("PENDING") // PENDING, SUBMITTED, APPROVED, EXTENDED, FAILED
+
+  // Extension
+  extensionDays       Int?
+  extensionReason     String?   @db.Text
+  extensionApprovedBy String?
+  extensionApprovedAt DateTime?
+
+  // Submission
+  submittedAt DateTime?
+  submittedBy String?
+
+  // Audit
+  createdBy String?
+  updatedBy String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([applicationId])
+  @@index([status])
+  @@index([revisionDue])
+  @@index([organizationId])
+  @@map("revision_deadlines")
+}
+
+// GACP REQUIREMENTS - ADDITIONAL MODELS
+// Models for enhanced GACP compliance
+
+// 1. WATER SOURCE - แหล่งน้ำและระบบกรอง

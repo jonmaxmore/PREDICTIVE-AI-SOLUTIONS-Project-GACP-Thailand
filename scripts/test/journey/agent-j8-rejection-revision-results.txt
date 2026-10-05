@@ -1,0 +1,14 @@
+Agent J8 — Rejection & Revision Results
+Date: 2026-03-16T12:48:02.784Z
+Pass: 10 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Login as health user | Token acquired
+PASS | Get my applications | 1 applications
+PASS | Document slot config | status: 200
+PASS | Pre-submission validation | status: 200
+PASS | Review criteria | status: 200
+PASS | Step 5 requirements | status: 200
+PASS | GACP categories | status: 200
+PASS | GACP standards | status: 200
+PASS | Applications config | status: 200
+PASS | Full cultivation config | status: 200

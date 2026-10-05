@@ -1,0 +1,63 @@
+// กทล.๑ ส่วนสำหรับเจ้าหน้าที่ ข้อ ๑.๑ — one verdict per document line, per round.
+//
+// The platform's review used to be all-or-nothing: an officer accepted a filing
+// or sent it back with a free-text note, so a filing with nine papers and one
+// problem reached the applicant as "แก้ไข" and they had to guess which paper.
+// The ministry's form is a line per document; this table is that line.
+//
+// APPEND-ONLY BY ROUND. A resubmit opens round N+1 and the round-N rows stay
+// exactly as written — they are the record of what was asked, by whom, and by
+// when, which is what an applicant appeals against and an auditor reads.
+model ApplicationDocumentReview {
+  id            String   @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  // Canonical slot id (lower_snake), the same vocabulary the requirement engine
+  // and the uploads use — never a display label.
+  slotId        String   @map("slot_id")
+
+  // ACCEPTED | MORE_REQUESTED — shared/… vocabulary lives in
+  // services/application-document-review-service.js DOCUMENT_REVIEW_VERDICTS,
+  // mirrored by the CHECK constraint in the migration.
+  verdict       String
+
+  // Thai, required when MORE_REQUESTED. An applicant cannot act on a request
+  // that does not say what is wrong.
+  reason        String?
+
+  // Working-day, required when MORE_REQUESTED (utils/working-days.js).
+  dueDate       DateTime? @map("due_date")
+
+  reviewerId    String   @map("reviewer_id")
+
+  // Document pre-check (2026-09-27 design, §8) — the precheck row this
+  // review round was informed by, if any. Optional: prechecks predate a
+  // review round only when the officer's client ran one; a review can also
+  // happen with no precheck at all (feature disabled, or a slot outside the
+  // 7-slot CATALOG scope). SetNull rather than Restrict — the review row is
+  // the durable audit record; losing its precheck must never block deleting
+  // the precheck.
+  precheckId String?           @map("precheck_id")
+  precheck   DocumentPrecheck? @relation(fields: [precheckId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  // Bumps when the applicant resubmits. Part of the uniqueness key so the same
+  // slot can be reviewed again in a later round without overwriting the record.
+  round         Int      @default(1)
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Tenancy (ADR-014)
+  organizationId String  @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([applicationId, slotId, round])
+  @@index([applicationId])
+  @@index([applicationId, round])
+  // Fix round 1 (task-5-review.md Minor 3): a SET NULL on precheck delete
+  // scans this table by precheck_id, and so does any "reviews by precheck"
+  // read (§2 accuracy measurement).
+  @@index([precheckId])
+  @@map("application_document_reviews")
+}

@@ -1,0 +1,46 @@
+// Domain: User × Role Group M2M (ADR-016 Phase 1C)
+//
+// Lets a single user belong to multiple canonical role groups (e.g. one
+// person who reviews documents AND runs field audits). Replaces the
+// implicit "User.role is the only source of truth" model with an
+// additive M2M while keeping User.role as a fallback during transition.
+
+model RoleGroup {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Canonical code from CANONICAL_ROLES (admin, scheduler,
+  // document_reviewer, auditor, account).
+  code String @unique
+
+  titleTH  String
+  titleEN  String
+  isActive Boolean @default(true)
+
+  memberships UserGroupMembership[]
+
+  @@map("role_groups")
+}
+
+model UserGroupMembership {
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId    String
+  group      RoleGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  assignedAt DateTime  @default(now())
+  assignedBy String?
+  isActive   Boolean   @default(true)
+
+  // Mirrored from User.organizationId so RLS observe-only can evaluate
+  // the policy without joining users. Application code keeps it in sync
+  // when a user moves tenants (rare); the user row is source of truth.
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
+  @@index([organizationId, groupId])
+  @@map("user_group_memberships")
+}

@@ -1,0 +1,184 @@
+openapi: 3.0.3
+info:
+  title: GACP Platform - Access Control API
+  version: 2.0.0
+  description: |
+    Access control and authorization endpoints for GACP platform.
+    Backend handles ALL authorization decisions.
+    Part of "One Brain, Many Faces" architecture.
+  contact:
+    name: API Support
+    email: support@gacp-botanical.com
+
+servers:
+  - url: http://localhost:3001
+    description: Local development
+  - url: https://api.gacp-botanical.com
+    description: Production
+
+tags:
+  - name: Access
+    description: Authorization and access control operations
+
+paths:
+  /api/v2/access/check:
+    post:
+      tags:
+        - Access
+      summary: Check access to resource
+      description: Verifies if the authenticated user has access to a specific resource
+      operationId: checkAccess
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessCheckRequest'
+      responses:
+        '200':
+          description: Access check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessCheckResponse'
+        '400':
+          description: Missing resource parameter
+        '401':
+          description: Unauthorized
+        '404':
+          description: Resource not found
+
+  /api/v2/access/verify-PROVIDER:
+    post:
+      tags:
+        - Access
+      summary: Verify provider role
+      description: Verifies if a role is a valid provider role and returns redirect path
+      operationId: verifyPROVIDER
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - role
+              properties:
+                role:
+                  type: string
+                  example: ADMIN
+      responses:
+        '200':
+          description: provider verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyPROVIDERResponse'
+        '400':
+          description: Missing role parameter
+
+  /api/v2/access/roles:
+    get:
+      tags:
+        - Access
+      summary: Get available roles
+      description: Returns list of all available roles in the system
+      operationId: getRoles
+      responses:
+        '200':
+          description: Roles list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolesResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AccessCheckRequest:
+      type: object
+      required:
+        - resource
+      properties:
+        resource:
+          type: string
+          description: Resource identifier to check access for
+          enum:
+            - PROVIDER-login
+            - PROVIDER-dashboard
+            - admin-panel
+            - Applicant-dashboard
+            - application-review
+            - scheduling
+
+    AccessCheckResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            resource:
+              type: string
+            allowed:
+              type: boolean
+            role:
+              type: string
+            redirect:
+              type: string
+              description: Path to redirect user
+            message:
+              type: string
+
+    VerifyPROVIDERResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            isPROVIDER:
+              type: boolean
+              description: Whether the role is a valid provider role
+            isAdmin:
+              type: boolean
+              description: Whether the role is an admin role
+            redirect:
+              type: string
+              description: Recommended redirect path
+              example: /admin
+            message:
+              type: string
+
+    RolesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            PROVIDERRoles:
+              type: array
+              items:
+                type: string
+              example: [REVIEWER_AUDITOR, SCHEDULER, ADMIN, SUPER_ADMIN]
+            adminRoles:
+              type: array
+              items:
+                type: string
+              example: [ADMIN, SUPER_ADMIN]
+            allRoles:
+              type: array
+              items:
+                type: string
+              example: [Applicant, REVIEWER_AUDITOR, SCHEDULER, ADMIN, SUPER_ADMIN]

@@ -1,0 +1,137 @@
+{
+ "A POST /quotes/:id/accept": {
+  "status": 200,
+  "code": null
+ },
+ "A POST /quotes/:id/reject": {
+  "status": 200,
+  "code": null
+ },
+ "A GET /applications/:id/quotations (lapsed)": {
+  "status": 200,
+  "code": null
+ },
+ "A POST /applications/bundles/:id/submit": {
+  "status": 422,
+  "code": "APPLICATION_INCOMPLETE"
+ },
+ "A PUT /applications/:id/revision": {
+  "status": 200,
+  "code": null
+ },
+ "A PUT /revision-deadline/:id/submit": {
+  "status": 200,
+  "code": null
+ },
+ "A POST /applications/:id/car": {
+  "status": 200,
+  "code": null
+ },
+ "A POST /planting-cycles/:id/activities": {
+  "status": 201,
+  "code": null
+ },
+ "B POST /quotes/:id/accept": {
+  "status": 403,
+  "code": null
+ },
+ "B POST /quotes/:id/reject": {
+  "status": 403,
+  "code": null
+ },
+ "B GET /applications/:id/quotations (lapsed)": {
+  "status": 404,
+  "code": null
+ },
+ "B POST /applications/bundles/:id/submit": {
+  "status": 404,
+  "code": null
+ },
+ "B PUT /applications/:id/revision": {
+  "status": 404,
+  "code": null
+ },
+ "B PUT /revision-deadline/:id/submit": {
+  "status": 404,
+  "code": null
+ },
+ "B POST /applications/:id/car": {
+  "status": 404,
+  "code": null
+ },
+ "B POST /planting-cycles/:id/activities": {
+  "status": 201,
+  "code": null
+ },
+ "S POST /quotes/:id/accept": {
+  "status": 403,
+  "code": null
+ },
+ "S POST /quotes/:id/reject": {
+  "status": 403,
+  "code": null
+ },
+ "S GET /applications/:id/quotations (lapsed)": {
+  "status": 404,
+  "code": null
+ },
+ "S POST /applications/bundles/:id/submit": {
+  "status": 404,
+  "code": null
+ },
+ "S PUT /applications/:id/revision": {
+  "status": 404,
+  "code": null
+ },
+ "S PUT /revision-deadline/:id/submit": {
+  "status": 404,
+  "code": null
+ },
+ "S POST /applications/:id/car": {
+  "status": 404,
+  "code": null
+ },
+ "S POST /planting-cycles/:id/activities": {
+  "status": 404,
+  "code": null
+ },
+ "A rows": {
+  "acceptQuote": "invoiced",
+  "rejectQuote": "rejected",
+  "lapsedLiveQuotations": [
+   "PENDING reissued"
+  ],
+  "bundle": "DRAFT",
+  "bundleApp": "DRAFT",
+  "revApp": "ASSIGNED_FOR_REVIEW",
+  "rdApp": "REVISION_REQUESTED",
+  "carApp": "CAR_REVIEWING"
+ },
+ "B rows": {
+  "acceptQuote": "sent",
+  "rejectQuote": "sent",
+  "lapsedLiveQuotations": [
+   "PENDING"
+  ],
+  "bundle": "DRAFT",
+  "bundleApp": "DRAFT",
+  "revApp": "REVISION_REQUESTED",
+  "rdApp": "REVISION_REQUESTED",
+  "carApp": "CAR_PENDING"
+ },
+ "S rows": {
+  "acceptQuote": "sent",
+  "rejectQuote": "sent",
+  "lapsedLiveQuotations": [
+   "PENDING"
+  ],
+  "bundle": "DRAFT",
+  "bundleApp": "DRAFT",
+  "revApp": "REVISION_REQUESTED",
+  "rdApp": "REVISION_REQUESTED",
+  "carApp": "CAR_PENDING"
+ },
+ "cycle logs": {
+  "count": 3
+ }
+}

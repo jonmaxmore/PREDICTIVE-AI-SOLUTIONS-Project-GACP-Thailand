@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{DOC_TYPE_TH}} — {{DOC_NUMBER}}</title>
+  <!--
+    Invoice / Billing Note (ใบวางบิล/ใบแจ้งหนี้) — B22-B redesign
+    (2026-05-16). Accent: FOREST GREEN (#15803D).
+
+    B22-B trade-dress fix: the previous (B21-B) FlowAccount-clone visual
+    identity has been replaced with an original typographic-chip pattern
+    (Direction 3). Removed elements (trade-dress risk):
+      - Diagonal colored corner triangle (`.corner-accent`)
+      - Centered logo inside the signature block
+
+    Replacement identity:
+      - Document type rendered as a rounded chip inline with the Thai
+        title (`.doc-type-chip`).
+      - Page number stays plain text in the top-right (no shape).
+      - Signature block uses a clean divider rule between the two signers.
+      - New palette tuned for medicinal-plant + Thai-authority context.
+
+    Visual contract preserved across all 7 finance templates:
+      - Issuer block top-left (logo + legal name + tax ID + address)
+      - Document title with type chip
+      - Meta box top-right (เลขที่ / วันที่ / ครบกำหนด)
+      - Customer block under header
+      - Items table with accent-bordered header row
+      - Totals table on the right, grand total in accent color
+      - Amount-in-words italic line
+      - Signature row at the bottom
+      - "ต้นฉบับ / ORIGINAL" subtitle next to the title
+
+    Single Issuer Compliance (Batch 17): {{ISSUER_NAME_TH}}, {{ISSUER_TAX_ID}},
+    {{ISSUER_ADDRESS}}, {{TOTALS_ROWS_HTML}}, {{PAYMENT_INFO_HTML}} ALL come
+    from `config/invoice-issuers.js` via `resolveIssuerForTemplate` — never
+    hardcoded. Per ม.86 ป.รัษฎากร (one document = one seller) DTAM and
+    PLATFORM lines are NEVER combined on a single invoice.
+
+    Thai-numeral display variants (Batch 16-D): the visible body retains
+    Arabic numerals on body totals for B2B compatibility; only the
+    legal-text {{TOTAL_AMOUNT_TEXT}} field is Thai script per
+    ม.86/4 (5) ป.รัษฎากร.
+  -->
+  <style>
+    /* Sarabun is embedded locally, not imported.
+       The vendored woff2 faces in assets/fonts/sarabun are base64-inlined as
+       data: URIs and injected into <head> by pdf-generator.service.js, so this
+       template needs no font URL. The @import that used to pull Sarabun from a
+       foreign font CDN on every render was removed 2026-07-25 so the render has
+       no remote font dependency; the renderer now allows only data: + about:blank, so any
+       remote @import re-added here would be aborted and silently fall back. */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Accent — Invoice/Billing Note = FOREST GREEN (B22-B palette). */
+      --accent: #15803D;
+      --accent-strong: #166534;
+      --accent-bg: #F0FDF4;
+      --accent-border: #BBF7D0;
+
+      /* Neutrals — shared across all 7 templates. */
+      --text-primary: #111827;
+      --text-secondary: #4B5563;
+      --text-muted: #9CA3AF;
+      --text-soft: #6B7280;
+      --border: #E5E7EB;
+      --border-strong: #D1D5DB;
+      --surface-alt: #F9FAFB;
+    }
+
+    body {
+      font-family: 'Sarabun', 'Noto Sans Thai', Tahoma, sans-serif;
+      font-size: 13px;
+      color: var(--text-primary);
+      background: #fff;
+      padding: 20mm 18mm;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      position: relative;
+    }
+
+    /*
+      ── Page indicator (top-right, plain text — B22-B) ──
+      Replaces the previous diagonal corner triangle. No coloured shape,
+      no clip-path. Pure typography to avoid trade-dress conflict.
+    */
+    .page-indicator {
+      position: absolute;
+      top: 12mm;
+      right: 12mm;
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--text-soft);
+      letter-spacing: 0.3px;
+    }
+    .page-indicator strong {
+      color: var(--accent-strong);
+      font-weight: 700;
+    }
+
+    /* ── Issuer header (top-left) ── */
+    .issuer-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .issuer-logo {
+      width: 56px;
+      height: 56px;
+      flex-shrink: 0;
+      object-fit: contain;
+    }
+
+    .issuer-text h1 {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-primary);
+      line-height: 1.4;
+      margin-bottom: 2px;
+    }
+
+    .issuer-text p {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+
+    .issuer-text p.tax-id {
+      color: var(--text-soft);
+      font-weight: 500;
+    }
+
+    /* ── Title + meta row ── */
+    .title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 18px;
+    }
+
+    /*
+      B22-B doc title pattern — inline chip + subtitle next to the Thai
+      title. The chip is a rounded pill in the accent colour family.
+    */
+    .doc-title-row {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .doc-title-block .doc-title {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1.15;
+    }
+    .doc-type-chip {
+      display: inline-block;
+      padding: 4px 12px;
+      background: var(--accent-bg);
+      color: var(--accent-strong);
+      border: 1px solid var(--accent-border);
+      border-radius: 14px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .doc-title-block .doc-subtitle {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+
+    .meta-box {
+      border: 1px solid var(--accent-border);
+      background: var(--accent-bg);
+      border-radius: 6px;
+      padding: 10px 14px;
+      min-width: 230px;
+      font-size: 12px;
+    }
+
+    .meta-box .meta-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      line-height: 1.5;
+    }
+
+    .meta-box .meta-row + .meta-row {
+      border-top: 1px dashed var(--accent-border);
+    }
+
+    .meta-box .label {
+      color: var(--accent-strong);
+      font-weight: 500;
+    }
+
+    .meta-box .value {
+      color: var(--text-primary);
+      font-weight: 600;
+      text-align: right;
+    }
+
+    /* ── Customer block ── */
+    .customer-block {
+      margin-bottom: 16px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-alt);
+    }
+
+    .customer-block .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-strong);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .customer-block .customer-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 20px;
+    }
+
+    .customer-block .field span.lbl {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    .customer-block .field span.val {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .customer-block .field.full { grid-column: 1 / -1; }
+
+    /* ── Items table ── */
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 12.5px;
+    }
+
+    .items-table thead th {
+      background: var(--surface-alt);
+      border-bottom: 2px solid var(--accent);
+      padding: 10px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-align: left;
+      letter-spacing: 0.3px;
+    }
+
+    .items-table thead th.r { text-align: right; }
+
+    .items-table tbody td {
+      padding: 12px 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .items-table tbody td.r { text-align: right; white-space: nowrap; }
+
+    .items-table .col-num { width: 38px; }
+    .items-table .col-qty { width: 80px; }
+    .items-table .col-unit { width: 110px; }
+    .items-table .col-total { width: 120px; }
+
+    /* ── Totals table ── */
+    .totals-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      margin: 14px 0;
+    }
+
+    .totals-table {
+      min-width: 280px;
+      font-size: 13px;
+      border-collapse: collapse;
+    }
+
+    /*
+      O4 (staging walk 2026-09-30): the amount cell keeps 8px on its right, the
+      same inset as the items table's Total column above it. With 0 the text
+      box ended exactly on the printable edge (print body has no padding) and
+      the last glyph of "บาท" was clipped. Pinned by
+      __tests__/unit/finance-paper-text-inside-print-margin.test.js.
+    */
+    .totals-table td {
+      padding: 5px 8px 5px 12px;
+    }
+
+    .totals-table tr td:first-child {
+      color: var(--text-secondary);
+      padding-right: 28px;
+    }
+
+    .totals-table tr td:last-child {
+      text-align: right;
+      white-space: nowrap;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .totals-table tr.grand td {
+      border-top: 2px solid var(--accent);
+      font-weight: 700;
+      color: var(--accent);
+      font-size: 15px;
+      padding-top: 10px;
+    }
+
+    /* ── Amount in words ── */
+    .amount-in-words {
+      margin: 12px 0 18px;
+      padding: 8px 12px;
+      font-style: italic;
+      color: var(--text-secondary);
+      font-size: 12px;
+      background: var(--surface-alt);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 4px 4px 0;
+    }
+
+    .amount-in-words strong { color: var(--text-primary); font-style: normal; }
+
+    /* ── Notes / payment ── */
+    .notes-block {
+      margin-bottom: 16px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .notes-block .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-strong);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .notes-block .pay-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .pay-field .lbl { color: var(--text-soft); font-size: 11px; }
+    .pay-field div { line-height: 1.55; }
+
+    .payment-note-small { font-size: 10.5px; color: var(--text-soft); margin-top: 4px; }
+
+    .payment-remark {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+    }
+
+    /*
+      ── Signature row (B22-B) ──
+      No centered logo, no decorative middle element. Pure whitespace
+      gap between the two signer columns, optionally separated by a thin
+      vertical rule for visual rhythm.
+    */
+    .signature-block {
+      display: flex;
+      justify-content: space-between;
+      align-items: stretch;
+      gap: 60px;
+      margin-top: 40px;
+    }
+
+    .signature-block .signer {
+      flex: 1;
+      text-align: center;
+      max-width: 240px;
+    }
+
+    .signature-block .signer .line {
+      border-top: 1px solid var(--text-primary);
+      margin-bottom: 6px;
+      padding-top: 36px;
+    }
+
+    .signature-block .signer .role {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .signature-block .signer .name {
+      font-size: 11px;
+      color: var(--text-soft);
+      margin-top: 2px;
+    }
+
+    /* ── Footer ── */
+    .doc-footer {
+      margin-top: 20px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 10.5px;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.55;
+    }
+
+    /*
+      Print = the PDF. renderTemplateToPdf (invoice-template-service.js) already
+      gives every page a 10mm margin, so the body adds no padding of its own
+      here. The old 14mm on top of it left a one-line document 1-2 lines too
+      tall for A4 and pushed the footer alone onto a second page, under a
+      "หน้า 1 / 1" (staging walk 2026-09-29, P2). Pinned by
+      __tests__/unit/invoice-documents-fit-one-page.test.js.
+    */
+    @media print {
+      body { padding: 0; }
+      /* 8px, not 0: "/ 1" sat on the printable edge too (O4). */
+      .page-indicator { top: 0; right: 8px; }
+      .signature-block { margin-top: 24px; }
+      .signature-block .signer .line { padding-top: 28px; }
+      .doc-footer { margin-top: 14px; }
+      .meta-box .meta-row { gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Page indicator (B22-B, plain text — no decorative shape) -->
+  <div class="page-indicator">หน้า <strong>1</strong> / 1</div>
+
+  <!--
+    Issuer header — Single Issuer Compliance Fix (Batch 17, 2026-05-16).
+    {{ISSUER_NAME_TH}} / {{ISSUER_TAX_ID}} / {{ISSUER_ADDRESS}} resolved by
+    `resolveIssuerForTemplate` in `invoice-template-service.js` from the
+    canonical `config/invoice-issuers.js`. STATE invoices declare DTAM;
+    PLATFORM invoices declare Predictive AI Solution Co., Ltd.
+  -->
+  <div class="issuer-header">
+    <img src="{{ISSUER_LOGO_DATA_URL}}" class="issuer-logo" alt="โลโก้ผู้ออกเอกสาร" />
+    <div class="issuer-text">
+      <h1>{{ISSUER_NAME_TH}}</h1>
+      <p class="tax-id">เลขประจำตัวผู้เสียภาษีอากร / Tax ID: {{ISSUER_TAX_ID}}</p>
+      <p>{{ISSUER_ADDRESS}}</p>
+      <p>{{COMPANY_CONTACT_LINE}}</p>
+    </div>
+  </div>
+
+  <!--
+    Title + meta — B22-B typographic chip pattern. The English type
+    name is rendered as a rounded chip inline with the Thai title; the
+    "ORIGINAL" subtitle sits next to the chip. No coloured shapes on the
+    page edges, no centred logo in the signature row.
+  -->
+  <div class="title-row">
+    <div class="doc-title-block">
+      <div class="doc-title-row">
+        <h1 class="doc-title">{{DOC_TYPE_TH}}</h1>
+        <span class="doc-type-chip">{{DOC_TYPE_EN}}</span>
+        <span class="doc-subtitle">ต้นฉบับ / ORIGINAL</span>
+      </div>
+    </div>
+    <div class="meta-box">
+      <div class="meta-row"><span class="label">เลขที่ / No.</span><span class="value">{{DOC_NUMBER}}</span></div>
+      <div class="meta-row"><span class="label">วันที่ออก / Date</span><span class="value">{{ISSUE_DATE}}</span></div>
+      <div class="meta-row"><span class="label">ครบกำหนด / Due</span><span class="value">{{DUE_DATE}}</span></div>
+      <div class="meta-row"><span class="label">คำขอ / Application</span><span class="value">{{APPLICATION_NUMBER}}</span></div>
+    </div>
+  </div>
+
+  <!-- Customer / payer -->
+  <div class="customer-block">
+    <div class="section-label">ลูกค้า / Billed To</div>
+    <div class="customer-grid">
+      <div class="field">
+        <span class="lbl">{{PAYER_NAME_LABEL}}</span><br>
+        <span class="val">{{PAYER_NAME}}</span>
+      </div>
+      <div class="field">
+        <span class="lbl">{{PAYER_ID_LABEL}}</span><br>
+        <span class="val">{{PAYER_ID}}</span>
+      </div>
+      <div class="field full">
+        <span class="lbl">ที่อยู่ / Address</span><br>
+        <span class="val">{{PAYER_ADDRESS}}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Items table -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th class="col-num">#</th>
+        <th>รายการ / Description</th>
+        <th class="r col-qty">จำนวน<br>Qty</th>
+        <th class="r col-unit">ราคา/หน่วย<br>Unit Price</th>
+        <th class="r col-total">มูลค่า<br>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{ITEMS_ROWS}}
+    </tbody>
+  </table>
+
+  <!--
+    Totals — Single Issuer Compliance Fix (Batch 17). DTAM (state) invoices
+    show only ยอดรวม + รวมทั้งสิ้น (no VAT row — government revenue is
+    VAT-exempt per ม.77/1 (10) ป.รัษฎากร). PLATFORM invoices show
+    ยอดรวม + VAT + รวมทั้งสิ้น. The {{TOTALS_ROWS_HTML}} payload is built
+    by `invoice-template-service` per issuer side.
+  -->
+  <div class="totals-wrapper">
+    <table class="totals-table">
+      <tbody>
+        {{TOTALS_ROWS_HTML}}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Amount in words — ม.86/4 (5) ป.รัษฎากร (legal requirement) -->
+  <div class="amount-in-words">
+    <strong>จำนวนเงิน (ตัวอักษร): </strong>{{TOTAL_AMOUNT_TEXT}}
+  </div>
+
+  <!--
+    Payment info — Single Issuer Compliance Fix (Batch 17). Bank channel
+    pulled from `config/invoice-issuers.js` so destination always matches
+    the issuer in the header (never DTAM's account on a PLATFORM invoice
+    and vice versa) per ม.86 ป.รัษฎากร — one document, one receiver.
+  -->
+  <div class="notes-block">
+    <div class="section-label">หมายเหตุ / วิธีชำระเงิน</div>
+    {{PAYMENT_INFO_HTML}}
+    <div class="payment-remark">
+      กรุณาชำระเงินภายใน {{INVOICE_DUE_DAYS}} วัน หลังได้รับใบวางบิล/ใบแจ้งหนี้นี้
+    </div>
+  </div>
+
+  <!-- Signature row — two columns (ผู้ขาย / ผู้รับ) -->
+  <div class="signature-block">
+    <div class="signer">
+      <div class="line"></div>
+      <div class="role">ผู้ขาย / Seller</div>
+      <div class="name">{{ISSUER_NAME_TH}}</div>
+      <div class="name">วันที่ ......./......./.......</div>
+    </div>
+    <div class="signer">
+      <div class="line"></div>
+      <div class="role">ผู้รับ / Receiver</div>
+      <div class="name">{{PAYER_NAME}}</div>
+      <div class="name">วันที่ ......./......./.......</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="doc-footer">
+    เอกสารนี้ออกโดยระบบ GACP Online · กรุณาชำระภายใน {{DUE_DATE}} · เอกสารเลขที่ {{DOC_NUMBER}} ออก ณ วันที่ {{ISSUE_DATE}}
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "เชียงใหม่": {
+    "region": "north",
+    "avgTemp": 25,
+    "avgRainfall": 1200,
+    "cannabisSuitability": 85,
+    "tips": ["เหมาะปลูกกัญชา", "ระวังหน้าฝน"]
+  },
+  "กรุงเทพ": {
+    "region": "central",
+    "avgTemp": 30,
+    "avgRainfall": 1500,
+    "cannabisSuitability": 60,
+    "tips": ["ร้อนเกินไป", "ปลูกในโรงเรือน"]
+  },
+  "ภูเก็ต": {
+    "region": "south",
+    "avgTemp": 28,
+    "avgRainfall": 2400,
+    "cannabisSuitability": 70,
+    "tips": ["ฝนตกมาก", "ระบายน้ำดี"]
+  }
+}

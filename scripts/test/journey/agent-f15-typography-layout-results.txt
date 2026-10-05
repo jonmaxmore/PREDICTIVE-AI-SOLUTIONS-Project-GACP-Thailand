@@ -1,0 +1,16 @@
+Agent F15 — Typography & Layout Results
+Date: 2026-03-13T13:17:01.702Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Home layout | HTTP 200
+PASS | Login layout | HTTP 200
+PASS | Register layout | HTTP 200
+PASS | Health dashboard | HTTP 200
+PASS | Applications layout | HTTP 200
+PASS | Wizard layout | HTTP 200
+PASS | Provider dashboard | HTTP 200
+PASS | Audits layout | HTTP 200
+PASS | Analytics layout | HTTP 200
+PASS | Settings layout | HTTP 200
+PASS | Trace layout | HTTP 200
+PASS | Profile layout | HTTP 200

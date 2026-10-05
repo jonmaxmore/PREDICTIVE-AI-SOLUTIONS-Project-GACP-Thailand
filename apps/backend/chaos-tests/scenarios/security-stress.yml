@@ -1,0 +1,64 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 20
+      name: "Security Stress"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  # SQL Injection Attempts
+  - name: "SQL Injection Test"
+    weight: 25
+    flow:
+      - post:
+          url: "/api/auth/health/login"
+          json:
+            identifier: "' OR '1'='1"
+            password: "' OR '1'='1"
+          expect:
+            - statusCode: [400, 401, 429]
+            - hasProperty: "body.success"
+
+  # NoSQL Injection Attempts
+  - name: "NoSQL Injection Test"
+    weight: 25
+    flow:
+      - post:
+          url: "/api/auth/health/check-identifier"
+          json:
+            identifier: '{"$gt": ""}'
+          expect:
+            - statusCode: [400, 401, 429]
+
+  # XSS Attempts
+  - name: "XSS Prevention Test"
+    weight: 25
+    flow:
+      - post:
+          url: "/api/auth/health/register"
+          json:
+            identifier: "<script>alert('xss')</script>"
+            password: "test123"
+            firstName: "<img onerror=alert(1) src=x>"
+          expect:
+            - statusCode: [400, 401, 429]
+
+  # Token Bypass Attempts
+  - name: "Token Bypass Test"
+    weight: 25
+    flow:
+      - get:
+          url: "/api/v2/applications"
+          headers:
+            Authorization: "Bearer fake-token-12345"
+          expect:
+            - statusCode: [401, 403]
+      - get:
+          url: "/api/v2/payments"
+          headers:
+            Authorization: "Bearer expired.token.here"
+          expect:
+            - statusCode: [401, 403]

@@ -1,0 +1,196 @@
+# ============================================================
+# GACP Platform - Local Production-Like Deployment
+# ============================================================
+# Usage:
+#   docker-compose -f docker-compose.local-prod.yml up -d
+#
+# Features:
+#   - Nginx with self-signed SSL (HTTPS)
+#   - PostgreSQL + Redis (persistent volumes)
+#   - Backend + Frontend (production builds)
+#   - Mobile API support (Android/iOS compatible)
+#   - Matches production architecture exactly
+# ============================================================
+
+services:
+  # ------------------------------------------------------------
+  # 1. NGINX GATEWAY (Production-like SSL)
+  # ------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: gacp-nginx-local
+    restart: always
+    ports:
+      - "80:80"     # HTTP (redirects to HTTPS)
+      - "443:443"   # HTTPS (self-signed)
+      - "8080:8080" # Health check endpoint (local only)
+    volumes:
+      - ./nginx/nginx.local.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl/local:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - gacp-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ------------------------------------------------------------
+  # 2. BACKEND API (Production build)
+  # ------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: gacp-backend-local
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=8000
+      - DATABASE_URL=postgresql://${APP_DB_USER:-${DB_USER:-gacp}}:${APP_DB_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD is required}}@postgres:5432/${DB_NAME:-gacp_db}?schema=public
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - DTAM_JWT_SECRET=${DTAM_JWT_SECRET:?DTAM_JWT_SECRET is required}
+      - HMAC_KEY=${HMAC_KEY:?HMAC_KEY is required}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:?MASTER_ENCRYPTION_KEY is required}
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-12}
+      # Keep COOKIE_DOMAIN unset for localhost rehearsal so cookies remain host-only.
+      - CORS_ORIGIN=https://localhost,https://192.168.1.*,https://10.0.2.*,capacitor://localhost,http://localhost,http://localhost:8080
+      - FRONTEND_URL=http://localhost:8080
+      # Mobile support
+      - MOBILE_API_ENABLED=true
+      - ALLOW_EMULATOR_TRAFFIC=true
+      # Rehearsal only: keep false by default; enable temporarily for regression scripts that use /api/e2e/*
+      - ENABLE_E2E_ROUTES=${ENABLE_E2E_ROUTES:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - gacp-network
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+  # ------------------------------------------------------------
+  # 3. FRONTEND (Next.js Production Build)
+  # ------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/web-app/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://localhost/api
+        - NEXT_PUBLIC_MOBILE_APP_URL=https://localhost/mobile
+        # Build identity (design-reproducibility/01-build-identity): read back by
+        # GET /api/webapp-version (build-info.ts). Unset defaults to "" — same as
+        # the Dockerfile's own ARG default — so an unstamped local build honestly
+        # reports "unknown build" instead of a stale/wrong commit. Export both
+        # before building to stamp it: GIT_SHA=$(git rev-parse HEAD)
+        # BUILT_AT=$(date -u +%FT%TZ).
+        - GIT_SHA=${GIT_SHA:-}
+        - BUILT_AT=${BUILT_AT:-}
+    container_name: gacp-frontend-local
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=https://localhost/api
+      - INTERNAL_API_URL=http://backend:8000
+      # PWA / Mobile support
+      - NEXT_PUBLIC_PWA_ENABLED=true
+      - NEXT_PUBLIC_MOBILE_DEEP_LINK=gacp://
+    depends_on:
+      - backend
+    networks:
+      - gacp-network
+    expose:
+      - "3000"
+
+  # ------------------------------------------------------------
+  # 4. DATABASE (PostgreSQL 15 - Production version)
+  # ------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: gacp-postgres-local
+    restart: always
+    environment:
+      - POSTGRES_USER=${DB_USER:-gacp}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
+      - POSTGRES_DB=${DB_NAME:-gacp_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./apps/backend/prisma/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - gacp-network
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-gacp} -d ${DB_NAME:-gacp_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # 5. CACHE (Redis 7 - Production version)
+  # ------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: gacp-redis-local
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - gacp-network
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # 6. CERTIFICATE GENERATOR (Local SSL setup)
+  # ------------------------------------------------------------
+  cert-gen:
+    image: alpine/openssl
+    container_name: gacp-cert-gen
+    volumes:
+      - ./nginx/ssl/local:/certs
+    command: >
+      sh -c "
+        mkdir -p /certs &&
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048
+        -keyout /certs/localhost.key
+        -out /certs/localhost.crt
+        -subj '/CN=localhost/O=GACP Local/C=TH'
+        -addext 'subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1,IP:192.168.1.0/24'
+        2>/dev/null || true
+      "
+    profiles:
+      - setup
+
+networks:
+  gacp-network:
+    driver: bridge
+    name: gacp-network
+
+volumes:
+  postgres_data:
+    name: gacp-postgres-data-local
+  redis_data:
+    name: gacp-redis-data-local

@@ -1,0 +1,646 @@
+openapi: 3.0.3
+info:
+  title: GACP Payment Service API
+  description: |
+    GACP payment processing service with PromptPay and Omise integration.
+
+    **Features:**
+    - PromptPay QR code generation (Thai National Standard)
+    - Omise credit card payment (3D Secure)
+    - Thai tax invoice/receipt generation (VAT 7%)
+    - Refund processing
+    - Payment webhook handling
+
+    **Payment Methods:**
+    1. PromptPay QR (Bank of Thailand v2.1)
+    2. Credit/Debit Card (Omise + 3D Secure)
+
+    **Payment Phases:**
+    - Phase 1: ฿5,000 (Application fee)
+    - Phase 2: ฿25,000 (Inspection fee)
+
+    **Research Base:**
+    - Bank of Thailand PromptPay v2.1 Standard
+    - PCI DSS Level 1 compliance (Omise)
+    - Thai Revenue Department tax regulations
+    - ISO 4217 currency codes (THB)
+  version: 1.0.0
+  contact:
+    name: GACP Platform API Support
+    email: api-support@gacp.platform
+
+servers:
+  - url: https://api.gacp.platform/v1/payments
+    description: Production server
+  - url: https://staging-api.gacp.platform/v1/payments
+    description: Staging server
+  - url: http://localhost:3003/v1/payments
+    description: Development server
+
+tags:
+  - name: Invoices
+    description: Invoice management
+  - name: PromptPay
+    description: PromptPay QR code generation
+  - name: Credit Card
+    description: Omise credit card payment
+  - name: Webhooks
+    description: Payment webhook handling
+
+paths:
+  /invoices:
+    post:
+      tags:
+        - Invoices
+      summary: Create invoice
+      description: |
+        Create payment invoice for application.
+
+        **Invoice Types:**
+        - PHASE1_FEE: ฿5,000 (Application processing)
+        - PHASE2_FEE: ฿25,000 (Inspection)
+
+        **VAT:** 7% included in price
+
+        **Payment Methods Available:**
+        - PromptPay QR code
+        - Credit/Debit card
+
+        **Authorization:** Application owner or DTAM
+      operationId: createInvoice
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceRequest'
+      responses:
+        '201':
+          description: Invoice created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          description: Invoice already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /invoices/{invoiceId}:
+    get:
+      tags:
+        - Invoices
+      summary: Get invoice
+      description: |
+        Get invoice details with payment status.
+
+        **Authorization:** Invoice owner or DTAM/ADMIN
+      operationId: getInvoice
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invoice retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceDetailResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /invoices/{invoiceId}/promptpay:
+    post:
+      tags:
+        - PromptPay
+      summary: Generate PromptPay QR code
+      description: |
+        Generate PromptPay QR code for invoice payment.
+
+        **QR Code Specs:**
+        - Format: EMVCo QR Code (Bank of Thailand v2.1)
+        - Valid for: 15 minutes
+        - Payment Timeout: 7 days
+        - Country Code: TH (Thailand)
+        - Currency: 764 (THB)
+
+        **QR Data Structure:**
+        - Payload Format Indicator: 01
+        - Point of Initiation: 12 (static/dynamic)
+        - Merchant Account: PromptPay ID
+        - Merchant Category: 0000 (general)
+        - Transaction Currency: 764 (THB)
+        - Transaction Amount: Invoice amount
+        - Country Code: TH
+        - CRC: Auto-calculated checksum
+
+        **Authorization:** Invoice owner only
+      operationId: generatePromptPayQR
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: PromptPay QR generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptPayQRResponse'
+        '400':
+          description: Invoice already paid or expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /invoices/{invoiceId}/creditcard:
+    post:
+      tags:
+        - Credit Card
+      summary: Pay with credit card
+      description: |
+        Process credit card payment via Omise.
+
+        **Flow:**
+        1. Client tokenizes card with Omise.js (PCI compliant)
+        2. Client sends token to this endpoint
+        3. Server creates charge with Omise API
+        4. 3D Secure authentication if required
+        5. Charge confirmed or failed
+
+        **Security:**
+        - PCI DSS Level 1 compliant (via Omise)
+        - 3D Secure 2.0 for fraud prevention
+        - Card data never touches our server
+        - Token-based payment flow
+
+        **Authorization:** Invoice owner only
+      operationId: payWithCreditCard
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditCardPaymentRequest'
+      responses:
+        '200':
+          description: Payment processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          description: Invalid token or payment failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '402':
+          description: Payment required (3D Secure authentication needed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreeDSecureResponse'
+
+  /invoices/{invoiceId}/receipt:
+    get:
+      tags:
+        - Invoices
+      summary: Download tax receipt
+      description: |
+        Download official Thai tax receipt/invoice.
+
+        **Receipt Format:**
+        - PDF format (A4 size)
+        - Thai language
+        - VAT included (7%)
+        - Buddhist Era dates
+        - QR code for verification
+        - Digital signature
+
+        **Legal Compliance:**
+        - Thai Revenue Department standards
+        - 7-year retention requirement
+        - Unique receipt number
+
+        **Authorization:** Invoice owner or DTAM/ADMIN
+      operationId: downloadReceipt
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Receipt PDF returned
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invoice not paid yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /webhooks/omise:
+    post:
+      tags:
+        - Webhooks
+      summary: Omise webhook
+      description: |
+        Handle Omise payment webhooks.
+
+        **Events Handled:**
+        - charge.complete: Payment successful
+        - charge.failed: Payment failed
+
+        **Security:**
+        - Webhook signature verification
+        - IP whitelist (Omise IPs only)
+        - Idempotency key check
+
+        **Note:** This endpoint is for Omise only, not for public use.
+      operationId: handleOmiseWebhook
+      parameters:
+        - name: X-Omise-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Webhook signature for verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OmiseWebhookPayload'
+      responses:
+        '200':
+          description: Webhook processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                    example: true
+        '400':
+          description: Invalid signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateInvoiceRequest:
+      type: object
+      required:
+        - applicationId
+        - invoiceType
+      properties:
+        applicationId:
+          type: string
+          example: 6523f9876543210fedcba987
+        invoiceType:
+          type: string
+          enum: [PHASE1_FEE, PHASE2_FEE]
+          example: PHASE1_FEE
+
+    Invoice:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+          example: 6523f9876543210fedcba001
+        invoiceNumber:
+          type: string
+          example: INV-2025-001234
+        applicationId:
+          type: string
+          example: 6523f9876543210fedcba987
+        applicationNumber:
+          type: string
+          example: GACP-2025-A3B4C
+        invoiceType:
+          type: string
+          enum: [PHASE1_FEE, PHASE2_FEE]
+          example: PHASE1_FEE
+        amount:
+          type: number
+          example: 5000
+        currency:
+          type: string
+          example: THB
+        vatRate:
+          type: number
+          example: 0.07
+        vatAmount:
+          type: number
+          example: 350
+        totalAmount:
+          type: number
+          example: 5000
+        status:
+          type: string
+          enum: [PENDING, PAID, EXPIRED]
+          example: PENDING
+        paymentMethod:
+          type: string
+          enum: [PROMPTPAY, CREDIT_CARD]
+          example: PROMPTPAY
+        paidAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          example: '2025-10-23T10:00:00.000Z'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2025-10-16T10:00:00.000Z'
+
+    InvoiceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Invoice created successfully
+        data:
+          $ref: '#/components/schemas/Invoice'
+
+    InvoiceDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          allOf:
+            - $ref: '#/components/schemas/Invoice'
+            - type: object
+              properties:
+                paymentHistory:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      paymentId:
+                        type: string
+                      paymentMethod:
+                        type: string
+                      amount:
+                        type: number
+                      status:
+                        type: string
+                      paidAt:
+                        type: string
+                        format: date-time
+
+    PromptPayQRResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: PromptPay QR generated successfully
+        data:
+          type: object
+          properties:
+            qrCode:
+              type: string
+              description: Base64 encoded QR code image (PNG)
+              example: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...
+            qrData:
+              type: string
+              description: EMVCo QR payload string
+              example: '00020101021229370016A000000677010111011300669876543215802TH530376454045000.005802TH62170813GACP20250016630439F2'
+            promptPayId:
+              type: string
+              example: '0669876543'
+            amount:
+              type: number
+              example: 5000
+            currency:
+              type: string
+              example: THB
+            expiresAt:
+              type: string
+              format: date-time
+              example: '2025-10-16T10:15:00.000Z'
+            instructions:
+              type: array
+              items:
+                type: string
+              example:
+                - Open your mobile banking app
+                - Select PromptPay payment
+                - Scan this QR code
+                - Confirm payment
+                - Wait for confirmation (1-3 minutes)
+
+    CreditCardPaymentRequest:
+      type: object
+      required:
+        - omiseToken
+      properties:
+        omiseToken:
+          type: string
+          description: Omise.js generated token (card data tokenized)
+          example: tokn_test_5xz4f5g6h7j8k9l0m1n2
+        saveCard:
+          type: boolean
+          default: false
+          description: Save card for future use
+        returnUri:
+          type: string
+          format: uri
+          description: Return URL after 3D Secure authentication
+          example: https://gacp.platform/payment/callback
+
+    PaymentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Payment processed successfully
+        data:
+          type: object
+          properties:
+            paymentId:
+              type: string
+              example: 6523f9876543210fedcba002
+            chargeId:
+              type: string
+              example: chrg_test_5xz4f5g6h7j8k9l0
+            status:
+              type: string
+              enum: [SUCCESSFUL, FAILED, PENDING_3DS]
+              example: SUCCESSFUL
+            amount:
+              type: number
+              example: 5000
+            currency:
+              type: string
+              example: THB
+            cardLastDigits:
+              type: string
+              example: '4242'
+            cardBrand:
+              type: string
+              example: Visa
+            paidAt:
+              type: string
+              format: date-time
+              example: '2025-10-16T10:05:00.000Z'
+
+    ThreeDSecureResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: 3D Secure authentication required
+        data:
+          type: object
+          properties:
+            authorizeUri:
+              type: string
+              format: uri
+              description: Redirect user to this URL for 3D Secure authentication
+              example: https://api.omise.co/payments/paym_test_5xz4f5g6/authorize
+            paymentId:
+              type: string
+              example: 6523f9876543210fedcba002
+
+    OmiseWebhookPayload:
+      type: object
+      properties:
+        object:
+          type: string
+          example: event
+        id:
+          type: string
+          example: evnt_test_5xz4f5g6h7j8k9l0
+        livemode:
+          type: boolean
+          example: false
+        location:
+          type: string
+        key:
+          type: string
+          example: charge.complete
+        data:
+          type: object
+          description: Charge object
+        created:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            field:
+              type: string
+            details:
+              type: object
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

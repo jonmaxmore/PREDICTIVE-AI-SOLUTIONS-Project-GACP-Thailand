@@ -1,0 +1,11 @@
+# Self-signed SSL certificates for development/testing
+# Production should use Let's Encrypt certificates
+
+# DO NOT commit actual SSL certificates to version control
+*.pem
+*.key
+*.crt
+*.csr
+
+# Keep directory structure
+!.gitkeep

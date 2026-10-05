@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8" />
+    <style>
+        /* Sarabun is embedded locally, not imported.
+           The vendored woff2 faces in assets/fonts/sarabun are base64-inlined as
+           data: URIs and injected into <head> by pdf-generator.service.js, so this
+           template needs no font URL. The @import that used to pull Sarabun from a
+           foreign font CDN on every render was removed 2026-07-25 so the render has
+           no remote font dependency; the renderer now allows only data: + about:blank, so any
+           remote @import re-added here would be aborted and silently fall back. */
+
+        :root {
+            --dtam-green: #1a5c38;
+            --dtam-green-light: #2d7a50;
+            --dtam-green-bg: #f0fdf4;
+            --text-primary: #1a1a1a;
+            --text-muted: #6b7280;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Sarabun', 'Noto Sans Thai', sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .label-page {
+            width: 100mm;
+            height: 100mm;
+            padding: 6mm;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            border: 1.5px solid var(--dtam-green);
+            border-radius: 4mm;
+            background: #ffffff;
+            page-break-after: always;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .label-page::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3mm;
+            background: linear-gradient(90deg, var(--dtam-green), var(--dtam-green-light));
+        }
+
+        /* ── Header ─────────────────────────────────────────── */
+        .label-header {
+            display: flex;
+            align-items: center;
+            gap: 3mm;
+            margin-top: 2mm;
+        }
+
+        .gacp-badge {
+            display: flex;
+            align-items: center;
+            gap: 1.5mm;
+            background: var(--dtam-green-bg);
+            border: 1px solid var(--dtam-green);
+            border-radius: 2mm;
+            padding: 1.5mm 3mm;
+        }
+
+        .gacp-badge .icon {
+            font-size: 12px;
+        }
+
+        .gacp-badge .text {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--dtam-green);
+            letter-spacing: 0.5px;
+        }
+
+        /* ── QR Code ────────────────────────────────────────── */
+        .qr-section {
+            text-align: center;
+        }
+
+        .qr-code {
+            width: 50mm;
+            height: 50mm;
+        }
+
+        .qr-hint {
+            font-size: 7px;
+            color: var(--text-muted);
+            margin-top: 1mm;
+        }
+
+        /* ── Info Grid ──────────────────────────────────────── */
+        .info-grid {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 1mm;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 8px;
+            line-height: 1.4;
+        }
+
+        .info-row .label {
+            color: var(--text-muted);
+            font-weight: 400;
+            flex-shrink: 0;
+        }
+
+        .info-row .value {
+            color: var(--text-primary);
+            font-weight: 600;
+            text-align: right;
+            max-width: 55mm;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .lot-number {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--dtam-green);
+            text-align: center;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="label-page">
+        <!-- Header Badge -->
+        <div class="label-header">
+            <div class="gacp-badge">
+                <span class="icon">🌿</span>
+                <span class="text">GACP Certified</span>
+            </div>
+        </div>
+
+        <!-- Lot Number -->
+        <div class="lot-number">{{LOT_NUMBER}}</div>
+
+        <!-- QR Code -->
+        <div class="qr-section">
+            <img src="{{QR_DATA_URL}}" class="qr-code" alt="QR" />
+            <div class="qr-hint">สแกนเพื่อตรวจสอบย้อนกลับ / Scan to trace</div>
+        </div>
+
+        <!-- Info Grid — Wave E.2-I: bilingual labels (TH / EN) so the
+             100×100mm sticker is readable by foreign buyers and downstream
+             traceability scanners regardless of locale. Layout space is
+             tight; using compact "TH / EN" inline matches the existing
+             pattern in certificate.html / receipt-tax-invoice.html. -->
+        <div class="info-grid">
+            <div class="info-row">
+                <span class="label">ฟาร์ม / Farm:</span>
+                <span class="value">{{FARM_NAME}}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">บรรจุ / Packaged:</span>
+                <span class="value">{{PACKAGED_DATE}}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">หมดอายุ / Expires:</span>
+                <span class="value">{{EXPIRY_DATE}}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">น้ำหนัก / Weight:</span>
+                <span class="value">{{WEIGHT}}</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

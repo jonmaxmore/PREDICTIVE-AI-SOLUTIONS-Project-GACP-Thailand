@@ -1,0 +1,16 @@
+Agent F06 — Auth UX Flow Results
+Date: 2026-03-13T13:19:37.055Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Login page renders | HTTP 200
+PASS | Register renders | HTTP 200
+PASS | Forgot password renders | HTTP 200
+PASS | Provider login renders | HTTP 200
+PASS | Auth API health | status: 200
+PASS | Login validation | status: 400
+PASS | Register validation | status: 400
+PASS | Provider login validation | status: 400
+PASS | Password standards | status: 400
+PASS | Invalid email format | status: 400
+PASS | Empty identifier | status: 400
+PASS | Health entry | HTTP 200

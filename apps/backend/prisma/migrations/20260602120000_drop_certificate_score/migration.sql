@@ -1,0 +1,26 @@
+-- Drop the fabricated `score` column from `certificates`.
+--
+-- WHY
+-- GACP pass/fail is decided SOLELY by the on-site field-assessment team — a human
+-- PASS / FAIL / NEEDS_REVIEW decision recorded via POST /api/audits/:id/result
+-- (audit-onsite-service.submitDecision). There is no automated scoring system.
+-- The `score` column was populated by gacp-scoring-service with a percentage, or
+-- with a hardcoded fallback of 100 when no scoring data existed — i.e. a number
+-- that reflects no real business process. It was never rendered on the certificate
+-- PDF (certificate.html has no score token) and was read by no other code path.
+-- Removing it stops fabricated data from being persisted and from being folded
+-- into the certificate content-integrity hash.
+--
+-- DEPLOY CAVEATS — verify BEFORE applying:
+--   1. DESTRUCTIVE: drops the column and any historical values with it. That is
+--      intended (the values were fabricated). Confirm no consumer added after
+--      2026-06-02 reads certificates.score.
+--   2. HASH-CANONICAL CHANGE: certificate-service no longer includes `score` in
+--      buildCertificateDocumentHash(). Certificates issued BEFORE this change had
+--      their documentHash computed WITH score; the public verify endpoint will
+--      recompute WITHOUT score and flag those rows as tampered. Safe only if zero
+--      production certificates exist at deploy time (true for the pre-go-live
+--      pilot). If any real certs exist, re-hash them from the score-less canonical
+--      in the same maintenance window.
+
+ALTER TABLE "certificates" DROP COLUMN "score";

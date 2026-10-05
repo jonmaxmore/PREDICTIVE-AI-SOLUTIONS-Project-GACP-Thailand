@@ -1,0 +1,161 @@
+{
+  "annotations": { "list": [] },
+  "description": "GACP Finance KPIs - Iter 29. Application status, slip approvals, VAT, invoices, AR aging.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "iteration": "iter-29-2026-05-16",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Applications by Status",
+      "datasource": "Prometheus",
+      "description": "Live count grouped by status (DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none" } },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "expr": "gacp_applications_total{status=~\"DRAFT|SUBMITTED|UNDER_REVIEW|APPROVED|REJECTED\"}",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Daily Slip Approvals",
+      "datasource": "Prometheus",
+      "description": "Approved/Rejected counts per 24h window (Iter 25 slip review)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "expr": "increase(payment_slip_decision_total{decision=\"APPROVED\"}[1d])",
+          "legendFormat": "approved/day",
+          "refId": "A"
+        },
+        {
+          "expr": "increase(payment_slip_decision_total{decision=\"REJECTED\"}[1d])",
+          "legendFormat": "rejected/day",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Output VAT Collected (Running Total - Current Period)",
+      "datasource": "Prometheus",
+      "description": "Sum of output VAT in current open period (THB). Iter 26 finance.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyTHB",
+          "decimals": 2
+        }
+      },
+      "options": { "colorMode": "value" },
+      "targets": [
+        {
+          "expr": "vat_output_current_period_thb",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Pending Invoices",
+      "datasource": "Prometheus",
+      "description": "Issued but not paid invoices (Iter 26)",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 25 },
+              { "color": "red", "value": 75 }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background" },
+      "targets": [
+        {
+          "expr": "invoice_pending_count",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "bargauge",
+      "title": "AR Aging Buckets",
+      "datasource": "Prometheus",
+      "description": "Outstanding receivables grouped by age bucket (0-30, 31-60, 61-90, 90+ days)",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "currencyTHB" } },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      },
+      "targets": [
+        {
+          "expr": "invoice_ar_aging_thb{bucket=\"0_30\"}",
+          "legendFormat": "0-30 days",
+          "refId": "A"
+        },
+        {
+          "expr": "invoice_ar_aging_thb{bucket=\"31_60\"}",
+          "legendFormat": "31-60 days",
+          "refId": "B"
+        },
+        {
+          "expr": "invoice_ar_aging_thb{bucket=\"61_90\"}",
+          "legendFormat": "61-90 days",
+          "refId": "C"
+        },
+        {
+          "expr": "invoice_ar_aging_thb{bucket=\"90_plus\"}",
+          "legendFormat": "90+ days",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Revenue Recognition Trend (Last 30 days)",
+      "datasource": "Prometheus",
+      "description": "Daily recognized revenue (THB) over last 30 days",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "currencyTHB" } },
+      "targets": [
+        {
+          "expr": "sum_over_time(revenue_recognized_daily_thb[30d:1d])",
+          "legendFormat": "recognized",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["gacp", "finance", "kpi", "iter-29"],
+  "templating": { "list": [] },
+  "time": { "from": "now-30d", "to": "now" },
+  "timezone": "Asia/Bangkok",
+  "title": "GACP Finance KPIs (Iter 29)",
+  "uid": "gacp-finance-kpis",
+  "version": 1
+}

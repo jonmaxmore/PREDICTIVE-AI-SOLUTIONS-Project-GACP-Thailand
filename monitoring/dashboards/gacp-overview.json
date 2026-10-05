@@ -1,0 +1,233 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "GACP Platform Overview - Iter 29 SRE Dashboard. Covers HTTP, latency, DB, sessions, audit, slip queue.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "iteration": "iter-29-2026-05-16",
+  "links": [
+    { "title": "Finance KPIs", "url": "/d/gacp-finance-kpis" },
+    { "title": "Security Events", "url": "/d/gacp-security-events" }
+  ],
+  "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "HTTP Traffic",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 101,
+      "type": "timeseries",
+      "title": "HTTP Request Rate (per endpoint)",
+      "datasource": "Prometheus",
+      "description": "Requests/sec broken down by handler+method",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        {
+          "expr": "sum by (handler, method) (rate(http_requests_total{job=\"gacp-backend\"}[1m]))",
+          "legendFormat": "{{method}} {{handler}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "type": "timeseries",
+      "title": "HTTP Error Rate (4xx / 5xx)",
+      "datasource": "Prometheus",
+      "description": "Error ratio split by class. Critical alert at 5%.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"gacp-backend\",status=~\"4..\"}[5m])) / clamp_min(sum(rate(http_requests_total{job=\"gacp-backend\"}[5m])), 1)",
+          "legendFormat": "4xx rate",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(http_requests_total{job=\"gacp-backend\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{job=\"gacp-backend\"}[5m])), 1)",
+          "legendFormat": "5xx rate",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "type": "timeseries",
+      "title": "Latency P50 / P95 / P99",
+      "datasource": "Prometheus",
+      "description": "End-to-end HTTP response latency quantiles",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"gacp-backend\"}[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"gacp-backend\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"gacp-backend\"}[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "type": "timeseries",
+      "title": "Database Query Latency (P95)",
+      "datasource": "Prometheus",
+      "description": "Prisma query duration p95 by model+action",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, model, action) (rate(db_query_duration_seconds_bucket{job=\"gacp-backend\"}[5m])))",
+          "legendFormat": "{{model}}.{{action}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 200,
+      "type": "row",
+      "title": "Sessions & Resources",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 201,
+      "type": "stat",
+      "title": "Active Sessions",
+      "datasource": "Prometheus",
+      "description": "Count of unexpired refresh tokens (live user sessions)",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 18 },
+      "fieldConfig": { "defaults": { "unit": "none" } },
+      "targets": [
+        {
+          "expr": "sum(gacp_active_sessions)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 202,
+      "type": "timeseries",
+      "title": "Backend Memory (RSS)",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 6, "w": 9, "x": 6, "y": 18 },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes{job=\"gacp-backend\"}",
+          "legendFormat": "RSS",
+          "refId": "A"
+        },
+        {
+          "expr": "nodejs_heap_size_used_bytes{job=\"gacp-backend\"}",
+          "legendFormat": "heap used",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 203,
+      "type": "timeseries",
+      "title": "Backend CPU",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 6, "w": 9, "x": 15, "y": 18 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total{job=\"gacp-backend\"}[1m])",
+          "legendFormat": "cpu",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 300,
+      "type": "row",
+      "title": "Audit & Slip Queue",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 301,
+      "type": "timeseries",
+      "title": "Audit Log Writes/sec",
+      "datasource": "Prometheus",
+      "description": "AuditLog table insert rate from Iter 23",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "expr": "rate(audit_log_writes_total[1m])",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 302,
+      "type": "stat",
+      "title": "Slip Review Queue Depth",
+      "datasource": "Prometheus",
+      "description": "Pending payment slips awaiting reviewer action (Iter 25)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "payment_slip_pending_count",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["gacp", "overview", "iter-29"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "Asia/Bangkok",
+  "title": "GACP Platform Overview (Iter 29)",
+  "uid": "gacp-overview-iter29",
+  "version": 1
+}

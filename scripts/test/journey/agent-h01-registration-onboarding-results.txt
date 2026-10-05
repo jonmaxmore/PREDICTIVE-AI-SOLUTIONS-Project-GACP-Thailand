@@ -1,0 +1,16 @@
+Agent H01 — Registration & Onboarding Results
+Date: 2026-03-13T14:03:31.960Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Health check | status: 200
+PASS | Login as health user | Token acquired
+PASS | Dashboard access | status: 200
+PASS | My profile | status: 200
+PASS | My applications | status: 200
+PASS | Notifications | status: 200
+PASS | Standards info | status: 200
+PASS | Available plants | status: 200
+PASS | Pricing info | status: 200
+PASS | Master data | status: 200
+PASS | Locations | status: 200
+PASS | Full config | status: 200

@@ -1,0 +1,13 @@
+# hardcode-patterns.txt — grep -E patterns counted by ratchet.sh (hardcode counter).
+# One pattern per line; lines starting with # ignored.
+# Scope: apps/backend/{services,routes,jobs,middleware} — business logic only
+# (config/, shared/ are the SSOT homes and are excluded by the probe).
+# Seed set from the Wave-2 session; /audit-system extends this file (operator PR).
+# Fee magic numbers (THB) outside fee-service/config
+[^0-9.](5000|25000|27675|5535|553500|2767500)[^0-9]
+# VAT rate literal outside config
+0\.07
+# Legal entity name hardcoded outside shared constants
+พรีดิกทีฟ
+# Absolute service URLs in business logic
+https?://[a-z0-9.-]+\.(com|net|org|io|th)

@@ -1,0 +1,2365 @@
+{
+ "A /api/analytics": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/analytics/dashboard": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/analytics/geography/certification-rate": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/analytics/geography/farms": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/analytics/performance/overview": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/analytics/predictions/certification-expiry": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/analytics/predictions/harvest-forecast": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/analytics/trends/applications": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/analytics/trends/plant-types": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/application-bundles/:id": {
+  "status": 200,
+  "labels": [
+   "bundle"
+  ]
+ },
+ "A /api/application-bundles/my": {
+  "status": 200,
+  "labels": [
+   "bundle"
+  ]
+ },
+ "A /api/applications": {
+  "status": 200,
+  "labels": [
+   "D",
+   "D2",
+   "X"
+  ]
+ },
+ "A /api/applications/:applicationId/quotations": {
+  "status": 200,
+  "labels": [
+   "X",
+   "quotation"
+  ]
+ },
+ "A /api/applications/:applicationId/quotations/:issuerType/pdf": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/applications/:applicationId/statement": {
+  "status": 200,
+  "labels": [
+   "X",
+   "invoiceX",
+   "quotation",
+   "userA"
+  ]
+ },
+ "A /api/applications/:id": {
+  "status": 200,
+  "labels": [
+   "X"
+  ]
+ },
+ "A /api/applications/:id/activities": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/applications/:id/audit-notes": {
+  "status": 200,
+  "labels": [
+   "X"
+  ]
+ },
+ "A /api/applications/:id/history": {
+  "status": 200,
+  "labels": [
+   "X"
+  ]
+ },
+ "A /api/applications/:id/katorlor1": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/applications/:id/pdf": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/applications/:id/requirements": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/applications/:id/status": {
+  "status": 200,
+  "labels": [
+   "X"
+  ]
+ },
+ "A /api/applications/bundles/:id": {
+  "status": 200,
+  "labels": [
+   "bundle"
+  ]
+ },
+ "A /api/applications/bundles/my": {
+  "status": 200,
+  "labels": [
+   "bundle"
+  ]
+ },
+ "A /api/applications/config": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/applications/draft": {
+  "status": 200,
+  "labels": [
+   "D2"
+  ]
+ },
+ "A /api/applications/draft-documents": {
+  "status": 200,
+  "labels": [
+   "D2"
+  ]
+ },
+ "A /api/applications/my": {
+  "status": 200,
+  "labels": [
+   "D",
+   "D2",
+   "X"
+  ]
+ },
+ "A /api/applications/my/statuses": {
+  "status": 200,
+  "labels": [
+   "D",
+   "D2",
+   "X"
+  ]
+ },
+ "A /api/applications/readiness": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/applications/revision-deadline/:applicationId": {
+  "status": 200,
+  "labels": [
+   "X",
+   "revisionDeadline"
+  ]
+ },
+ "A /api/audits/site-analysis": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/audits/site-analysis/:id": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis",
+   "userA"
+  ]
+ },
+ "A /api/audits/site-analysis/:id/compliance-score": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/audits/site-analysis/:id/evaluate-soil": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/audits/site-analysis/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "A /api/audits/site-analysis/farm/:farmId/latest": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "A /api/auth/health/me": {
+  "status": 200,
+  "labels": [
+   "userA"
+  ]
+ },
+ "A /api/auth/health/me/export": {
+  "status": 200,
+  "labels": [
+   "C",
+   "D",
+   "D2",
+   "X",
+   "certX",
+   "draftDoc",
+   "farm",
+   "invoiceX",
+   "report",
+   "userA"
+  ]
+ },
+ "A /api/auth/health/me/notification-prefs": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/auth/health/verify": {
+  "status": 200,
+  "labels": [
+   "userA"
+  ]
+ },
+ "A /api/certificates": {
+  "status": 200,
+  "labels": [
+   "X",
+   "certX",
+   "farm",
+   "userA"
+  ]
+ },
+ "A /api/certificates/:id": {
+  "status": 200,
+  "labels": [
+   "X",
+   "certX",
+   "farm",
+   "userA"
+  ]
+ },
+ "A /api/certificates/:id/download": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/certificates/my": {
+  "status": 200,
+  "labels": [
+   "X",
+   "certX",
+   "farm"
+  ]
+ },
+ "A /api/consent": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/controlled-environments/plot/:plotId": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/cultivation-logs/:id": {
+  "status": 200,
+  "labels": [
+   "C",
+   "cultivationLog",
+   "cycle",
+   "userA"
+  ]
+ },
+ "A /api/cultivation-logs/cycle/:cycleId": {
+  "status": 200,
+  "labels": [
+   "cultivationLog",
+   "cycle"
+  ]
+ },
+ "A /api/cultivation-logs/cycle/:cycleId/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/cultivation-logs/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "cultivationLog",
+   "cycle"
+  ]
+ },
+ "A /api/dashboard": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/dashboard/stats": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/dashboard/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/documents": {
+  "status": 200,
+  "labels": [
+   "D",
+   "draftDoc"
+  ]
+ },
+ "A /api/documents/:id": {
+  "status": 200,
+  "labels": [
+   "D",
+   "draftDoc"
+  ]
+ },
+ "A /api/entities/:id": {
+  "status": 200,
+  "labels": [
+   "C"
+  ]
+ },
+ "A /api/entities/:id/audit-log": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/entities/:id/members": {
+  "status": 200,
+  "labels": [
+   "userA"
+  ]
+ },
+ "A /api/entities/:id/members/:memberUserId/permissions": {
+  "status": 200,
+  "labels": [
+   "C",
+   "userA"
+  ]
+ },
+ "A /api/entities/:id/my-permissions": {
+  "status": 200,
+  "labels": [
+   "C"
+  ]
+ },
+ "A /api/entities/invitations": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/entities/mine": {
+  "status": 200,
+  "labels": [
+   "C",
+   "PA"
+  ]
+ },
+ "A /api/farms": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "A /api/farms/:farmId/plots": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "plot"
+  ]
+ },
+ "A /api/farms/:id": {
+  "status": 200,
+  "labels": [
+   "C",
+   "batch",
+   "cycle",
+   "farm",
+   "userA"
+  ]
+ },
+ "A /api/farms/my": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "A /api/farms/my/eligible-for-planting": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "A /api/fertilizer-records/cycle/:cycleId": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/finance/credit-notes": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/finance/issuers/by-service-type/:serviceType": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/harvest-batches": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "cycle",
+   "farm"
+  ]
+ },
+ "A /api/harvest-batches/:id": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "cycle",
+   "farm"
+  ]
+ },
+ "A /api/harvest-batches/:id/lab-results": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/harvest-batches/stats/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "A /api/invoices/:invoiceId/pdf": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/invoices/my": {
+  "status": 200,
+  "labels": [
+   "X",
+   "invoiceX"
+  ]
+ },
+ "A /api/invoices/my/:invoiceId/receipt/pdf": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/lots/:id": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "cycle",
+   "farm",
+   "lot",
+   "userA"
+  ]
+ },
+ "A /api/lots/:id/label": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/lots/:id/qr": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/lots/:id/qr/print": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/lots/batch/:batchId": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "lot"
+  ]
+ },
+ "A /api/mfa/status": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/notifications": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/notifications/unread-count": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/planting-cycles": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/planting-cycles/:id": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "cultivationLog",
+   "cycle",
+   "farm"
+  ]
+ },
+ "A /api/planting-cycles/:id/activities": {
+  "status": 200,
+  "labels": [
+   "cultivationLog"
+  ]
+ },
+ "A /api/planting-cycles/:id/plot-qrs": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/planting-cycles/capacity/summary": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "A /api/planting-cycles/my": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/plots/farms/:farmId/plots": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "plot"
+  ]
+ },
+ "A /api/preview/applications/:id/preview": {
+  "status": 200,
+  "labels": [
+   "D",
+   "draftDoc"
+  ]
+ },
+ "A /api/quotes/my": {
+  "status": 200,
+  "labels": [
+   "X",
+   "quote"
+  ]
+ },
+ "A /api/report-submissions": {
+  "status": 200,
+  "labels": [
+   "certX",
+   "report",
+   "userA"
+  ]
+ },
+ "A /api/report-submissions/:id": {
+  "status": 200,
+  "labels": [
+   "certX",
+   "report",
+   "userA"
+  ]
+ },
+ "A /api/report-submissions/schedule": {
+  "status": 200,
+  "labels": [
+   "certX"
+  ]
+ },
+ "A /api/report-submissions/types": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/revision-deadline/:applicationId": {
+  "status": 200,
+  "labels": [
+   "X",
+   "revisionDeadline"
+  ]
+ },
+ "A /api/seed-sources/cycle/:cycleId": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/site-analyses": {
+  "status": 403,
+  "labels": []
+ },
+ "A /api/site-analyses/:id": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis",
+   "userA"
+  ]
+ },
+ "A /api/site-analyses/:id/compliance-score": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/site-analyses/:id/evaluate-soil": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/site-analyses/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "A /api/site-analyses/farm/:farmId/latest": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "A /api/sop-documents": {
+  "status": 200,
+  "labels": [
+   "sop",
+   "userA"
+  ]
+ },
+ "A /api/sop-documents/:id": {
+  "status": 200,
+  "labels": [
+   "sop",
+   "userA"
+  ]
+ },
+ "A /api/standards/:code/analyze/:applicationId": {
+  "status": 200,
+  "labels": [
+   "X",
+   "standardCode"
+  ]
+ },
+ "A /api/surveys/active": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/templates": {
+  "status": 200,
+  "labels": [
+   "templateCode"
+  ]
+ },
+ "A /api/templates/:code": {
+  "status": 200,
+  "labels": [
+   "templateCode"
+  ]
+ },
+ "A /api/tickets": {
+  "status": 200,
+  "labels": [
+   "X",
+   "ticket",
+   "userA"
+  ]
+ },
+ "A /api/tickets/:id": {
+  "status": 200,
+  "labels": [
+   "X",
+   "ticket",
+   "userA"
+  ]
+ },
+ "A /api/tickets/application/:applicationId": {
+  "status": 200,
+  "labels": [
+   "X",
+   "ticket",
+   "userA"
+  ]
+ },
+ "A /api/training-records/:id": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "training",
+   "userA"
+  ]
+ },
+ "A /api/training-records/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "training"
+  ]
+ },
+ "A /api/training-records/farm/:farmId/compliance": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/training-records/farm/:farmId/personnel": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/training-records/farm/:farmId/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "A /api/water-sources/plot/:plotId": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/analytics": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/analytics/dashboard": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/analytics/geography/certification-rate": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/analytics/geography/farms": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/analytics/performance/overview": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/analytics/predictions/certification-expiry": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/analytics/predictions/harvest-forecast": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/analytics/trends/applications": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/analytics/trends/plant-types": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/application-bundles/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/application-bundles/my": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/applications": {
+  "status": 200,
+  "labels": [
+   "D",
+   "D2",
+   "X"
+  ]
+ },
+ "B /api/applications/:applicationId/quotations": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/:applicationId/quotations/:issuerType/pdf": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/:applicationId/statement": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/:id/activities": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/:id/audit-notes": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/:id/history": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/:id/katorlor1": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/:id/pdf": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/:id/requirements": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/:id/status": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/bundles/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/applications/bundles/my": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/applications/config": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/applications/draft": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/applications/draft-documents": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/applications/my": {
+  "status": 200,
+  "labels": [
+   "D",
+   "D2",
+   "X"
+  ]
+ },
+ "B /api/applications/my/statuses": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/applications/readiness": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/applications/revision-deadline/:applicationId": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/audits/site-analysis": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/audits/site-analysis/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/audits/site-analysis/:id/compliance-score": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/audits/site-analysis/:id/evaluate-soil": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/audits/site-analysis/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "B /api/audits/site-analysis/farm/:farmId/latest": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "B /api/auth/health/me": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/auth/health/me/export": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/auth/health/me/notification-prefs": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/auth/health/verify": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/certificates": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/certificates/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/certificates/:id/download": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/certificates/my": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/consent": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/controlled-environments/plot/:plotId": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/cultivation-logs/:id": {
+  "status": 200,
+  "labels": [
+   "C",
+   "cultivationLog",
+   "cycle",
+   "userA"
+  ]
+ },
+ "B /api/cultivation-logs/cycle/:cycleId": {
+  "status": 200,
+  "labels": [
+   "cultivationLog",
+   "cycle"
+  ]
+ },
+ "B /api/cultivation-logs/cycle/:cycleId/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/cultivation-logs/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "cultivationLog",
+   "cycle"
+  ]
+ },
+ "B /api/dashboard": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/dashboard/stats": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/dashboard/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/documents": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/documents/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/entities/:id": {
+  "status": 200,
+  "labels": [
+   "C"
+  ]
+ },
+ "B /api/entities/:id/audit-log": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/entities/:id/members": {
+  "status": 200,
+  "labels": [
+   "userA"
+  ]
+ },
+ "B /api/entities/:id/members/:memberUserId/permissions": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/entities/:id/my-permissions": {
+  "status": 200,
+  "labels": [
+   "C"
+  ]
+ },
+ "B /api/entities/invitations": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/entities/mine": {
+  "status": 200,
+  "labels": [
+   "C"
+  ]
+ },
+ "B /api/farms": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "B /api/farms/:farmId/plots": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "plot"
+  ]
+ },
+ "B /api/farms/:id": {
+  "status": 200,
+  "labels": [
+   "C",
+   "batch",
+   "cycle",
+   "farm",
+   "userA"
+  ]
+ },
+ "B /api/farms/my": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "B /api/farms/my/eligible-for-planting": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "B /api/fertilizer-records/cycle/:cycleId": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/finance/credit-notes": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/finance/issuers/by-service-type/:serviceType": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/harvest-batches": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "cycle",
+   "farm"
+  ]
+ },
+ "B /api/harvest-batches/:id": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "cycle",
+   "farm"
+  ]
+ },
+ "B /api/harvest-batches/:id/lab-results": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/harvest-batches/stats/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "B /api/invoices/:invoiceId/pdf": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/invoices/my": {
+  "status": 200,
+  "labels": [
+   "X",
+   "invoiceX"
+  ]
+ },
+ "B /api/invoices/my/:invoiceId/receipt/pdf": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/lots/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/lots/:id/label": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/lots/:id/qr": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/lots/:id/qr/print": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/lots/batch/:batchId": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/mfa/status": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/notifications": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/notifications/unread-count": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/planting-cycles": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/planting-cycles/:id": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "cultivationLog",
+   "cycle",
+   "farm"
+  ]
+ },
+ "B /api/planting-cycles/:id/activities": {
+  "status": 200,
+  "labels": [
+   "cultivationLog"
+  ]
+ },
+ "B /api/planting-cycles/:id/plot-qrs": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/planting-cycles/capacity/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/planting-cycles/my": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/plots/farms/:farmId/plots": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "plot"
+  ]
+ },
+ "B /api/preview/applications/:id/preview": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/quotes/my": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/report-submissions": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/report-submissions/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/report-submissions/schedule": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/report-submissions/types": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/revision-deadline/:applicationId": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/seed-sources/cycle/:cycleId": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/site-analyses": {
+  "status": 403,
+  "labels": []
+ },
+ "B /api/site-analyses/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/site-analyses/:id/compliance-score": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/site-analyses/:id/evaluate-soil": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/site-analyses/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "B /api/site-analyses/farm/:farmId/latest": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "B /api/sop-documents": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/sop-documents/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/standards/:code/analyze/:applicationId": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/surveys/active": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/templates": {
+  "status": 200,
+  "labels": [
+   "templateCode"
+  ]
+ },
+ "B /api/templates/:code": {
+  "status": 200,
+  "labels": [
+   "templateCode"
+  ]
+ },
+ "B /api/tickets": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/tickets/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/tickets/application/:applicationId": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/training-records/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "B /api/training-records/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "training"
+  ]
+ },
+ "B /api/training-records/farm/:farmId/compliance": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/training-records/farm/:farmId/personnel": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/training-records/farm/:farmId/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "B /api/water-sources/plot/:plotId": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/analytics": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/analytics/dashboard": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/analytics/geography/certification-rate": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/analytics/geography/farms": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/analytics/performance/overview": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/analytics/predictions/certification-expiry": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/analytics/predictions/harvest-forecast": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/analytics/trends/applications": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/analytics/trends/plant-types": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/application-bundles/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/application-bundles/my": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/applications": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/applications/:applicationId/quotations": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/:applicationId/quotations/:issuerType/pdf": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/:applicationId/statement": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/:id/activities": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/:id/audit-notes": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/:id/history": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/:id/katorlor1": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/:id/pdf": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/:id/requirements": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/:id/status": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/bundles/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/applications/bundles/my": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/applications/config": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/applications/draft": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/applications/draft-documents": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/applications/my": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/applications/my/statuses": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/applications/readiness": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/applications/revision-deadline/:applicationId": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/audits/site-analysis": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/audits/site-analysis/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/audits/site-analysis/:id/compliance-score": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/audits/site-analysis/:id/evaluate-soil": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/audits/site-analysis/farm/:farmId": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/audits/site-analysis/farm/:farmId/latest": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/auth/health/me": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/auth/health/me/export": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/auth/health/me/notification-prefs": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/auth/health/verify": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/certificates": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/certificates/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/certificates/:id/download": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/certificates/my": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/consent": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/controlled-environments/plot/:plotId": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/cultivation-logs/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/cultivation-logs/cycle/:cycleId": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/cultivation-logs/cycle/:cycleId/summary": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/cultivation-logs/farm/:farmId": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/dashboard": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/dashboard/stats": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/dashboard/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/documents": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/documents/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/entities/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/entities/:id/audit-log": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/entities/:id/members": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/entities/:id/members/:memberUserId/permissions": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/entities/:id/my-permissions": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/entities/invitations": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/entities/mine": {
+  "status": 200,
+  "labels": [
+   "PS"
+  ]
+ },
+ "S /api/farms": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/farms/:farmId/plots": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/farms/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/farms/my": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/farms/my/eligible-for-planting": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/fertilizer-records/cycle/:cycleId": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/finance/credit-notes": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/finance/issuers/by-service-type/:serviceType": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/harvest-batches": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/harvest-batches/:id": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/harvest-batches/:id/lab-results": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/harvest-batches/stats/:farmId": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/invoices/:invoiceId/pdf": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/invoices/my": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/invoices/my/:invoiceId/receipt/pdf": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/lots/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/lots/:id/label": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/lots/:id/qr": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/lots/:id/qr/print": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/lots/batch/:batchId": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/mfa/status": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/notifications": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/notifications/unread-count": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/planting-cycles": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/planting-cycles/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/planting-cycles/:id/activities": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/planting-cycles/:id/plot-qrs": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/planting-cycles/capacity/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/planting-cycles/my": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/plots/farms/:farmId/plots": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/preview/applications/:id/preview": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/quotes/my": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/report-submissions": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/report-submissions/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/report-submissions/schedule": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/report-submissions/types": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/revision-deadline/:applicationId": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/seed-sources/cycle/:cycleId": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/site-analyses": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/site-analyses/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/site-analyses/:id/compliance-score": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/site-analyses/:id/evaluate-soil": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/site-analyses/farm/:farmId": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/site-analyses/farm/:farmId/latest": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/sop-documents": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/sop-documents/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/standards/:code/analyze/:applicationId": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/surveys/active": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/templates": {
+  "status": 200,
+  "labels": [
+   "templateCode"
+  ]
+ },
+ "S /api/templates/:code": {
+  "status": 200,
+  "labels": [
+   "templateCode"
+  ]
+ },
+ "S /api/tickets": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/tickets/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/tickets/application/:applicationId": {
+  "status": 200,
+  "labels": []
+ },
+ "S /api/training-records/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "S /api/training-records/farm/:farmId": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/training-records/farm/:farmId/compliance": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/training-records/farm/:farmId/personnel": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/training-records/farm/:farmId/summary": {
+  "status": 403,
+  "labels": []
+ },
+ "S /api/water-sources/plot/:plotId": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/analytics": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/analytics/dashboard": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/analytics/geography/certification-rate": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/analytics/geography/farms": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/analytics/performance/overview": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/analytics/predictions/certification-expiry": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/analytics/predictions/harvest-forecast": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/analytics/trends/applications": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/analytics/trends/plant-types": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/application-bundles/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/application-bundles/my": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/applications": {
+  "status": 200,
+  "labels": [
+   "D",
+   "D2",
+   "X"
+  ]
+ },
+ "V /api/applications/:applicationId/quotations": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/:applicationId/quotations/:issuerType/pdf": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/:applicationId/statement": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/:id/activities": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/:id/audit-notes": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/:id/history": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/:id/katorlor1": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/:id/pdf": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/:id/requirements": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/:id/status": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/bundles/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/applications/bundles/my": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/applications/config": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/applications/draft": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/applications/draft-documents": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/applications/my": {
+  "status": 200,
+  "labels": [
+   "D",
+   "D2",
+   "X"
+  ]
+ },
+ "V /api/applications/my/statuses": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/applications/readiness": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/applications/revision-deadline/:applicationId": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/audits/site-analysis": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/audits/site-analysis/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/audits/site-analysis/:id/compliance-score": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/audits/site-analysis/:id/evaluate-soil": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/audits/site-analysis/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "V /api/audits/site-analysis/farm/:farmId/latest": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "V /api/auth/health/me": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/auth/health/me/export": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/auth/health/me/notification-prefs": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/auth/health/verify": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/certificates": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/certificates/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/certificates/:id/download": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/certificates/my": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/consent": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/controlled-environments/plot/:plotId": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/cultivation-logs/:id": {
+  "status": 200,
+  "labels": [
+   "C",
+   "cultivationLog",
+   "cycle",
+   "userA"
+  ]
+ },
+ "V /api/cultivation-logs/cycle/:cycleId": {
+  "status": 200,
+  "labels": [
+   "cultivationLog",
+   "cycle"
+  ]
+ },
+ "V /api/cultivation-logs/cycle/:cycleId/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/cultivation-logs/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "cultivationLog",
+   "cycle"
+  ]
+ },
+ "V /api/dashboard": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/dashboard/stats": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/dashboard/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/documents": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/documents/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/entities/:id": {
+  "status": 200,
+  "labels": [
+   "C"
+  ]
+ },
+ "V /api/entities/:id/audit-log": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/entities/:id/members": {
+  "status": 200,
+  "labels": [
+   "userA"
+  ]
+ },
+ "V /api/entities/:id/members/:memberUserId/permissions": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/entities/:id/my-permissions": {
+  "status": 200,
+  "labels": [
+   "C"
+  ]
+ },
+ "V /api/entities/invitations": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/entities/mine": {
+  "status": 200,
+  "labels": [
+   "C"
+  ]
+ },
+ "V /api/farms": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "V /api/farms/:farmId/plots": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "plot"
+  ]
+ },
+ "V /api/farms/:id": {
+  "status": 200,
+  "labels": [
+   "C",
+   "batch",
+   "cycle",
+   "farm",
+   "userA"
+  ]
+ },
+ "V /api/farms/my": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "V /api/farms/my/eligible-for-planting": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "V /api/fertilizer-records/cycle/:cycleId": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/finance/credit-notes": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/finance/issuers/by-service-type/:serviceType": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/harvest-batches": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "cycle",
+   "farm"
+  ]
+ },
+ "V /api/harvest-batches/:id": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "cycle",
+   "farm"
+  ]
+ },
+ "V /api/harvest-batches/:id/lab-results": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/harvest-batches/stats/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm"
+  ]
+ },
+ "V /api/invoices/:invoiceId/pdf": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/invoices/my": {
+  "status": 200,
+  "labels": [
+   "X",
+   "invoiceX"
+  ]
+ },
+ "V /api/invoices/my/:invoiceId/receipt/pdf": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/lots/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/lots/:id/label": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/lots/:id/qr": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/lots/:id/qr/print": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/lots/batch/:batchId": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/mfa/status": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/notifications": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/notifications/unread-count": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/planting-cycles": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/planting-cycles/:id": {
+  "status": 200,
+  "labels": [
+   "batch",
+   "cultivationLog",
+   "cycle",
+   "farm"
+  ]
+ },
+ "V /api/planting-cycles/:id/activities": {
+  "status": 200,
+  "labels": [
+   "cultivationLog"
+  ]
+ },
+ "V /api/planting-cycles/:id/plot-qrs": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/planting-cycles/capacity/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/planting-cycles/my": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/plots/farms/:farmId/plots": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "plot"
+  ]
+ },
+ "V /api/preview/applications/:id/preview": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/quotes/my": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/report-submissions": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/report-submissions/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/report-submissions/schedule": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/report-submissions/types": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/revision-deadline/:applicationId": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/seed-sources/cycle/:cycleId": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/site-analyses": {
+  "status": 403,
+  "labels": []
+ },
+ "V /api/site-analyses/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/site-analyses/:id/compliance-score": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/site-analyses/:id/evaluate-soil": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/site-analyses/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "V /api/site-analyses/farm/:farmId/latest": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "siteAnalysis"
+  ]
+ },
+ "V /api/sop-documents": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/sop-documents/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/standards/:code/analyze/:applicationId": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/surveys/active": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/templates": {
+  "status": 200,
+  "labels": [
+   "templateCode"
+  ]
+ },
+ "V /api/templates/:code": {
+  "status": 200,
+  "labels": [
+   "templateCode"
+  ]
+ },
+ "V /api/tickets": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/tickets/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/tickets/application/:applicationId": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/training-records/:id": {
+  "status": 404,
+  "labels": []
+ },
+ "V /api/training-records/farm/:farmId": {
+  "status": 200,
+  "labels": [
+   "farm",
+   "training"
+  ]
+ },
+ "V /api/training-records/farm/:farmId/compliance": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/training-records/farm/:farmId/personnel": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/training-records/farm/:farmId/summary": {
+  "status": 200,
+  "labels": []
+ },
+ "V /api/water-sources/plot/:plotId": {
+  "status": 200,
+  "labels": []
+ }
+}

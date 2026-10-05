@@ -1,0 +1,19 @@
+# Static robots.txt fallback — Iter 28.
+# Next.js generates a dynamic version from apps/web-app/src/app/robots.ts
+# at build time which supersedes this file for the live deployment.
+# Keep this static copy in sync so CDN-only fetches still resolve.
+
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /pricing
+Allow: /terms-of-service
+Allow: /privacy-policy
+Allow: /auth/
+
+Disallow: /api/
+Disallow: /admin/
+Disallow: /provider/
+Disallow: /health/
+
+Sitemap: https://gacpth.com/sitemap.xml

@@ -1,0 +1,25 @@
+-- Drop the role_job_descriptions table.
+--
+-- The table backed a "Role Job Description" feature whose only consumer
+-- was a cosmetic narrative card on /provider/profile. Authorization
+-- never read from it — the canonical source of truth is
+-- shared/canonical-rbac.js (ROLE_PERMISSIONS + hasPermission), and the
+-- profile page also has its own hardcoded permission list. Three
+-- partial sources for the same idea, only one of which was actually
+-- used.
+--
+-- Pre-flight verification on prod 2026-05-02:
+--   role_job_descriptions row count: 0 (controller seed never ran in
+--   production; that omission is precisely why the table was unused).
+--
+-- Code surface removed in the same PR:
+--   - apps/backend/controllers/role-jd-controller.js
+--   - apps/backend/routes/api/provider/roles.js
+--   - the /roles mount in apps/backend/routes/api/provider/index.js
+--   - the RoleJD card + state in apps/web-app/src/app/provider/profile/page.tsx
+--   - the roleJdByCode URL constant in apps/web-app/src/lib/services/provider-api.ts
+--
+-- Idempotent: IF EXISTS guards the drop so re-running against a clean
+-- DB or a partially-migrated DB is a no-op.
+
+DROP TABLE IF EXISTS "role_job_descriptions";

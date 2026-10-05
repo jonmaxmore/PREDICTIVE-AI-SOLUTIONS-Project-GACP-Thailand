@@ -1,0 +1,90 @@
+{
+  "lots": [],
+  "plots": [],
+  "steps": {},
+  "plantId": "cannabis",
+  "qrCount": 0,
+  "farmData": {
+    "areaSqm": "1200",
+    "siteName": "สวนสมชาย",
+    "areaTypes": [
+      "OUTDOOR",
+      "GREENHOUSE",
+      "INDOOR"
+    ],
+    "siteAddress": "12 หมู่ 3 ต.หนองหาร อ.สันทราย จ.เชียงใหม่",
+    "province": "เชียงใหม่",
+    "district": "สันทราย",
+    "subDistrict": "หนองหาร",
+    "postalCode": "50290",
+    "landOwnership": "OWNED",
+    "landDocumentDetail": {
+      "type": "โฉนด",
+      "number": "12345"
+    }
+  },
+  "siteData": null,
+  "certScope": "PLANTING",
+  "documents": [],
+  "renewalOf": null,
+  "siteTypes": [],
+  "varieties": [
+    {
+      "kind": "SEED",
+      "name": "หางกระรอกภูพาน",
+      "unit": "ต้น",
+      "origin": "DOMESTIC",
+      "source": "ศูนย์พันธุ์พืชเชียงใหม่",
+      "quantity": "500"
+    }
+  ],
+  "processing": null,
+  "youtubeUrl": "",
+  "generalInfo": null,
+  "harvestData": null,
+  "requestType": "NEW",
+  "serviceType": null,
+  "locationType": null,
+  "securityData": null,
+  "serviceTypes": [],
+  "applicantData": {
+    "phone": "0812345678",
+    "idCard": "1000000000009",
+    "address": "12 หมู่ 3 ต.หนองหาร อ.สันทราย จ.เชียงใหม่ 50290",
+    "lastName": "คิวเอฟาร์ม",
+    "firstName": "สมชาย"
+  },
+  "applicantType": "INDIVIDUAL",
+  "consentedPDPA": false,
+  "lastDraftStep": 2,
+  "licensePdfUrl": null,
+  "plantTracking": [],
+  "replacementOf": null,
+  "stepDocuments": [],
+  "varietiesNote": null,
+  "workflowState": "DRAFT",
+  "draftDocuments": [
+    {
+      "size": 5540,
+      "slotId": "controlled_herb_license",
+      "fileUrl": "/uploads/application-drafts/1788661752660-355fc85b-96d7-4c3c-b8f7-31d39b220f71.pdf",
+      "stepKey": "plans-docs",
+      "fileName": "qa-doc.pdf",
+      "mimeType": "application/pdf",
+      "documentId": "c240a366-170f-4f4d-8183-89633b59745f",
+      "uploadedAt": "2026-09-06T02:29:12.666Z"
+    }
+  ],
+  "productionData": null,
+  "estimatedQRCost": 0,
+  "lastDraftSavedAt": "2026-09-06T02:29:33.479Z",
+  "cultivationDetails": null,
+  "cultivationMethods": [],
+  "renewalOfExpiryDate": null,
+  "acknowledgedStandards": false,
+  "certificationPurposes": [
+    "EXPORT"
+  ],
+  "previousCertificateNumber": null,
+  "renewalOfCertificateNumber": null
+}

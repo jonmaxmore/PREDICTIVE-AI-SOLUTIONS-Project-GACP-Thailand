@@ -1,0 +1,1310 @@
+// Domain: Billing & Payment
+
+model Invoice {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Invoice Number
+  invoiceNumber String @unique
+
+  // ใบแจ้งหนี้ผูกกับคำขอเสมอ — DB บังคับด้วย CHECK `invoices_billable_application_chk`
+  // เดิมเป็น XOR ระหว่างคำขอกับแพ็กเกจสมาชิก ตั้งแต่แพ็กเกจถูกปลดระวาง 2026-09-11
+  // กติกาจึงเหลือทางเดียว (เข้มขึ้น ไม่ใช่ผ่อนลง)
+  applicationId  String?
+  application    Application?  @relation(fields: [applicationId], references: [id])
+  healthId       String
+  applicant      User          @relation(fields: [healthId], references: [canonicalId])
+  quoteId        String?
+  quote          Quote?        @relation(fields: [quoteId], references: [id])
+
+  // Service Type
+  serviceType String
+
+  // Billing
+  billingName       String?
+  billingAddress    String?
+  certificateNumber String?
+
+  // Items (JSON) — LEGACY: kept for backward compat with old invoices
+  items Json?
+
+  // Structured Line Items — NEW: itemized billing for DTAM compliance
+  lineItems InvoiceLineItem[]
+
+  // Totals
+  // Iter 24 (hardening loop, 2026-05-16) — Decimal type unification (audit-gap P0 #3).
+  // Migrated from Float → Decimal(15,2) so money math is exact across the system.
+  // Float (IEEE-754 binary64) accumulates rounding errors that compound through
+  // sum/diff operations and produce ฿0.01 drift after dozens of invoices —
+  // forbidden under TFRS for NPAEs ch.18 (revenue) and ม.86/4 ป.รัษฎากร
+  // (sequential tax-invoice numbering with exact taxable-amount column).
+  // Quotation / JournalLine / CreditNote / DebitNote already Decimal(15,2);
+  // this change brings Invoice into lockstep. Migration:
+  //   20260517000000_decimal_unification (additive USING-cast, no data loss).
+  // Service callers wrap reads with `Number(invoice.totalAmount)` for JS math
+  // (Prisma marshals Decimal as Decimal.js — `.toLocaleString()` is NOT on
+  // its prototype, so any direct interpolation site got a small fix).
+  subtotal        Decimal @db.Decimal(15, 2)
+  vat             Decimal @default(0) @db.Decimal(15, 2)
+  totalAmount     Decimal @db.Decimal(15, 2)
+  totalAmountText String?
+
+  // Payment
+  dueDate              DateTime
+  status               String              @default("pending") // pending, paid, overdue, cancelled
+  paidAt               DateTime?
+  paymentTransactionId String?
+  // T-010 (subtask 1) — promote loose paymentTransactionId scalar into a
+  // proper FK so reconciliation can `include: { paymentTransaction: true }`
+  // without the second findFirst, and so dangling references are caught at
+  // INSERT time instead of silently ignored at JOIN time. The migration
+  // (20260505_invoice_payment_transaction_fk) uses ON DELETE SET NULL to
+  // preserve the invoice when a transaction row is purged — same policy
+  // as the *ProviderId promotions in 20260430200000_add_application_role_fks.
+  paymentTransaction   PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  paymentMethod        String? // QR_CASH, BANK_TRANSFER, CREDIT_CARD
+
+  // Receipt (Issued by Accountant)
+  receiptNumber   String?   @unique
+  receiptIssuedAt DateTime?
+  receiptIssuedBy String?
+
+  // Receipt auto-issue tracking (B-RCPT-STATUS, 2026-06-04). ใบเสร็จออกอัตโนมัติ
+  // แบบ ASYNCHRONOUS เมื่อชำระเงินสำเร็จ (นอก tx ของการรับชำระ เพื่อไม่ให้ปัญหาเรื่อง
+  // เลขที่ใบเสร็จไปขวางการรับชำระ — decision A)
+  //
+  // สัญญาณที่จุดชนวนคือ **Stripe webhook** ไม่ใช่ "อนุมัติสลิป" ตามที่คอมเมนต์เดิมเขียน —
+  // รางสลิปถูกปลดระวางแล้ว (มติ operator 2026-09-06) และตาราง payment_slips ถูกลบ
+  // 2026-09-11 · ตัวเงินตัดสินที่ checkout-settlement-service เท่านั้น
+  // Before this, a failed auto-issue was swallowed ("non-fatal") and invisible.
+  // These columns make a PENDING/FAILED auto-issue visible to the ACCOUNT queue
+  // (listReceiptFailures) and retryable (retryReceiptIssue).
+  receiptStatus        String? // null | "PENDING" | "ISSUED" | "FAILED"
+  receiptError         String? // last failure message (truncated to 500 chars)
+  receiptAttempts      Int       @default(0)
+  receiptLastAttemptAt DateTime?
+
+  // Digital signature metadata (B16-A, column landed 2026-06-04). Written by
+  // receipt-auto-sign-service on approval: { signerUserId, signerRole, signedAt,
+  // signatureAlgorithm, signatureBase64, pdfHash, keyNamespace, issuerSide }.
+  signatureMetadata    Json?
+
+  // Notes
+  notes String?
+
+  // Structured ops metadata (hold reason, release notes, finance flags, ...)
+  // Used by holdInvoice / releaseHold in services/invoice/invoice-finance-ops.js
+  metadata Json?
+
+  // Audit Trail
+  createdBy   String?
+  updatedBy   String?
+  createdByIp String?
+
+  // Soft Delete
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Legal Retention (7 years for tax)
+  retainUntil DateTime @default(dbgenerated("(now() + '7 years'::interval)"))
+  legalHold   Boolean  @default(false)
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Wave 1: the single-checkout order this invoice belongs to (one-to-one).
+  checkoutOrder CheckoutOrder? @relation("CheckoutOrderInvoice")
+
+  // W3-41 Q2-D2: dedup ledger rows for the daily payment-reminder sweep
+  // (jobs/payment-reminder-job.js) — one row per (type, intended send day).
+  paymentReminderLogs PaymentReminderLog[]
+
+  // NOTE: the `journalEntries JournalEntry[]` back-relation was removed during
+  // migration-drift reconciliation. Its FK (journal_entries.invoiceId → invoices.id)
+  // was never enforced in the DB because the columns are type-incompatible
+  // (journal_entries.invoiceId is uuid; invoices.id is text). No backend code
+  // traversed this relation. journal_entries.invoiceId remains as a scalar.
+
+  // Credit-note / debit-note back-relations (B20-A, 2026-05-16). A paid
+  // PLATFORM-side ใบกำกับภาษี can be amended by zero, one, or many
+  // CreditNote / DebitNote rows over its lifetime (ม.86/10 และ ม.86/9
+  // ป.รัษฎากร). Both are issued by the PLATFORM only — STATE-fee invoices
+  // are corrected via Treasury's refund process, not via CN/DN on the
+  // platform's books.
+  creditNotes CreditNote[]
+  debitNotes  DebitNote[]
+
+  @@index([applicationId])
+  @@index([healthId])
+  @@index([status])
+  @@index([invoiceNumber])
+  @@index([isDeleted])
+  @@index([organizationId])
+  // Phase 2 #2.8: webhook reconciliation joins Invoice → PaymentTransaction
+  // by paymentTransactionId. Without this index, every webhook hit causes
+  // a sequential scan on `invoices`.
+  @@index([paymentTransactionId])
+  // DB-06: index FK columns
+  @@index([quoteId])
+  @@map("invoices")
+}
+
+// NEW: INVOICE LINE ITEM (Itemized billing for DTAM compliance)
+
+model InvoiceLineItem {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Parent Invoice
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+
+  // Item Details
+  lineNumber  Int // ลำดับ (1, 2, 3...)
+  code        String // "DOC_REVIEW", "FIELD_AUDIT", "PLATFORM_FEE", "VAT"
+  description String // "ค่าอ่าน/พิจารณาเอกสาร"
+  quantity    Int    @default(1)
+  // BE-DB-05: Decimal(15,2) per TFRS for NPAEs (exact decimal math) — the
+  // parent Invoice.{subtotal,vat,totalAmount} are already Decimal (Iter 24,
+  // 20260517000000); line items were left as Float. A sum of Float line items
+  // can drift from the Decimal parent total by sub-satang once non-integer
+  // amounts appear. Migrated to match the Invoice family.
+  unitPrice   Decimal @db.Decimal(15, 2) // 5000.00
+  amount      Decimal @db.Decimal(15, 2) // quantity × unitPrice
+
+  // Category
+  phase     String? // "PHASE_1", "PHASE_2"
+  isTaxable Boolean @default(false)
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([invoiceId])
+  @@index([organizationId])
+  @@map("invoice_line_items")
+}
+
+// แพ็กเกจสมาชิก (Subscription) ถูกปลดระวาง 2026-09-11 — คำสั่ง operator: แพลตฟอร์มไม่มี
+// บริการนี้ขาย · ขาที่พาไป ACTIVE ไม่มีตัวจุดชนวนอยู่จริงมาตั้งแต่ถอดรางสลิปออก และตาราง
+// มีศูนย์แถว · ประตู entitlement ที่เคยกั้นการสร้างล็อตไว้ที่ PREMIUM ถูกถอดด้วย
+// (operator: "ตอนนี้เราเปิดสร้างล็อตแบบ open") — ด่านจริงของประตูนั้นคือความเป็นเจ้าของรุ่น
+// ซึ่งยังอยู่ครบ
+// migration: 20260911140000_retire_subscriptions_and_slips
+
+model Quote {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Quote Number
+  quoteNumber String @unique
+
+  // Relations
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  // Items (JSON)
+  items Json?
+
+  // Totals — BE-DB-05: Decimal(15,2) per TFRS for NPAEs (exact decimal math),
+  // matching Quotation/Invoice. Quote is the legacy quote model; its amounts
+  // feed downstream invoice math, so Float drift here propagates.
+  subtotal    Decimal @db.Decimal(15, 2)
+  vat         Decimal @default(0) @db.Decimal(15, 2)
+  totalAmount Decimal @db.Decimal(15, 2)
+
+  // Status
+  status     String    @default("pending") // pending, accepted, rejected, expired
+  validUntil DateTime
+  acceptedAt DateTime?
+  rejectedAt DateTime?
+
+  // Notes
+  notes String?
+
+  // Soft Delete
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  // Relations
+  invoices Invoice[]
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([applicationId])
+  @@index([status])
+  @@index([isDeleted])
+  @@index([organizationId])
+  @@map("quotes")
+}
+
+model PaymentTransaction {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  // Payment Phase
+  phase String // PHASE_1 (5,000), PHASE_2 (25,000)
+
+  // Gateway Info
+  gateway    String // STRIPE, PROMPTPAY, TRUEMONEY, etc.
+  gatewayRef String? @unique // Reference ID from gateway (M-017: unique for idempotent webhook)
+
+  // Amount
+  /// Amount in SATANG (1 baht = 100 satang). Stripe-style integer to avoid
+  /// floating-point. Convert to/from baht via Math.round(amount / 100) for
+  /// display.
+  /// IMPORTANT: this is in SATANG. By contrast, Application.phase1Amount /
+  /// phase2Amount are in BAHT. Same conceptual value (the gateway-charged
+  /// amount), different units — so writers that bridge the two fields must
+  /// multiply or divide by 100. Existing call sites:
+  ///   - payment-service-phase-flow.js:139,273  amount: phase{1,2}Amount * 100  (baht->satang)
+  ///   - payment-service-webhook-flow.js:257,283 amount: transactionAmount || application.phase{1,2}Amount  (mixed; verify each caller)
+  amount   Int
+  currency String @default("THB")
+
+  // Status
+  status String @default("PENDING") // PENDING, PROCESSING, SUCCESS, FAILED, CANCELLED, EXPIRED, REFUNDED
+
+  // Payment Details
+  paymentMethod String? // CREDIT_CARD, PROMPTPAY, etc.
+  paymentData   Json? // { cardLast4, bank, etc. }
+
+  // Timestamps
+  paidAt      DateTime?
+  failedAt    DateTime?
+  cancelledAt DateTime?
+  expiredAt   DateTime?
+
+  // Error Info (if failed)
+  errorCode    String?
+  errorMessage String?
+
+  // Webhook
+  webhookReceivedAt DateTime?
+  webhookData       Json?
+
+  // Idempotency
+  idempotencyKey String? @unique
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // T-010 (subtask 1) — back-relation for the FK added on Invoice.paymentTransactionId.
+  // One PaymentTransaction can settle multiple superseded Invoice rows
+  // (e.g., re-billing scenarios with the same gateway capture).
+  invoices Invoice[]
+
+  // Wave 1: the checkout order this charge settles (one-to-one).
+  checkoutOrder CheckoutOrder? @relation("CheckoutOrderCharge")
+
+  @@index([applicationId])
+  @@index([status])
+  @@index([gatewayRef])
+  @@index([createdAt])
+  @@index([organizationId])
+  @@map("payment_transactions")
+}
+
+// NEW: PAYMENT AUDIT (Raw Webhook Data)
+
+// Wave 0 purge (docs/payment-refactor/legacy-payment-audit.md): the orphan
+// PaymentAudit (raw gateway webhook store — no mounted webhook since the
+// 2026-04-29 slip-flow cutover) and PaymentReconciliation (Float money,
+// never written) models were dropped. The single-checkout redesign gets a
+// NEW remittance/reconciliation model — those two were not a usable base.
+
+// BANK ACCOUNT (slip-flow Phase 1 — destination account for off-platform
+// transfers; ACCOUNT-team manages via /provider/accounting/bank-accounts)
+
+model BankAccount {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Bank fields (Thai)
+  bankCode      String // SCB, KBANK, BBL, KTB, BAY, GSB, KKP, TTB, etc.
+  bankName      String // Human-readable, e.g. "ธนาคารกรุงเทพ"
+  accountNumber String // Formatted "xxx-x-xxxxx-x" or contiguous digits
+  accountHolder String // Legal name of the receiving entity
+  branchName    String?
+
+  // PromptPay (optional — applicant-facing screen renders QR if set)
+  promptpayId String? // 13-digit national ID OR 10-digit phone number
+
+  // Lifecycle
+  isActive        Boolean   @default(true) // Applicant-visible candidate
+  isDefault       Boolean   @default(false) // One-per-(org, defaultForPhase) enforced in service
+  defaultForPhase String? // null = default for all phases; "PHASE_1" / "PHASE_2" / "SUBSCRIPTION" = phase-scoped
+  // Two-money-flow issuer side (B-PAY-SIDE, 2026-06-04). Each phase produces
+  // a STATE-fee invoice (→ DTAM/Treasury account) AND a PLATFORM-fee+VAT
+  // invoice (→ company account); the applicant must transfer each to its own
+  // account. The slip-upload modal derives the side from the invoice's
+  // serviceType (PHASE_x_STATE_FEE / PHASE_x_PLATFORM_FEE) and asks /active
+  // for that side. null = legacy single/side-agnostic account.
+  issuerType      String? // null | "STATE" (DTAM) | "PLATFORM"
+  effectiveFrom   DateTime  @default(now())
+  effectiveUntil  DateTime?
+
+  // Operational (not shown to applicants)
+  notes String?
+
+  // Audit
+  createdBy String? // ACCOUNT/ADMIN user id
+  updatedBy String?
+
+  // Tenancy (ADR-014)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Back-link
+
+  @@unique([organizationId, bankCode, accountNumber])
+  @@index([organizationId, isActive, defaultForPhase, effectiveFrom, effectiveUntil])
+  @@index([organizationId, isActive])
+  @@index([organizationId, issuerType, isActive])
+  @@map("bank_accounts")
+}
+
+
+// ──────────────────────────────────────────────────────────────────────────
+// DOUBLE-ENTRY ACCOUNTING (B16, 2026-05-16)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Persists the journal-entry stream emitted by services/journal-entry-service.js
+// every time an Invoice transitions to PAID. Conforms to Thai accounting
+// requirements:
+//   - TFRS for NPAEs (Thai Financial Reporting Standards for Non-Publicly
+//     Accountable Entities) — mandatory double-entry bookkeeping.
+//   - TAS 1 (Presentation of Financial Statements) — chronological audit
+//     trail with traceable references to source documents.
+//   - Revenue Code §86/4 (ภ.พ.30) — VAT remittance requires a separable
+//     "VAT Payable (Output)" credit line on every platform-fee receipt.
+//   - 7-year retention — see Invoice.retainUntil; journal entries inherit
+//     the same retention window (enforced at the application layer).
+//
+// Design notes:
+//   - Decimal(15,2) for money (NOT Float / Int satang) — accounting requires
+//     exact decimal math at the schema boundary; Prisma marshals to JS
+//     Decimal.js, services round via round2() before persistence.
+//   - lines cascade-delete with entry (a journal entry without its lines is
+//     a torn write; treat as a single aggregate).
+//   - metadata Json? on lines is forward-compat: withholding tax (WHT),
+//     foreign-currency amounts (currency, fxRate), multi-entity splits
+//     (subsidiary code), and reversal markers can land here without a
+//     migration. See docs/architecture/journal-entry-schema-2026-05-16.md.
+//   - Soft delete via isDeleted only on JournalEntry (the aggregate root) —
+//     lines are immutable once the entry is written; corrections must be
+//     posted as a REVERSING entry, not by editing lines (standard
+//     accounting practice — preserves the audit trail).
+
+model JournalEntry {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entryDate      DateTime // accounting date (typically invoice.paidAt)
+  reference      String // free-form, usually invoice.invoiceNumber
+  invoiceId      String?       @db.Uuid
+  // NOTE: Invoice relation removed (migration-drift reconcile): invoiceId (uuid) and
+  // invoices.id (text) are type-incompatible, so the declared FK could never be created
+  // or enforced. invoiceId is kept as a plain scalar reference (no @relation).
+  description    String // e.g. "Payment received for INV-…"
+  totalDebit     Decimal       @db.Decimal(15, 2) // must equal totalCredit
+  totalCredit    Decimal       @db.Decimal(15, 2)
+  organizationId String?       @db.Uuid
+  createdAt      DateTime      @default(now())
+  createdBy      String? // canonical user id of the actor
+  sourceType     String? // e.g. CHECKOUT_SETTLEMENT — the idempotency class of this entry
+  sourceId       String? // the order id for a settlement — one live settlement entry per order
+  isDeleted      Boolean       @default(false) // soft-delete; reversing entries preferred
+  lines          JournalLine[]
+
+  @@index([entryDate])
+  @@index([reference])
+  @@index([invoiceId])
+  @@index([organizationId])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entryId     String       @db.Uuid
+  entry       JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  lineNumber  Int // 1-based ordinal within the entry
+  accountCode String // chart-of-accounts code (e.g. "1112-001")
+  accountName String // Thai-language account name from journal-entry-service.ACCOUNTS
+  debit       Decimal      @default(0) @db.Decimal(15, 2)
+  credit      Decimal      @default(0) @db.Decimal(15, 2)
+  issuer      String? // 'DTAM' | 'PLATFORM' — splits state vs platform revenue
+  // Taxable amount under Revenue Code ม.79 — the VAT base for this line.
+  // Distinct from `credit` because the VAT-bearing portion of a multi-line
+  // invoice is the platform-fee subtotal, NOT the total cash captured.
+  // Used by ภ.พ.30 (monthly VAT remittance) to filter only VAT-bearing rows
+  // without re-parsing accountCode. Optional — non-VAT lines leave it null.
+  taxableAmount Decimal?   @db.Decimal(15, 2)
+  metadata    Json? // forward-compat: WHT, FX, multi-entity, reversal markers
+  createdAt   DateTime     @default(now())
+
+  @@index([entryId])
+  @@index([accountCode])
+  @@map("journal_lines")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// RECEIPT SEQUENCE ALLOCATOR (B16, 2026-05-16; extended 2026-05-16 batch B16-A)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Per-issuer + per-document-type + per-year monotonic counter for canonical
+// receipt / quotation / invoice numbers. Issued numbers must be unique across
+// the entire program — duplicates would be a legal defect under DTAM and
+// Revenue Department audit. Allocation runs inside a SERIALIZABLE Prisma
+// transaction:
+//   - findUnique → capture current `nextNumber`
+//   - update     → bump nextNumber by 1 (or upsert with nextNumber=2 on first
+//                  allocation, returning 1)
+// PostgreSQL's serializable isolation plus the compound unique index ensures
+// two concurrent allocators cannot mint the same number.
+//
+// Shape history:
+//   - 2026-05-16 (B16-original): single (prefix, year, counter) tuple.
+//     prefix encoded both issuer + document via string concat ('RCP-DTAM').
+//   - 2026-05-16 (B16-A extension, this migration): added structured columns
+//     (issuerType, documentType, yearBE, yearAD, nextNumber) so:
+//       1. the receipt-sequence-service can query by issuer+doctype directly
+//          without parsing the prefix string;
+//       2. PLATFORM rows carry the actual CE year (yearAD) and the storage
+//          BE year (yearBE) side-by-side — the render layer no longer has
+//          to translate between calendars;
+//       3. new document types (QUOTATION, INVOICE, FULL_TAX_INVOICE, etc.)
+//          can extend the table without touching the legacy prefix column.
+//
+//     Legacy columns (prefix, year, counter) are kept NULLABLE so existing
+//     B16 rows survive and the receipt-numbering-service.js fallback path
+//     stays functional through the transition. Once all consumers migrate
+//     to the new columns, B16-D drops the legacy trio.
+//
+// Compliance basis: TFRS for NPAEs ch.2 (financial reporting framework),
+//   Revenue Code §86/4 (sequential tax-invoice numbering), §87/3 (7-year
+//   document retention).
+//
+// Concurrency note for DBAs:
+//   Two unique indexes coexist during the transition window:
+//     `receipt_sequences_prefix_year_key`              (legacy)
+//     `receipt_sequences_issuer_doc_be_ad_key`         (new)
+//   Both protect against duplicate buckets. A row created via the new path
+//   leaves `prefix`/`year` NULL; the legacy unique index is partial-friendly
+//   (PostgreSQL treats multiple NULLs as distinct, so legacy and new rows
+//   coexist without collision).
+
+model ReceiptSequence {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // ── Legacy shape (B16-original, kept nullable through transition) ─────
+  prefix          String?  // 'RCP-DTAM' | 'TAX-PRD' — legacy, kept for back-compat
+  year            Int?     // legacy year column (CE for PLATFORM, BE for DTAM)
+  counter         Int      @default(0) // last-allocated value; nextval = counter + 1
+  // ── New shape (B16-A extension) ───────────────────────────────────────
+  issuerType      String?  // 'DTAM' | 'PLATFORM' — populated on new rows
+  documentType    String?  // 'QUOTATION' | 'INVOICE' | 'GOVERNMENT_REVENUE_RECEIPT'
+  //                       // | 'FULL_TAX_INVOICE'
+  yearBE          Int?     // Buddhist Era year (2568, 2569 …); 0 if irrelevant
+  yearAD          Int?     // Anno Domini year (2025, 2026 …); 0 if irrelevant
+  nextNumber      Int      @default(1) // next value to mint (NOT last allocated)
+  // ── Audit ──────────────────────────────────────────────────────────────
+  lastAllocatedAt DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([prefix, year], map: "receipt_sequences_prefix_year_key")
+  @@unique([issuerType, documentType, yearBE, yearAD], map: "receipt_sequences_issuer_doc_be_ad_key")
+  @@index([prefix])
+  @@index([issuerType, documentType])
+  @@map("receipt_sequences")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// QUOTATION (B16-A extension, 2026-05-16) — DTAM-side / PLATFORM-side split
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Adds a structured Quotation row decoupled from the legacy `Quote` model:
+//   - The legacy Quote stays in place (consumed by finance routes from
+//     batch 11) — DO NOT delete or migrate Quote rows here. Batch B16-A
+//     introduces Quotation as the canonical home for the new two-issuer
+//     billing flow.
+//   - Each Application now generates TWO Quotation rows per phase:
+//       • issuerType='DTAM'     — state fee transferred to Treasury
+//       • issuerType='PLATFORM' — platform service fee + VAT to platform bank
+//     The applicant accepts both via the same UI step; the system mints
+//     two Invoice rows + two Receipt rows downstream.
+//   - `installments` is a JSON array of phase splits, e.g.:
+//       [{ "phase": "PHASE_1", "amount": 5000 },
+//        { "phase": "PHASE_2", "amount": 25000 }]
+//     This lets one Quotation describe BOTH phase fees up-front while still
+//     billing them separately when the applicant reaches each gate.
+//
+// Compliance basis:
+//   - Revenue Code §86 — formal quotation is not a tax document but, when
+//     it precedes a full tax invoice, the same identity/address fields
+//     must reconcile (§86/4 trace requirement).
+//   - TFRS for NPAEs ch. 18 (รายได้) — revenue is recognised at invoice
+//     time, NOT quotation; this table holds estimates only.
+//
+// Quote vs Quotation decision (recorded for auditors):
+//   Existing Quote has applicationId + subtotal/vat/totalAmount, so it
+//   COULD have been extended with issuerType + installments. However the
+//   two-issuer flow needs a clean break:
+//     • Quote.quoteNumber is shared across legacy single-issuer documents
+//       (QT-20260516-0001 style) — re-using it would conflate the two
+//       numbering streams and break batch-11 quote-service uniqueness.
+//     • The new flow's `quotationNumber` is allocated via ReceiptSequence
+//       (documentType='QUOTATION') with separate DTAM / PLATFORM buckets.
+//   → DECISION: ADD a new Quotation model alongside Quote. Quote rows are
+//     read-only legacy; new finance code writes Quotation.
+
+model Quotation {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Linkage — every quotation belongs to exactly one application; an
+  // application has TWO quotations (DTAM + PLATFORM).
+  applicationId   String
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  // Issuer — splits the document stream into DTAM (state fee) and
+  // PLATFORM (service fee + VAT).
+  issuerType      String   // 'DTAM' | 'PLATFORM'
+
+  // Canonical number (e.g. 'QT-DTAM-2569-000001' or 'QT-PRD-2026-000001').
+  // Allocated via receipt-sequence-service with documentType='QUOTATION'.
+  quotationNumber String   @unique
+
+  // Money (Decimal(15,2) per TFRS for NPAEs — exact decimal math).
+  subtotal        Decimal  @db.Decimal(15, 2)
+  vat             Decimal  @default(0) @db.Decimal(15, 2)
+  totalAmount     Decimal  @db.Decimal(15, 2)
+
+  // Per-phase installment breakdown, e.g.
+  //   [{ "phase":"PHASE_1","amount":5000 },{ "phase":"PHASE_2","amount":25000 }]
+  // for the DTAM quotation, or
+  //   [{ "phase":"PHASE_1","amount":535 },{ "phase":"PHASE_2","amount":2675 }]
+  // for the PLATFORM quotation. Each phase becomes an Invoice when the
+  // applicant clears the phase gate.
+  installments    Json?
+
+  // Lifecycle
+  status          String   @default("DRAFT") // DRAFT | SENT | ACCEPTED | REJECTED | EXPIRED | INVOICED
+  validUntil      DateTime?
+  acceptedAt      DateTime?
+  rejectedAt      DateTime?
+
+  // F-G4-64 — the acceptance record. `acceptedSnapshot` is the document the
+  // applicant actually saw at the instant of acceptance, built from THIS row's
+  // installments (never from a live fee calculation), with every money value a
+  // 2-decimal string. `acceptedSnapshotHash` is sha256 over its canonical
+  // (key-sorted) JSON; a checkout order copies it so the charge can be proved
+  // to have been checked against those exact figures. `acceptedBy` is the
+  // acting User id — `updatedBy` already carried it, but that column also moves
+  // for reasons that are not acceptance.
+  acceptedSnapshot     Json?
+  acceptedSnapshotHash String?
+  acceptedBy           String?
+
+  // Per-instalment billing stamps. Under W14 ONE quotation prices BOTH phases,
+  // so `status = INVOICED` may only be written once EVERY instalment this
+  // quotation prices has been billed. A renewal prices PHASE_2 only, so for a
+  // renewal phase2InvoicedAt alone closes the quotation.
+  phase1InvoicedAt DateTime?
+  phase2InvoicedAt DateTime?
+
+  // Notes (provider note, applicant note)
+  notes           String?
+  applicantNotes  String?
+
+  // Audit
+  createdBy       String?
+  updatedBy       String?
+
+  // Soft delete
+  isDeleted       Boolean   @default(false)
+  deletedAt       DateTime?
+  deletedBy       String?
+  deleteReason    String?
+
+  // Tenancy (ADR-014, Phase 1) — keep parity with Quote.
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Lookup index only. The UNIQUENESS of a live quotation per
+  // (applicationId, issuerType) is enforced by a PARTIAL unique index that
+  // lives in SQL and nowhere else, because Prisma's schema language cannot
+  // express `WHERE "isDeleted" = false`:
+  //
+  //   quotations_application_issuer_live_uq
+  //     — prisma/migrations/20260828100000_quotation_acceptance_snapshot_expand
+  //
+  // It is what actually stops two concurrent issuances from minting two priced
+  // documents and burning two QT-PRD numbers for one application; the service
+  // reads its violation as "somebody else already issued it" and re-reads
+  // (quotation-service.issueQuotationsForApplication). Partial so a
+  // soft-deleted row never blocks a re-issue, and so a pre-W14 application can
+  // keep its legitimate DTAM + PLATFORM pair.
+  @@index([applicationId, issuerType])
+  @@index([status])
+  @@index([organizationId])
+  @@index([isDeleted])
+  @@map("quotations")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// ISSUER BANK ACCOUNT (B16-A extension, 2026-05-16)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Canonical destination bank account per issuer side (DTAM / PLATFORM). The
+// applicant's payment UI renders these two accounts side-by-side so they can
+// make BOTH transfers in the same session: state fee → Treasury (DTAM),
+// platform fee + VAT → platform bank (PLATFORM).
+//
+// NOT to be confused with the existing `BankAccount` model above. The
+// existing BankAccount is org-scoped + phase-scoped — applicable per
+// organization. This new IssuerBankAccount is GLOBAL — one row per issuer
+// type total, representing the platform-level canonical destinations.
+//
+// Compliance basis:
+//   - กฎกระทรวงการคลังเรื่องเงินรายได้แผ่นดิน — state revenue must land in
+//     a Treasury-controlled (กรมบัญชีกลาง) account, NOT a private bank
+//     account. The DTAM row records that destination so the slip-flow
+//     reconciler knows where to expect the bank credit.
+//   - Revenue Code §82 — VAT-registered entity (the platform) must maintain
+//     a single canonical bank account for VAT receipts so the monthly
+//     ภ.พ.30 reconciliation has a single source of truth.
+
+// ──────────────────────────────────────────────────────────────────────────
+// CREDIT NOTE (ใบลดหนี้) — ม.86/10 ป.รัษฎากร  (B20-A, 2026-05-16)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Issued by the PLATFORM (Predictive AI Solution Co., Ltd.) when a previously
+// issued full tax invoice (ใบกำกับภาษีเต็มรูป) must be amended downward —
+// cancellation, price reduction, partial return, billing-error correction.
+//
+// Legal basis:
+//   - ป.รัษฎากร ม.86/10 — A VAT-registered seller that issues a tax invoice
+//     and later reduces the taxable amount MUST issue a "ใบลดหนี้" to the
+//     buyer in the same VAT period (ภ.พ.30 month) where the change occurs.
+//   - ม.86/4 — Sequential numbering rules carry over (CN must reference the
+//     ORIGINAL invoice number + state the reason).
+//   - ม.87/3 — 7-year retention applies to all tax-bearing documents.
+//   - TFRS for NPAEs ch. 18 (รายได้) — reduces revenue at the period the
+//     CN is recognised; the original revenue entry is not edited, a
+//     REVERSING entry is posted instead.
+//
+// Scope: PLATFORM only. DTAM (state-fee) invoices are corrected via the
+// กรมบัญชีกลาง refund process — NOT via CN/DN here. Enforced at the service
+// layer (createCreditNote rejects when originalInvoice.serviceType maps to
+// the DTAM issuer).
+model CreditNote {
+  id                String   @id @default(uuid())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Canonical document number: CN-PRD-{yearAD}-{seq6}
+  //   e.g. "CN-PRD-2026-000001". Allocated via receipt-sequence-service /
+  //   receipt-numbering-service with documentType='CREDIT_NOTE_PLATFORM'
+  //   and issuerType='PLATFORM' (Arabic numerals + CE year per platform
+  //   convention — matches TAX-PRD-* tax-invoice numbering).
+  /// null while DRAFT — allocated at ISSUE (number year = printed year, 2026-09-26)
+  creditNoteNumber  String?  @unique
+
+  // Reference to the original ใบกำกับภาษี (mandatory under ม.86/10).
+  originalInvoiceId String
+  originalInvoice   Invoice  @relation(fields: [originalInvoiceId], references: [id])
+
+  // Reason for the credit note — free-text Thai description that prints on
+  // the PDF, plus a coded enum for analytics / VAT report categorisation.
+  //   'CANCELLATION'      — service cancelled by buyer
+  //   'PRICE_REDUCTION'   — agreed price discount post-invoice
+  //   'CORRECTION'        — over-billing / arithmetic error
+  //   'RETURN'            — partial return of supplied service
+  reason            String
+  reasonCode        String
+
+  // Money — Decimal(15,2) per TFRS for NPAEs (exact decimal math). All
+  // values are POSITIVE numbers; the "downward" semantics are implicit in
+  // the document type. The journal entry posted at POSTED status will
+  // Dr Revenue + Dr Output VAT and Cr the offsetting cash / refund-payable
+  // line — see services/credit-note-service.js for the reversing shape.
+  subtotal          Decimal  @db.Decimal(15, 2)
+  vat               Decimal  @db.Decimal(15, 2)
+  totalAmount       Decimal  @db.Decimal(15, 2)
+
+  // Lifecycle:
+  //   DRAFT   → ISSUED   (allocate number, freeze financials, generate PDF)
+  //   ISSUED  → POSTED   (write the reversing JournalEntry, mark immutable)
+  //   any     → CANCELLED (soft-cancel before POSTED; POSTED state is
+  //                        immutable — corrections require another CN/DN
+  //                        per standard accounting practice).
+  status            String
+  issuedAt          DateTime?
+  issuedBy          String?
+  postedAt          DateTime?
+  postedBy          String?
+
+  // Tenancy (ADR-014) — optional because legacy seed/test rows may exist
+  // without an organisation but every production row will carry one.
+  organizationId    String?
+
+  // Soft delete
+  isDeleted         Boolean  @default(false)
+
+  @@index([originalInvoiceId])
+  @@index([status])
+  @@index([organizationId])
+  @@map("credit_notes")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// DEBIT NOTE (ใบเพิ่มหนี้) — ม.86/9 ป.รัษฎากร  (B20-A, 2026-05-16)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Mirror of CreditNote — issued when a previously billed amount must be
+// adjusted UPWARD (additional charge, billing-error correction in the
+// over-charge direction, late fee). Same period-locking rule (same ภ.พ.30
+// month) and same retention. Reason codes differ:
+//   'ADDITIONAL_CHARGE' — extra scope of work billed after the fact
+//   'CORRECTION'        — under-billing / arithmetic error
+//   'LATE_FEE'          — penalty added per the service agreement
+model DebitNote {
+  id                String   @id @default(uuid())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Canonical document number: DN-PRD-{yearAD}-{seq6}
+  /// null while DRAFT — allocated at ISSUE (number year = printed year, 2026-09-26)
+  debitNoteNumber   String?  @unique
+
+  originalInvoiceId String
+  originalInvoice   Invoice  @relation(fields: [originalInvoiceId], references: [id])
+
+  reason            String
+  reasonCode        String
+
+  subtotal          Decimal  @db.Decimal(15, 2)
+  vat               Decimal  @db.Decimal(15, 2)
+  totalAmount       Decimal  @db.Decimal(15, 2)
+
+  status            String
+  issuedAt          DateTime?
+  issuedBy          String?
+  postedAt          DateTime?
+  postedBy          String?
+
+  organizationId    String?
+  isDeleted         Boolean  @default(false)
+
+  @@index([originalInvoiceId])
+  @@index([status])
+  @@index([organizationId])
+  @@map("debit_notes")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// MANUAL JOURNAL ENTRY DRAFT (B20-C, 2026-05-16) — workflow row
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Owns the draft → approval → posting workflow for journal entries that
+// are NOT triggered by a slip approval (bank charges, FX gain/loss,
+// accrual reversals, manual corrections after approval).
+//
+// State machine:
+//   DRAFT     → APPROVED  (ADMIN; separation-of-duties — approver ≠ creator)
+//   APPROVED  → POSTED    (ADMIN; writes JournalEntry + JournalLine atomically)
+//   DRAFT|APPROVED → REJECTED (records reason, terminal)
+//   POSTED    → (terminal — TFRS for NPAEs ch.18 immutability; corrections
+//                via a separate reversing entry)
+//
+// Compliance basis:
+//   - TFRS for NPAEs ch.2 — internal controls require segregation of
+//     incompatible functions: the staff member who creates a journal
+//     entry cannot be the one who approves it.
+//   - TFRS for NPAEs ch.18 — once posted, a journal entry is part of the
+//     chronological accounting record and is immutable. Corrections via
+//     reversing entries.
+//   - ป.รัษฎากร ม.86/4 — sequential numbering on tax-bearing documents;
+//     draftNumber MJE-{yearAD}-{seq6} preserves the audit trail even for
+//     rejected drafts (gap is meaningful — auditor can see "MJE-2026-
+//     000005 was rejected" rather than wondering whether it existed).
+//   - ป.รัษฎากร ม.87/3 — 7-year retention.
+//
+// Schema notes:
+//   - linesJson stores the validated debit/credit lines in array form
+//     so the draft is self-contained even before posting. On post, the
+//     lines are materialised into JournalLine rows linked to the freshly
+//     created JournalEntry; `postedJournalEntryId` back-pointer lets the
+//     auditor jump from this row to the GL entry.
+//   - description on the posted JournalEntry is prefixed with `[MANUAL]`
+//     so the trial-balance + financial-statements aggregators can filter
+//     manual vs auto entries without a dedicated entryType column. A
+//     future migration can promote that prefix into an explicit column.
+//   - organizationId is nullable to mirror existing CreditNote/DebitNote
+//     models (legacy seed rows may lack a tenant).
+//   - linesJson uses Json not Json? — the lines array is mandatory.
+
+model ManualJournalEntryDraft {
+  id                   String   @id @default(uuid())
+  // Canonical draft number — MJE-{yearAD}-{seq6}. Allocated by the
+  // service via a count+1 pattern (concurrency note: low-volume manual
+  // entries make this acceptable; promote to receipt-sequence-service
+  // when volume grows).
+  draftNumber          String   @unique
+
+  description          String
+  postingDate          DateTime
+  reason               String
+
+  // Lifecycle status — DRAFT | APPROVED | POSTED | REJECTED. POSTED is
+  // terminal; REJECTED is also terminal (corrections via a fresh draft).
+  status               String
+
+  // Validated lines as JSON: [{ lineNumber, accountCode, accountName,
+  // debit, credit }]. accountCode MUST exist in the canonical chart of
+  // accounts (chart-of-accounts-service); validated at create and again
+  // at post.
+  linesJson            Json
+
+  // Totals — Decimal(15,2) per TFRS for NPAEs exact-decimal-math rule.
+  // Stored on the row so list views can show the totals without parsing
+  // linesJson; reconciliation re-derives + compares at post time.
+  totalDebit           Decimal  @db.Decimal(15, 2)
+  totalCredit          Decimal  @db.Decimal(15, 2)
+
+  // Creator (mandatory — segregation-of-duties requires identifying the
+  // maker so the approver check can compare ids).
+  createdBy            String
+  createdAt            DateTime @default(now())
+
+  // Approval — populated when DRAFT → APPROVED. approvedBy MUST differ
+  // from createdBy; service-layer enforced (SELF_APPROVAL_FORBIDDEN).
+  approvedBy           String?
+  approvedAt           DateTime?
+
+  // Posting — populated when APPROVED → POSTED. The journalEntryId
+  // points to the freshly written GL row so auditors can hop draft → GL.
+  postedAt             DateTime?
+  // DB-02: typed @db.Uuid to match journal_entries.id (uuid). Value written is a
+  // real JournalEntry id (manual-journal-entry-service.js:441). A real FK is
+  // deferred to a change that can be tested against the posting flow.
+  postedJournalEntryId String?              @db.Uuid
+
+  // Rejection — populated when DRAFT|APPROVED → REJECTED. Reason is
+  // required and must be ≥ 10 chars (service-layer enforced).
+  rejectedBy           String?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+
+  // Tenancy (ADR-014) — optional to match CreditNote / DebitNote.
+  organizationId       String?
+
+  updatedAt            DateTime @updatedAt
+
+  @@index([status])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([postingDate])
+  @@map("manual_journal_entry_drafts")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// PERIOD CLOSE (Iter 24, 2026-05-16) — TFRS for NPAEs Ch.5 monthly close
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Persists the monthly accounting-period close that finance staff perform
+// at the start of the following calendar month (e.g., May 2026 closes in
+// early June 2026). Once a period is CLOSED the journal-entry layer
+// REJECTS new entries whose `entryDate` falls inside that period — this
+// prevents back-dating fraud and seals the ภ.พ.30 / TFRS NPAEs financial
+// statements for the period.
+//
+// State machine:
+//
+//   ┌──────┐  closePeriod  ┌────────┐  reopenPeriod (ADMIN)  ┌──────────┐
+//   │ OPEN │ ────────────▶ │ CLOSED │ ─────────────────────▶ │ REOPENED │
+//   └──────┘               └────────┘                        └──────────┘
+//                                                                 │
+//                                                                 │ closePeriod
+//                                                                 ▼
+//                                                            ┌────────┐
+//                                                            │ CLOSED │
+//                                                            └────────┘
+//
+//   - CLOSED: journal-entry insertion REJECTED for that period (entryDate
+//     within boundaries → throws PERIOD_CLOSED unless meta.allowClosedPeriod
+//     is set by ADMIN recovery flow).
+//   - REOPENED: temporary unlock for late posting (e.g., audit finding).
+//     Same period can be re-closed once corrections are posted.
+//   - OPEN: implicit when no row exists for (organizationId, year, month).
+//
+// Separation of duties (TFRS for NPAEs ch.2):
+//   - The user who CLOSED a period MUST NOT be the user who REOPENS it.
+//     ADMIN role is required for reopen; the closer-cannot-reopen rule is
+//     enforced at the service layer (period-close-service.js).
+//
+// Compliance basis:
+//   - TFRS for NPAEs ch.5 — year-end close (period close is the monthly
+//     equivalent that supports the year-end aggregate).
+//   - TFRS for NPAEs ch.2 — internal controls + segregation of duties.
+//   - ป.รัษฎากร ม.86/4 — VAT period closure aligns with monthly ภ.พ.30.
+//   - ป.รัษฎากร ม.87/3 — 7-year retention applies to period-close rows
+//     because they are part of the accounting audit trail.
+//   - Thai e-Transactions Act §31 — every close + reopen audit-logged.
+
+model PeriodClose {
+  id             String    @id @default(uuid())
+  organizationId String
+  year           Int       // calendar AD year (e.g., 2026)
+  month          Int       // 1..12 (1 = Jan)
+  closedAt       DateTime  @default(now())
+  closedBy       String    // canonical user id of the finance approver who closed
+  status         String    // 'OPEN' | 'CLOSED' | 'REOPENED'
+  reopenedAt     DateTime?
+  reopenedBy     String?
+  reopenReason   String?
+  notes          String?
+
+  @@unique([organizationId, year, month])
+  @@index([organizationId])
+  @@index([year, month])
+  @@map("period_closes")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// PURCHASE INVOICE (ใบกำกับภาษีซื้อ) — Input VAT tracking (Iter 26, 2026-05-16)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Persists purchase invoices (ใบกำกับภาษีซื้อ) the platform receives from
+// its own suppliers (office supplies, professional services, utilities,
+// etc.). Each row represents one supplier-issued ใบกำกับภาษีเต็มรูป —
+// the legal artefact the platform must hold on file to claim the embedded
+// VAT as Input VAT (ภาษีซื้อ) on its monthly ภ.พ.30 filing.
+//
+// Legal anchors (ป.รัษฎากร):
+//   - ม.82/3 — VAT-registered businesses may deduct Input VAT from
+//     Output VAT before remitting; the residual is the cash payable to
+//     the Revenue Department (or refundable if Input > Output).
+//   - ม.82/4 — a VAT-registered buyer can claim an Input VAT credit
+//     ONLY when the original ใบกำกับภาษีซื้อ (full tax invoice) is on
+//     file, contains the seller's name + TIN + invoice date + invoice
+//     number + taxable amount + VAT amount, and the purchase relates to
+//     the business's VAT-able activities.
+//   - ม.83/8 — the claim must be recognised in the same monthly ภ.พ.30
+//     period (e-Filing window: the 15th of the following month).
+//   - ม.86/4 — tax-invoice field minima (seller TIN, address, etc.).
+//   - ม.87/3 — 7-year retention for the supplier's tax invoice.
+//   - TFRS for NPAEs ch.2 — internal controls: every Input VAT credit
+//     should pass a review step (PENDING_REVIEW → APPROVED) by an actor
+//     other than the original submitter where practical.
+//
+// Lifecycle:
+//   PENDING_REVIEW (default on create)
+//      └─ approvePurchaseInvoice ──▶ APPROVED  (writes journal entry:
+//                                                Dr Input VAT 1310,
+//                                                Cr Cash / AP 1110 or 2110)
+//      └─ rejectPurchaseInvoice  ──▶ REJECTED  (records rejectionReason,
+//                                                terminal — submitter can
+//                                                file a new row)
+//   APPROVED row may further be markAsPaid (paidAt + actor stamp) when
+//   the platform settles the supplier — separate from the VAT-claim event.
+//
+// Compliance scope:
+//   - PLATFORM-side only (the platform is the VAT-registered buyer).
+//     DTAM-side / state-fee purchases do not pass through this table —
+//     กรมบัญชีกลาง procurement records live in Treasury's systems.
+//   - Decimal(15,2) money columns per TFRS for NPAEs exact-decimal rule.
+//   - 7-year retention is enforced at the application layer (isDeleted
+//     soft-delete only — rows are never hard-deleted while attachmentId
+//     points at the original supplier invoice).
+//   - Uniqueness ([supplierTaxId, invoiceNumber]) is the practical
+//     defense against double-claiming the same purchase: a supplier
+//     cannot legally re-issue the same invoice number for a given TIN
+//     (ม.86/4), so we use that pair as the de-dup key.
+
+model PurchaseInvoice {
+  id              String   @id @default(uuid())
+  // Supplier's invoice number (e.g. "INV-SUP-2026-001"). Free text — the
+  // supplier sets the format, not us; we only enforce uniqueness
+  // per-supplier-TIN to prevent double-claim.
+  invoiceNumber   String
+  // Seller (supplier) identity per ม.86/4.
+  supplierName    String
+  // 13-digit TIN (ม.86/4 mandatory). PDPA close-natid-round2 (2026-06-30):
+  // this plaintext column is ENCRYPTED AT REST (random-IV AES-256-GCM via the
+  // PDPA field-encryption extension — same national-ID class as User.taxId /
+  // Entity.juristicId). Because random-IV ciphertext cannot carry a useful
+  // UNIQUE or be raw-WHERE'd, dedup + uniqueness moved to the parallel keyed
+  // `supplierTaxIdHmac` column below. Reads decrypt transparently via the B1
+  // walker.
+  supplierTaxId   String
+  // Keyed HMAC-SHA-256 (computeLookupHmac, keyed off ENCRYPTION_KEY) of
+  // supplierTaxId — the deterministic lookup column the dedup query +
+  // @@unique now use. NULLABLE + additive (legacy rows are backfilled by
+  // scripts/pdpa/backfill-encrypt-formdata-pii.js, which also encrypts the
+  // plaintext column). Postgres treats multiple NULLs as distinct, so the
+  // @@unique carries no pressure on un-backfilled rows.
+  supplierTaxIdHmac String?
+  supplierAddress String?
+  // Invoice date as issued by the supplier — drives the ภ.พ.30 period
+  // assignment (ม.83/8): an Input VAT claim lands in the period that
+  // matches invoiceDate, NOT the date the platform received the doc.
+  invoiceDate     DateTime
+  // Internal receipt timestamp (when the platform staff entered the
+  // invoice into the system) — useful for backlog reporting but does
+  // NOT drive the VAT period.
+  receivedDate    DateTime @default(now())
+  // Money — exact-decimal per TFRS for NPAEs.
+  subtotal        Decimal  @db.Decimal(15, 2)
+  // Input VAT (ภาษีซื้อ) we can claim against Output VAT.
+  vat             Decimal  @db.Decimal(15, 2)
+  totalAmount     Decimal  @db.Decimal(15, 2)
+  // Coarse category (analytics + chart-of-accounts mapping in future):
+  //   'OFFICE_SUPPLIES' | 'PROFESSIONAL_SERVICES' | 'UTILITIES' | 'OTHER'
+  category        String
+  description     String?
+  notes           String?
+  // FK to attachment row holding the photo / PDF of the supplier
+  // invoice. Optional at create time (review flow uploads later), but
+  // strongly encouraged before APPROVED — service layer warns when
+  // approving without an attachment because ม.82/4 requires the
+  // original document on file.
+  attachmentId    String?
+  organizationId  String?
+  // Lifecycle status (see file header comment).
+  //   'PENDING_REVIEW' | 'APPROVED' | 'REJECTED'
+  status          String
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  rejectionReason String?
+  // Set when the platform settles the supplier (separate event from
+  // VAT-claim approval — a supplier can be approved-for-VAT before the
+  // bill is actually paid).
+  paidAt          DateTime?
+  paidBy          String?
+  // FK back to JournalEntry created on approval, populated by
+  // approvePurchaseInvoice (value is a real JournalEntry id, uuid). Nullable
+  // because PENDING_REVIEW / REJECTED rows never produce a journal entry.
+  // DB-01: typed @db.Uuid to match journal_entries.id; a real FK constraint is
+  // deferred to a change that can be tested against the approval/posting flow.
+  journalEntryId  String?       @db.Uuid
+
+  createdAt       DateTime @default(now())
+  createdBy       String
+  isDeleted       Boolean  @default(false)
+
+  // ม.86/4 dedup — a single supplier cannot legally issue duplicate
+  // invoice numbers for the same TIN. This is the practical Input-VAT
+  // double-claim guard.
+  // PDPA close-natid-round2 (2026-06-30): the dedup unique moved from the
+  // (now encrypted) plaintext `supplierTaxId` to the keyed `supplierTaxIdHmac`
+  // lookup column. A random-IV-encrypted column cannot carry a useful UNIQUE
+  // (every write of the same TIN ciphertexts differently → the constraint
+  // never trips on a real duplicate). The keyed HMAC is deterministic, so the
+  // double-claim invariant is preserved. The old
+  // `purchase_invoices_supplier_tax_invnum_key` plaintext unique is DROPPED in
+  // the same migration that adds this one.
+  @@unique([supplierTaxIdHmac, invoiceNumber], map: "purchase_invoices_supplier_tax_hmac_invnum_key")
+  // ภ.พ.30 monthly aggregation drives the dominant query — index by
+  // invoiceDate for the (gte, lt) window scan.
+  @@index([invoiceDate])
+  @@index([status])
+  @@index([organizationId])
+  @@map("purchase_invoices")
+}
+
+// DOCUMENT TEMPLATE MODEL (Phase 3 — Template Versioning Registry)
+
+// ──────────────────────────────────────────────────────────────────────────
+// SINGLE LUMP-SUM CHECKOUT ENGINE (Wave 1 EXPAND — design v2, approved)
+// docs/payment-refactor/step2-data-model-design.md
+//
+// One checkout = one order = one invoice = one Stripe charge. The itemized
+// breakdown lives here (denormalized for O(1) reads; line items carry the
+// same figures); the ONLY path to SETTLED is the cryptographically verified
+// payment_intent.succeeded webhook. Vocabulary SSOT: shared/checkout-status.js;
+// the migrations add matching Postgres CHECK constraints (String + CHECK per
+// executive decision R1).
+// ──────────────────────────────────────────────────────────────────────────
+
+model CheckoutOrder {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // What is being paid for. XOR — exactly one target (CHECK in migration).
+  applicationId  String?
+  application    Application?  @relation(fields: [applicationId], references: [id])
+
+  // The two payment gates of the canonical 7-step workflow: 'M1' | 'M2'.
+  milestone String
+
+  // Itemized breakdown (THB). Arithmetic enforced by CHECK constraints:
+  //   platform_fee_gross   = platform_fee_net + platform_fee_vat
+  //   total_payable_amount = platform_fee_gross
+  // (migration 20260929155037 — a CANCELLED row is exempt from the second, see there)
+  platformFeeNet     Decimal @db.Decimal(15, 2) @map("platform_fee_net")
+  platformFeeVat     Decimal @db.Decimal(15, 2) @map("platform_fee_vat")
+  platformFeeGross   Decimal @db.Decimal(15, 2) @map("platform_fee_gross")
+  totalPayableAmount Decimal @db.Decimal(15, 2) @map("total_payable_amount")
+
+  // PENDING_PAYMENT | SETTLED | EXPIRED | CANCELLED (shared/checkout-status.js)
+  status String @default("PENDING_PAYMENT")
+
+  // F-G4-64 — what this charge collects against. `quotationId` is the accepted
+  // quotation; `quotationSnapshotHash` is the hash of the snapshot the amount
+  // was compared with before the order was minted (a mismatch is refused as
+  // CHECKOUT_PRICE_DRIFT and no order is created, so a stored hash always means
+  // "these figures matched"). Nullable: every order settled before the gate
+  // existed has neither, and inventing one would be inventing a record.
+  // DB-03: typed @db.Uuid to match quotations.id (uuid) — a TEXT pointer cannot
+  // be joined against it ("operator does not exist: uuid = text") and cannot
+  // carry a @relation. A real FK constraint is deferred to a change that can be
+  // tested against the acceptance/settlement flow, as DB-01 and DB-02 were.
+  quotationId           String?   @db.Uuid @map("quotation_id")
+  quotationSnapshotHash String?   @map("quotation_snapshot_hash")
+
+  // Q4 pre-payment disclosure (owner ruling 2026-07-08). The slip rail records
+  // this in UserConsent; the card rail records it per ORDER as well, because
+  // the disclosure authorises THIS charge.
+  paymentTermsVersion    String?   @map("payment_terms_version")
+  paymentTermsAcceptedAt DateTime? @map("payment_terms_accepted_at")
+
+  // Stripe binding. One PaymentIntent per order (idempotency key
+  // `checkout:{orderId}`); amount in SATANG; statement descriptor
+  // 'PREDICTIVE AI - GACP'.
+  stripePaymentIntentId String?   @unique @map("stripe_payment_intent_id")
+  expiresAt             DateTime?
+  settledAt             DateTime?
+
+  // The ONE invoice this order mints (replaces the per-phase pair×2).
+  invoiceId String?  @unique
+  invoice   Invoice? @relation("CheckoutOrderInvoice", fields: [invoiceId], references: [id])
+
+  // The charge record (gateway='STRIPE', gatewayRef=PaymentIntent id).
+  paymentTransactionId String?             @unique
+  paymentTransaction   PaymentTransaction? @relation("CheckoutOrderCharge", fields: [paymentTransactionId], references: [id])
+
+  documents CheckoutDocument[]
+
+  // Tenancy (ADR-014)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([applicationId])
+  @@index([quotationId])
+  @@index([status])
+  @@index([organizationId])
+  @@map("checkout_orders")
+}
+
+// Raw Stripe event store — the webhook idempotency lock. The handler
+// INSERTS FIRST; a unique-violation on the Stripe event id means a
+// redelivery and the handler returns 200 without side effects. NOT
+// tenant-scoped: events arrive with no tenant context (org resolves through
+// the order in event metadata).
+model StripeWebhookEvent {
+  id          String    @id // Stripe event id (evt_...)
+  type        String
+  payload     Json
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+  status      String    @default("RECEIVED") // RECEIVED | PROCESSED | FAILED | DEAD_LETTER
+  attempts    Int       @default(0)
+  nextRetryAt DateTime?
+
+  @@index([type])
+  @@index([receivedAt])
+  @@index([status, nextRetryAt])
+  @@map("stripe_webhook_events")
+}
+
+// W3-41 Q2-D2 EXPAND — durable dedup ledger for the daily payment-reminder
+// sweep (jobs/payment-reminder-job.js, daily 09:00 Asia/Bangkok). One row =
+// one reminder dispatched (or being dispatched) for a checkout invoice on its
+// intended send day. The sweep INSERTS FIRST; a unique-violation on
+// (invoiceId, reminderType, intendedDate) means this reminder already went
+// out → skip silently — the same insert-first idempotency idiom as
+// StripeWebhookEvent above. The sweep NEVER writes Invoice state: OVERDUE
+// stays derived-only (checkout-schedule-service.overdueInvoiceWhere).
+model PaymentReminderLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  // 'PRE_DUE' | 'DUE_DATE' | 'OVERDUE_NOTICE' — the keys of
+  // checkout-schedule-service.computeReminderDates (vocabulary SSOT); the
+  // migration adds a matching Postgres CHECK (String + CHECK, decision R1).
+  reminderType String
+
+  // The intended send day AFTER the working-day shift (end-of-business-day
+  // instant on the canonical Thai calendar). Deterministic from
+  // Invoice.dueDate, so a same-day re-run recomputes the identical value and
+  // dedups on it; a DUE_DATE/OVERDUE_NOTICE collision on one working day
+  // still yields two rows because reminderType is part of the key.
+  intendedDate DateTime
+
+  // Stamped after the notification service confirmed the dispatch persisted;
+  // NULL = row inserted but dispatch unconfirmed (visible to ops, still
+  // deduped — the reminder is not retried by design).
+  sentAt DateTime?
+
+  // Tenancy (ADR-014) — copied from the parent Invoice by the sweep, the
+  // same copy-from-parent pattern the Wave 1-2 settlement writes use
+  // (checkout-settlement-service stamps order.organizationId). Unlike
+  // StripeWebhookEvent — deliberately tenant-less because Stripe events
+  // arrive with no tenant context — a reminder row always knows its tenant
+  // through the invoice, so it is tenant-scoped like the other billing tables.
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([invoiceId, reminderType, intendedDate])
+  @@index([invoiceId])
+  @@index([organizationId])
+  @@map("payment_reminder_logs")
+}
+
+// The two split documents generated per settlement (design §5, decision R2):
+//   PLATFORM_TAX_INVOICE    platform fee + 7% VAT, issued by
+//                           บริษัท พรีดิกทีฟ เอไอ โซลูชัน จำกัด
+//   DTAM_DISBURSAL_RECEIPT  DTAM fee, VAT-exempt (ม.77/1(10))
+// documentNumber comes from the per-issuer sequences; payload is the signed
+// contract the PDF renders from.
+model CheckoutDocument {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  checkoutOrderId String
+  checkoutOrder   CheckoutOrder @relation(fields: [checkoutOrderId], references: [id])
+
+  documentType   String // 'PLATFORM_TAX_INVOICE' | 'DTAM_DISBURSAL_RECEIPT'
+  documentNumber String @unique
+  payload        Json
+  pdfPath        String?
+  signedAt       DateTime?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([checkoutOrderId, documentType])
+  @@index([organizationId])
+  @@map("checkout_documents")
+}

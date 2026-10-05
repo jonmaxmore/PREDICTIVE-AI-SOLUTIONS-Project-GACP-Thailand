@@ -1,0 +1,2 @@
+# Operator-signed allowlist for no-skip.sh — one grep -F pattern per line.
+# Empty = nothing allowed.

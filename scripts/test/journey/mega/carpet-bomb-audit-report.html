@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GACP 20-Agent Carpet-Bomb Audit Report</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 2rem; }
+    .header { text-align: center; margin-bottom: 2rem; }
+    .header h1 { color: #22d3ee; font-size: 1.8rem; }
+    .header p { color: #94a3b8; margin-top: 0.5rem; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+    .stat { background: #1e293b; border-radius: 12px; padding: 1.5rem; text-align: center; }
+    .stat .num { font-size: 2rem; font-weight: bold; }
+    .stat .label { color: #94a3b8; font-size: 0.85rem; margin-top: 0.25rem; }
+    .pass { color: #22c55e; }
+    .fail { color: #ef4444; }
+    .warn { color: #f59e0b; }
+    table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; }
+    th { background: #334155; color: #94a3b8; padding: 0.75rem; text-align: left; font-size: 0.85rem; text-transform: uppercase; }
+    td { padding: 0.75rem; border-bottom: 1px solid #334155; }
+    tr:hover { background: #252f3f; }
+    .section { margin-top: 2rem; }
+    .section h2 { color: #22d3ee; margin-bottom: 1rem; }
+    .workflow { background: #1e293b; border-radius: 12px; padding: 1.5rem; margin-top: 1rem; font-family: monospace; line-height: 1.8; }
+    .workflow .step { color: #22c55e; }
+    .workflow .arrow { color: #64748b; }
+    .footer { text-align: center; margin-top: 2rem; color: #475569; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🔥 GACP 20-Agent Carpet-Bomb Audit Report</h1>
+    <p>Deep Validation Mode — 2026-03-13T14:04:28.273Z</p>
+    <p>Target: http://localhost:3000 | Runtime: 83.1s</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="num pass">100.0%</div><div class="label">Overall Score</div></div>
+    <div class="stat"><div class="num pass">287</div><div class="label">Passed</div></div>
+    <div class="stat"><div class="num pass">0</div><div class="label">Failed</div></div>
+    <div class="stat"><div class="num">287</div><div class="label">Total Checks</div></div>
+  </div>
+
+  <div class="section">
+    <h2>📊 Agent Results (20 Agents × 10 Categories)</h2>
+    <table>
+      <thead><tr><th>Agent</th><th>Name</th><th>Category</th><th>Score</th><th>Rate</th><th>Status</th></tr></thead>
+      <tbody><tr>
+      <td>🖥️ F01</td>
+      <td>Health User Pages</td>
+      <td>Frontend</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>🖥️ F02</td>
+      <td>Provider Pages</td>
+      <td>Frontend</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>⚡ B01</td>
+      <td>API Health & Uptime</td>
+      <td>Backend</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>🔒 B02</td>
+      <td>Auth & Token Validation</td>
+      <td>Backend</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>🗄️ D01</td>
+      <td>DB Connection & Health</td>
+      <td>Database</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>📦 D02</td>
+      <td>Master Data Completeness</td>
+      <td>Database</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>👤 H01</td>
+      <td>Registration & Onboarding</td>
+      <td>Health User</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>📝 H02</td>
+      <td>Application Submission</td>
+      <td>Health User</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>📋 P01</td>
+      <td>Reviewer Workflow</td>
+      <td>Provider</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>🔍 P02</td>
+      <td>Auditor Workflow</td>
+      <td>Provider</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>🏛️ T01</td>
+      <td>กทล.1 Form Compliance</td>
+      <td>DTAM</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>🔎 T05</td>
+      <td>Inspection Criteria</td>
+      <td>DTAM</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>🌍 W01</td>
+      <td>GACP Guidelines WHO</td>
+      <td>WHO</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>🌍 W02</td>
+      <td>Quality Standards WHO</td>
+      <td>WHO</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>💊 A01</td>
+      <td>Registration FDA</td>
+      <td>FDA</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>💊 A03</td>
+      <td>Quality Control FDA</td>
+      <td>FDA</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>🌿 G01</td>
+      <td>Soil Analysis</td>
+      <td>Agriculture</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>🌿 G02</td>
+      <td>Cultivation Methods</td>
+      <td>Agriculture</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>📋 E01</td>
+      <td>Good Agricultural Practices</td>
+      <td>GACP Expert</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr>
+<tr>
+      <td>✅ E03</td>
+      <td>Quality Assurance System</td>
+      <td>GACP Expert</td>
+      <td><span style="color:#22c55e;font-weight:bold">12/12</span></td>
+      <td>100%</td>
+      <td>🟢 PASS</td>
+    </tr></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>🧠 Deep Validation Results</h2>
+    <div class="stat" style="display:inline-block;margin-right:1rem">
+      <div class="num pass">47/47</div>
+      <div class="label">Deep Checks</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚙️ Official GACP Workflow (ถูกต้อง 100%)</h2>
+    <div class="workflow">
+      <span class="step">1. เกษตรกร/ผู้ประกอบการ (Health)</span> <span class="arrow">→</span> สมัคร+Login<br>
+      <span class="step">2. Wizard 12 Steps (กทล.1)</span> <span class="arrow">→</span> Submit + จ่ายเงินงวด 1<br>
+      <span class="step">3. Scheduler รับ Job</span> <span class="arrow">→</span> จ่ายงานตรวจเอกสาร<br>
+      <span class="step">4. Reviewer ตรวจเอกสาร</span> <span class="arrow">→</span> Approve / Reject<br>
+      <span class="step">5. แจ้ง Health จ่ายเงินงวด 2</span> <span class="arrow">→</span> ชำระเงิน<br>
+      <span class="step">6. Scheduler รับ Job รอบ 2</span> <span class="arrow">→</span> นัดหมาย Health + Auditor<br>
+      <span class="step">7. Auditor ลงตรวจพื้นที่</span> <span class="arrow">→</span> PASS / MINOR / MAJOR<br>
+      <span class="step">8. ออกใบรับรอง GACP</span> <span class="arrow">→</span> QR Verify สาธารณะ
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>GACP Digital Platform — Multi-Agent Carpet-Bomb Audit System v2.0</p>
+    <p>✅ ALL PASSED</p>
+  </div>
+</body>
+</html>

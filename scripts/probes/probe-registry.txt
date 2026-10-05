@@ -1,0 +1,57 @@
+# probe-registry.txt — ทะเบียนเดียวของ probe ทุกตัว (SSOT, Law 3.6)
+# ปลายทางที่เสนอ: scripts/probes/probe-registry.txt   (operator-owned — Law 3.12)
+#
+# กติกาบังคับโดย scripts/ci/probe-gate.js:
+#   • ทุกไฟล์ scripts/probes/*.sh (ยกเว้น _lib.sh) ต้องมีบรรทัดที่นี่ **พอดีหนึ่งบรรทัด**
+#     ตัวไหนไม่มี = gate FAIL — ปิดตระกูล "ตัวตรวจมีแต่ไม่ได้เสียบ" แบบทั่วไป ไม่ต้องไล่ทีละตัว
+#   • บรรทัดที่ผิดรูป / ไม่มีวันหมดอายุในช่อง waived = FAIL (ไม่ใช่ข้าม)
+#   • waived ที่ **เลยกำหนด** = FAIL — ไม่ใช่แค่เตือน ไม่งั้น waiver จะกลายเป็น phantom guardrail ตัวใหม่
+#   • waived ที่ probe **ผ่านแล้ว** = FAIL พร้อมบอกให้ลบบรรทัดนั้น (หนี้จ่ายแล้วต้องคืนสิทธิ์ — ratchet ลงทางเดียว)
+#   • เตือนล่วงหน้า 14 วันก่อนหมดอายุ (ไม่ทำให้ CI แดง)
+#
+# รูปแบบ:  <probe> | <run> | <waived:YYYY-MM-DD | -> | <signed-by> | <เหตุผล + ledger id>
+#
+# ช่อง run มี 3 ค่า:
+#   ci                        รันโดย probe-gate.js ทุกครั้งที่ local-gate/full-gate ทำงาน (ไม่มี hosted GitHub
+#                             Actions อีกต่อไป — operator สั่งไม่จ่ายบิล 2026-08-14, the change log 2026-08-14;
+#                             self-hosted runner dispatch ยังไม่เคยพิสูจน์ — 05-BACKLOG.md §4 Q-RUNNER)
+#   manual                    ไม่รันใน CI **ถาวร** — ต้องมีเหตุผลยืนพื้นจริง (เช่น ต้องแตะ DB จริง)
+#   manual-until:YYYY-MM-DD   ไม่รันใน CI **ชั่วคราว** — พ้นวันนั้น gate **FAIL** เหมือน waiver หมดอายุ
+#                             (ถ้าไม่มีค่านี้ "manual ชั่วคราว" จะจอดตลอดกาล = phantom ตัวเดิมย้ายคอลัมน์)
+#
+# ทุกแถวที่เป็นการ "ให้ความคุ้มครอง" — waiver, manual, manual-until — ต้อง
+# signed-by = operator และต้องมีเหตุผลเป็นลายลักษณ์อักษร · agent เซ็นให้ตัวเองไม่ได้ (Law 3.12)
+
+# ── รันใน CI (grep/static ล้วน — ไม่ต้องมี DB, key, หรือ jest) ──────────────────
+no-skip                | ci     | -                 | -        | ปลดคำยกเว้น 2026-09-11 (operator: "ทำให้ถูกต้อง ไม่มีการยกเว้น") · เผา 13 skip จนหมด: (1) สี่จุดใน farmer-services-carpet ที่ข้ามเมื่อไม่มี E2E_TEST_IDENTIFIER/PASSWORD ซึ่งตั้งไว้เฉพาะ workflow กลางคืนที่ไม่รันแล้ว ⇒ ข้ามตลอดกาลและขึ้นเขียว — แก้ด้วยการให้ค่าปริยายเป็นบัญชีที่ seed ไว้ (helpers/seeded-credentials.ts) และย้ายเทสรหัสผิดไปยิงเลขบัตรที่ไม่มีจริง เพราะผิดห้าครั้งจะล็อกบัญชี 15 นาที · (2) เจ็ดจุดใน e2e-golden-scenario ที่แปลง non-2xx เป็น skip ⇒ ประตูที่พังทำให้เทสขึ้น skipped แล้วนับรวมในผลเขียว — เปลี่ยนเป็น assert ที่พก response body มาด้วย และตัดขา dependency ทิ้งเพราะ describe.serial จัดการให้อยู่แล้ว · (3) account-split-journey: สี่ขั้นทดสอบ flow สลิปที่ถูกถอดทั้งระบบวันเดียวกัน และยังเขียวเพราะ mock ประตูที่ไม่มีแล้ว — ลบทั้งสี่ขั้น เหลือสี่ขั้นที่ทดสอบการแยกฝั่ง bookSide ซึ่งยังเป็นของจริง · (4) farmer-full-journey Stage 9 ต้องเลื่อนนาฬิกา mock — เปลี่ยนจาก skip เป็นไม่ประกาศเลยในโหมดที่รันไม่ได้ (แก้เชิงโครงสร้าง ไม่ใช่เชิงพฤติกรรม) · probe เองก็แก้ให้ข้ามคอมเมนต์ หลักเดียวกับ eslint no-legacy-status-vocabulary: คอมเมนต์ที่อธิบายว่าทำไมของถูกถอด คือเอกสาร ไม่ใช่การละเมิด · --selftest 5 เคสครบสองทิศ
+themed-surface-tokens  | ci     | -                 | -        | ปิดตระกูล "พื้นผิวไม่มีค่าในโหมดมืด" ที่ QA 2026-09-07 วัดได้ 9 ช่อง contrast ต่ำกว่า 1.2:1 บนหน้าประตูทางเข้า (evidence/apple-qa-audit-2026-09-07) · ตรวจโครงสร้าง: token ที่ tailwind อ่านผ่าน rgb(var(--x)) ต้องมีค่าใน :root และ .dark และค่าต้องต่างกัน + ห้าม shared field class ตอกพื้นด้วย !important · เลข contrast จริงอยู่ในเทส themed-surfaces-have-dark-values.test.ts · --selftest 5 เคส (A no-dark, B identical, C !important, D fixed, E unreadable→BLOCKED)
+holiday-single-source  | ci     | -                 | -        | L-001 เผาแล้ว (#834) — แหล่งเดียวที่ utils/working-days.js; waiver คืนแล้ว 2026-08-07
+fee-single-source      | ci     | -                 | -        | GOALS.md G1 ตัววัดของข้อ 1 — เขียว 2026-09-05 (payment-fees เป็น view, dup-source 2→0); --selftest 6 เคส
+nginx-config-drift     | ci     | -                 | -        | Audit 2026-09-17 GAP2-01 — ไฟล์ vhost ที่เครื่องเปิดใช้จริง (/etc/nginx/sites-enabled) ต้องเหมือน deploy/nginx/ ทุกไบต์ · RED บน main b4d7bc06: gacp-platform.conf ต่าง 58 บรรทัด (demo ถูกเปิดสาธารณะด้วยการลบแถว "1:0:0" บนเครื่อง ขณะที่ repo ยังบอกว่ามี gate) + staging.gacpth.com.conf ต่าง 7 บรรทัด (repo มี X-Forwarded-Host ที่เครื่องไม่มี) · พิมพ์เฉพาะเลขบรรทัด ไม่พิมพ์เนื้อหา · รันนอกเครื่องจริง = BLOCKED ไม่ใช่ PASS · --selftest 7/7 · แถวนี้ไม่ให้ cover ใดๆ — agent เป็นคนเติม
+no-secret              | ci     | -                 | -        | layer1 grep; layer2 **gitleaks รันจริงในเครื่องเมื่อมี binary** (ตรง the project rules L2, `no-secret.sh:99-102` เรียกมันตรง ๆ ไม่ผ่าน CI) · โค้ดยังคืน PASS เองเมื่อ `CI=1` โดยอ้าง TruffleHog job — ไม่มี job นั้นแล้วตั้งแต่ปิด Actions 2026-08-14 จึงเป็นช่องทาง false-PASS แฝงที่ยังไม่แก้ตรรกะรอบนี้ ดู the change log 2026-09-26 (follow-up)
+ratchet                | ci     | -                 | -        | hardcode/todo/env-direct/dup-source เทียบ baseline ใน scripts/probes/ratchet-baseline.txt
+dockerignore-secrets   | ci     | -                 | -        | W1-5 2026-08-21 — ประเมินกฎ .dockerignore จริงกับ *.pem / .env* / keys/ / public/uploads/ (selftest 7/7; RED ก่อนแก้ 92/93 ไฟล์จะหลุดเข้า image) · แถวนี้ agent เติมตามคำสั่ง operator เป็นลายลักษณ์อักษร 2026-08-22 (the change log)
+schema-arg-resolves    | ci     | -                 | -        | Part 5a 2026-08-26 — ทุก `--schema` ที่ส่งให้คำสั่ง Prisma ต้องชี้ path ที่มีอยู่จริง · RED พิสูจน์บนไฟล์จริง: คืนค่า .github/workflows/production.yml:279 เป็น `--schema prisma/schema.prisma` (ค่าที่มันถืออยู่หลายเดือนหลัง schema กลายเป็น prismaSchemaFolder เมื่อ 2026-03-12, commit 3120e673) → probe แดงพร้อมชี้ production.yml:279; คืนไฟล์กลับแล้ว PASS 40 argument · --selftest 12/12 ทั้งสองทิศ (4 เคส path พังใน workflow/Dockerfile/package.json/runbook, เคส `..` หลุดออกนอก repo, และเคสเขียวของ pg_dump --schema=public, `bq show --schema`, ร้อยแก้ว, และรูปแบบ relative ของ apps/web-app/Dockerfile) · static ล้วน ไม่ต้องมี DB/network/prisma binary · เสริม scripts/ci/check-enforcement-guardrails.js:148 (G-04b) ที่เป็น denylist ของชื่อไฟล์ตายตัวเดียว และเสียบไว้เฉพาะใน .github/workflows/ci.yml:342 ซึ่งไม่รันอีกแล้วตั้งแต่ปิด hosted Actions 2026-08-14 · แถวนี้ไม่ได้ให้ cover ใดๆ (run=ci, ไม่มี waiver) จึงไม่ต้องมีลายเซ็น operator — agent เป็นคนเติม
+dependency-audit       | ci     | -                 | -        | Audit 2026-09-17 PROC-04/SECU-01 — `pnpm audit --prod` ต้องไม่มี high/critical ที่ operator ไม่ได้เซ็นยอมรับ (scripts/probes/dependency-audit-accepted.txt: GHSA / package / หมดอายุ / signed-by=operator / เหตุผล) · RED บน main b4d7bc06: 13 ข้อ (critical next GHSA-2xp9-vwfh-vxw4 ที่ production รันอยู่ 9 วันหลังประกาศ) · หลังอัปเดตเหลือ extract-zip 2 ข้อที่ไม่มีเวอร์ชันแก้ — เสนอแถวยอมรับไว้แต่ยังเป็น `proposed` จึงยังไม่นับ · audit รันไม่ได้ = BLOCKED ไม่ใช่ PASS · --selftest 22/22 ทั้งสองทิศ · วันหมดอายุต้องเป็น YYYY-MM-DD ที่มีจริงบนปฏิทิน ไม่งั้นแถว INVALID = FAIL ระบุบรรทัด · id ใน package.json pnpm.auditConfig.ignoreCves/ignoreGhsas (pnpm ตัดทิ้งก่อนออก JSON) ต้องมีแถว operator ของ id นั้นเอง ไม่งั้น FAIL (PR #858 MEDIUM-1) · แถวนี้ไม่ให้ cover ใดๆ (run=ci ไม่มี waiver) จึงไม่ต้องมีลายเซ็น operator — agent เป็นคนเติม
+stripe-sdk-isolated    | ci     | -                 | -        | grep — Stripe SDK ต้องอยู่ไฟล์เดียว
+deps-health            | ci     | -                 | -        | เวอร์ชันเครื่องมือหลักพูดเสียงเดียวกันและยังไม่หมดอายุ (spec 2026-09-26-versions-packages-tools-refresh-design) — Node เมเจอร์เดียวทุกแหล่ง: Dockerfile/compose/engines ทุก package.json/.nvmrc/.node-version/workflows · ไม่เลยวัน end ใน node-release-schedule.txt (เตือน 60 วัน) · pnpm audit ไม่มี critical (ออฟไลน์ = BLOCKED ไม่ใช่ PASS) · jest/babel-jest เมเจอร์เดียวทั้ง package.json และ lockfile · --selftest 49 เคสสองทิศ
+
+# ── ยังไม่อยู่ในกอง ci — คำอธิบายเดิม (job enforcement-guardrails) ตายแล้ว: ไม่มี
+# hosted GitHub Actions ตั้งแต่ 2026-08-14 (the change log 2026-08-14) · เหตุผลจริงที่ยังอยู่:
+# local-gate.sh:30 เรียก probe-gate.js โดยไม่มี prisma generate — probe ที่ต้องใช้ prisma
+# จะ FAIL ผิดเหตุผลถ้าตั้งเป็น ci ในบริบทนั้น · สองตัวข้างล่างรันแบบ blocking อยู่แล้วผ่าน
+# full-gate required check probe-prisma-deps (full-gate-checks.txt:46) — แก้ข้อความ
+# 2026-08-22, ไม่ได้แตะ run/waived (นั่นคือ L6 operator-only)
+settle-webhook-only    | ci     | -                 | -        | ปลดคำยกเว้น 2026-09-11 (operator: "ทำให้ถูกต้อง ไม่มีการยกเว้น") · เหตุที่จอดไว้เดิมไม่ใช่เหตุจริงของมัน: probe grep หา `status: 'SETTLED'` ตรง ๆ ซึ่งแมตช์ทั้ง data: (เขียน) และ where: (อ่าน) ⇒ ฟ้อง dtam-remittance-service.js กับ dtam-remittance-batch-job.js ที่ **อ่าน** ใบที่ตัดเงินแล้วไปกระทบยอด ไม่ได้เขียนอะไรเลย · แก้ตรรกะให้นับเป็นการเขียนก็ต่อเมื่อเครื่องหมายล่าสุดก่อนหน้าคือ data: · --selftest 5 เคสครบสองทิศ (เขียนบรรทัดเดียว/หลายบรรทัด = FAIL · อ่านบรรทัดเดียว/หลายบรรทัด = PASS) · รันกับต้นไม้จริง 2026-09-11: PASS
+webhook-idempotent     | ci     | -                 | -        | ปลดคำยกเว้น 2026-09-11 · รันจริงวันนี้ PASS ไม่ต้องแก้อะไรเลย — มันถูกจอดไว้ตอนปิด hosted Actions แล้วไม่มีใครกลับมาปลด · local-gate รัน jest อยู่แล้ว เหตุที่ต้องจอดจึงหมดไปตั้งแต่ตอนนั้น
+
+# ── ไม่รันใน CI **ถาวร** — เหตุผลยืนพื้น ไม่มีวันหมดอายุเพราะเงื่อนไขไม่เปลี่ยน ──
+suite-green            | manual | -                 | operator | ซ้ำกับ full-gate required check `suite-green` (full-gate-checks.txt:42) ที่รัน suite เต็มอยู่แล้วบนเครื่อง staging — รันซ้ำใน probe-ci = เพิ่มเวลา gate เท่าตัวโดยไม่ได้ signal ใหม่ (เดิมอ้าง job `Test` ของ Actions ซึ่งไม่รันแล้ว — แก้ข้อความ 2026-08-22)
+stripe-keys-ready      | manual | -                 | operator | ต้องมี STRIPE_SECRET_KEY จริง; ใน CI จะคืน BLOCKED เสมอ = ไม่มี signal
+drain-complete         | manual | -                 | operator | ต้องต่อ DB production; agent/CI ไม่มีสิทธิ์ (the project rules)
+money-equation         | manual | -                 | operator | ต้อง sample แถวเงินจริงจาก DB — ห้ามใน CI (Law 3.4)
+quotation-closure      | manual | -                 | operator | F-G4-64 — ต้องอ่านแถวเงินจริงจาก DB (เหมือน money-equation) ห้ามใน CI (L3) · `--selftest` 6/6 (evidence/f-g4-64-task-12/quotation-closure-selftest.txt) ครอบทั้งเคสแดง (3 SETTLED orders ที่ใบเสนอราคาไม่มี invoicedAt ของงวดนั้น) และเคสเขียว (0 แถว) รวมทั้งสามทางที่ต้อง BLOCKED ไม่ใช่ PASS: ไม่มี DATABASE_URL, ไม่มี psql, query ล้ม · แถวนี้เป็นการให้ cover จึงต้อง operator เซ็นด้วยการ merge (L6) — agent เขียนแถวแต่เซ็นเองไม่ได้
+crawler-clean          | manual | -                 | operator | ต้องมี crawler-report.json จากรอบ QA — ผูกกับ /qa-full ไม่ใช่ PR gate
+
+# ── ไม่รันใน CI **ชั่วคราว** — มีวันหมดอายุ พ้นกำหนดแล้ว gate แดง ────────────────
+deploy-drift           | ci     | -                 | -        | เทียบ commit ที่แต่ละบริการรันอยู่จริง (GET /api/health, /api/webapp-version) กับ ref ใน scripts/probes/deploy-targets.txt · เดิม manual-until:2026-08-28 ระหว่างพิสูจน์ว่า build image บนเครื่องทำได้ — **พิสูจน์ครบ 2026-08-14** (build+deploy+probe แยกกรณีถูกทั้ง 4 แบบ — evidence/runtime-deploy-drift/task5/INDEX.md) และ **operator สั่งปลดเป็น ci เป็นลายลักษณ์อักษรวันเดียวกัน** · ผลที่ตามมาโดยตั้งใจ: ทุก commit บน main ทำให้ staging ตามหลังทันทีจน rebuild+redeploy (~2 นาที รอบอุ่น — runbook build-images-on-the-box.md) — gate แดงคือความจริง ไม่ใช่สัญญาณรบกวน · แถว production FAIL "ยิงไม่ถึง" เมื่อรันจากเครื่อง staging จนกว่า operator เพิ่ม Cloudflare WAF skip ให้ IP เครื่อง

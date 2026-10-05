@@ -1,0 +1,369 @@
+{
+  "$schema": "https://gacp.thai/schemas/gacp-brand-identity-2.0.json",
+  "metadata": {
+    "version": "2026-05-16",
+    "schemaRevision": "2.0.0",
+    "name": "GACP Brand Identity — Finance & Document System",
+    "owner": "Tanai Digital Platform / Predictive AI Solution Co., Ltd.",
+    "supersedes": {
+      "previousVersion": "1.0 (B21-A, 2026-05-16)",
+      "reason": "B21-A's tokens copied FlowAccount.com trade dress (corner-triangle accents, purple=invoice / orange=quote / green=receipt color-per-document mapping). The new identity removes both signals and replaces them with an original Thai-government + medicinal-plant + DTAM-authority brand language."
+    },
+    "principle": "ม.86 ป.รัษฎากร — one document, one issuer. Color codes the document role; the role is also redundantly stated in the title text for color-blind accessibility (WCAG 1.4.1).",
+    "purpose": "Canonical color, typography, layout and component tokens for the company's financial PDF templates — the three finance documents (quotation, invoice = ใบวางบิล / ใบแจ้งหนี้, and ONE paper for ใบเสร็จรับเงิน / ใบกำกับภาษีเต็มรูป = receipt-tax-invoice.html) plus the credit and debit notes — and the /provider/accounting/* dashboard. One issuer; no document in the ministry's name.",
+    "consumer": "Templates and React components must read tokens from this file. Do not duplicate hex codes inline."
+  },
+
+  "identitySignature": {
+    "description": "GACP's distinctive visual signal — used in place of FlowAccount's top-right corner triangle.",
+    "primaryElement": "left-edge-stripe",
+    "leftEdgeStripe": {
+      "widthMm": 12,
+      "position": "page-left",
+      "topToBottom": true,
+      "fillColor": "{{accent}}",
+      "rotatedLabel": {
+        "text": "{{DOC_TYPE_TH}} | {{DOC_NUMBER}}",
+        "rotationDeg": -90,
+        "color": "{{textOnFill}}",
+        "fontWeight": 600,
+        "letterSpacing": "1.5px",
+        "fontSizePx": 10,
+        "positionFromTopMm": 65
+      },
+      "rationale": "A left-edge vertical stripe is a generic editorial / report device used widely in government and academic publishing. It is visually distinct from FlowAccount's top-right diagonal triangle, easy to render with pure CSS (no clip-path, no SVG), and reads as 'official Thai document' rather than 'SME accounting SaaS'."
+    },
+    "leafMark": {
+      "description": "Subtle medicinal-leaf glyph in the issuer header. Optional asset, not load-bearing.",
+      "shape": "outline-leaf",
+      "sizePx": 18,
+      "color": "{{accent}}",
+      "rationale": "Reflects GACP context (medicinal-plant certification, ก.ม.พ. — กรมการแพทย์แผนไทยและการแพทย์ทางเลือก)."
+    },
+    "removedElements": [
+      ".corner-accent (triangular clip-path top-right) — REMOVED across all 7 templates",
+      "Per-doc colors matching FlowAccount (purple=invoice, orange=quote, green=receipt) — REPLACED",
+      "Centered logo motif inside signature block — NOT USED (signature row uses plain divider)"
+    ]
+  },
+
+  "typography": {
+    "displayFamily": "Sarabun, 'Noto Sans Thai', Tahoma, sans-serif",
+    "weights": { "light": 300, "regular": 400, "medium": 500, "semibold": 600, "bold": 700, "extrabold": 800 },
+    "scale": {
+      "title":    { "px": 22, "weight": 700, "lineHeight": 1.2,  "letterSpacing": "0" },
+      "chip":     { "px": 11, "weight": 600, "lineHeight": 1.0,  "letterSpacing": "0.4px" },
+      "subtitle": { "px": 12, "weight": 400, "lineHeight": 1.4,  "letterSpacing": "0.5px", "muted": true },
+      "h2":       { "px": 16, "weight": 700, "lineHeight": 1.3 },
+      "label":    { "px": 11, "weight": 700, "lineHeight": 1.4,  "uppercase": false, "letterSpacing": "0.4px" },
+      "body":     { "px": 13, "weight": 400, "lineHeight": 1.6 },
+      "bodyMono": { "px": 12.5, "weight": 400, "lineHeight": 1.5, "tabularNums": true },
+      "footer":   { "px": 10.5, "weight": 400, "lineHeight": 1.4, "muted": true },
+      "amountInWords": { "px": 12, "weight": 400, "italic": false, "muted": true },
+      "stripeLabel":   { "px": 10, "weight": 600, "lineHeight": 1.0, "letterSpacing": "1.5px", "uppercase": false }
+    },
+    "rationale": "Sarabun is the Thai government open-source standard (license: SIL OFL). Typography is industry-standard for Thai accounting documents and is not subject to trade-dress protection."
+  },
+
+  "page": {
+    "size": "A4",
+    "orientation": "portrait",
+    "margins": {
+      "top": "20mm",
+      "right": "16mm",
+      "bottom": "20mm",
+      "left": "26mm",
+      "printOverride": "16mm 12mm 16mm 22mm",
+      "note": "Left margin reserves 12mm for the identity stripe + 10mm whitespace gutter; right margin reduced 2mm because the corner-triangle is gone."
+    },
+    "grid": { "columns": 12, "gutter": "6mm" },
+    "headerHeightRatio": 0.20,
+    "footerHeightRatio": 0.07
+  },
+
+  "neutral": {
+    "ink":           { "hex": "#0F172A", "tw": "slate-900" },
+    "text":          { "hex": "#1E293B", "tw": "slate-800" },
+    "textMuted":     { "hex": "#475569", "tw": "slate-600" },
+    "label":         { "hex": "#64748B", "tw": "slate-500" },
+    "subtle":        { "hex": "#94A3B8", "tw": "slate-400" },
+    "border":        { "hex": "#E2E8F0", "tw": "slate-200" },
+    "borderStrong":  { "hex": "#CBD5E1", "tw": "slate-300" },
+    "surface":       { "hex": "#FFFFFF", "tw": "white" },
+    "surfaceAlt":    { "hex": "#F8FAFC", "tw": "slate-50" },
+    "stripeEven":    { "hex": "#F8FAFC", "tw": "slate-50" },
+    "rationale": "Cool-slate neutrals avoid the warm-gray tone used on FlowAccount.com and pair cleanly with the medicinal-green / earthy palette below."
+  },
+
+  "documentTypes": {
+    "INVOICE": {
+      "key": "INVOICE",
+      "thaiName": "ใบวางบิล/ใบแจ้งหนี้",
+      "englishName": "Billing Note / Invoice",
+      "templateFile": "invoice.html",
+      "lawReference": "ม.86 ป.รัษฎากร",
+      "issuer": "PLATFORM or DTAM (issuer-aware)",
+      "chipLabel": "ใบแจ้งหนี้",
+      "accent":       { "hex": "#15803D", "tw": "green-700" },
+      "accentSoft":   { "hex": "#F0FDF4", "tw": "green-50" },
+      "accentBorder": { "hex": "#86EFAC", "tw": "green-300" },
+      "textOnFill":   { "hex": "#FFFFFF", "tw": "white" },
+      "contrastAA":   true,
+      "contrastRatio": "5.69:1 (AA Large + AA Normal)",
+      "rationale": "Forest green — GACP = good agricultural and collection practices for medicinal plants. Green is the literal subject matter, not a copied SaaS choice."
+    },
+    "QUOTATION": {
+      "key": "QUOTATION",
+      "thaiName": "ใบเสนอราคา",
+      "englishName": "Quotation",
+      "templateFile": "quotation.html",
+      "lawReference": "Pre-contract (no statutory law required)",
+      "issuer": "PLATFORM or DTAM",
+      "chipLabel": "ใบเสนอราคา",
+      "accent":       { "hex": "#B45309", "tw": "amber-700" },
+      "accentSoft":   { "hex": "#FFFBEB", "tw": "amber-50" },
+      "accentBorder": { "hex": "#FCD34D", "tw": "amber-300" },
+      "textOnFill":   { "hex": "#FFFFFF", "tw": "white" },
+      "contrastAA":   true,
+      "contrastRatio": "4.82:1 (AA Normal)",
+      "rationale": "Warm earth amber — preliminary, welcoming, evokes rice-field / dried-herb tones. Different hue from FlowAccount's saturated orange (#EA580C) and used in a different role (Quotation, not their orange-coded document)."
+    },
+    "RECEIPT_TAX_INVOICE": {
+      "key": "RECEIPT_TAX_INVOICE",
+      "thaiName": "ใบเสร็จรับเงิน / ใบกำกับภาษีเต็มรูป",
+      "englishName": "Receipt / Tax Invoice",
+      "templateFile": "receipt-tax-invoice.html",
+      "lawReference": "ม.86/4 ป.รัษฎากร",
+      "issuer": "PLATFORM only (the one issuer, VAT-registered)",
+      "chipLabel": "RECEIPT / TAX INVOICE",
+      "accent":       { "hex": "#0F766E", "tw": "teal-700" },
+      "accentSoft":   { "hex": "#F0FDFA", "tw": "teal-50" },
+      "accentBorder": { "hex": "#5EEAD4", "tw": "teal-300" },
+      "textOnFill":   { "hex": "#FFFFFF", "tw": "white" },
+      "contrastAA":   true,
+      "contrastRatio": "5.01:1 (AA Normal)",
+      "rationale": "One paper for the third finance document (operator-approved design docs/design/2026-09-05-finance-documents-design.md §1 row 3, §3.3): proof of payment and the full tax invoice together. Deep teal — settled, finalized payment."
+    },
+    "CREDIT_NOTE": {
+      "key": "CREDIT_NOTE",
+      "thaiName": "ใบลดหนี้",
+      "englishName": "Credit Note",
+      "templateFile": "credit-note.html",
+      "lawReference": "ม.86/10 ป.รัษฎากร",
+      "issuer": "PLATFORM only (B20-A)",
+      "chipLabel": "ใบลดหนี้",
+      "accent":       { "hex": "#9F1239", "tw": "rose-700" },
+      "accentSoft":   { "hex": "#FFF1F2", "tw": "rose-50" },
+      "accentBorder": { "hex": "#FDA4AF", "tw": "rose-300" },
+      "textOnFill":   { "hex": "#FFFFFF", "tw": "white" },
+      "contrastAA":   true,
+      "contrastRatio": "7.34:1 (AAA)",
+      "rationale": "Burgundy rose — reduction event, somber but not alarming. Distinct from FlowAccount's bright red-600; the deeper rose-700 communicates 'careful adjustment' rather than 'error'."
+    },
+    "DEBIT_NOTE": {
+      "key": "DEBIT_NOTE",
+      "thaiName": "ใบเพิ่มหนี้",
+      "englishName": "Debit Note",
+      "templateFile": "debit-note.html",
+      "lawReference": "ม.86/9 ป.รัษฎากร",
+      "issuer": "PLATFORM only (B20-A)",
+      "chipLabel": "ใบเพิ่มหนี้",
+      "accent":       { "hex": "#1E3A8A", "tw": "blue-900" },
+      "accentSoft":   { "hex": "#EFF6FF", "tw": "blue-50" },
+      "accentBorder": { "hex": "#93C5FD", "tw": "blue-300" },
+      "textOnFill":   { "hex": "#FFFFFF", "tw": "white" },
+      "contrastAA":   true,
+      "contrastRatio": "11.95:1 (AAA)",
+      "rationale": "Navy blue-900 — additional charge, formal, paired with credit-note rose as a clear positive/negative pair. Darker than FlowAccount's blue-600."
+    }
+  },
+
+  "status": {
+    "DRAFT":            { "label": "แบบร่าง",       "bg": "#F1F5F9", "fg": "#0F172A", "border": "#CBD5E1" },
+    "PENDING":          { "label": "รอดำเนินการ",   "bg": "#FEF3C7", "fg": "#92400E", "border": "#FCD34D" },
+    "AWAITING_PAYMENT": { "label": "รอเก็บเงิน",    "bg": "#FFFBEB", "fg": "#B45309", "border": "#FCD34D" },
+    "PAID":             { "label": "ชำระแล้ว",     "bg": "#F0FDF4", "fg": "#15803D", "border": "#86EFAC" },
+    "OVERDUE":          { "label": "เกินกำหนด",   "bg": "#FFF1F2", "fg": "#9F1239", "border": "#FDA4AF" },
+    "CANCELLED":        { "label": "ยกเลิก",        "bg": "#F1F5F9", "fg": "#475569", "border": "#CBD5E1" },
+    "REFUNDED":         { "label": "คืนเงิน",     "bg": "#EEF2FF", "fg": "#3730A3", "border": "#A5B4FC" }
+  },
+
+  "aging": {
+    "NOT_YET_DUE": { "label": "ยังไม่ครบกำหนด",     "bg": "#F1F5F9", "fg": "#1E293B" },
+    "0_30":        { "label": "ค้าง 0-30 วัน",      "bg": "#FFFBEB", "fg": "#B45309" },
+    "31_60":       { "label": "ค้าง 31-60 วัน",     "bg": "#FFF7ED", "fg": "#9A3412" },
+    "61_90":       { "label": "ค้าง 61-90 วัน",     "bg": "#FFF1F2", "fg": "#9F1239" },
+    "OVER_90":     { "label": "ค้างเกิน 90 วัน",     "bg": "#FEE2E2", "fg": "#7F1D1D" }
+  },
+
+  "itemsTable": {
+    "columnsInvoiceStyle": [
+      { "key": "no",       "thaiHeader": "ลำดับ",        "width": "6%",  "align": "left"  },
+      { "key": "desc",     "thaiHeader": "รายการ",       "width": "39%", "align": "left"  },
+      { "key": "qty",      "thaiHeader": "จำนวน",        "width": "10%", "align": "right" },
+      { "key": "unit",     "thaiHeader": "ราคาต่อหน่วย", "width": "15%", "align": "right" },
+      { "key": "discount", "thaiHeader": "ส่วนลด",       "width": "10%", "align": "right" },
+      { "key": "total",    "thaiHeader": "มูลค่า",       "width": "20%", "align": "right" }
+    ],
+    "columnsTaxInvoiceStyle": [
+      { "key": "no",     "thaiHeader": "ลำดับ",      "width": "6%",  "align": "left"  },
+      { "key": "desc",   "thaiHeader": "รายการ",     "width": "54%", "align": "left"  },
+      { "key": "amount", "thaiHeader": "มูลค่า",     "width": "15%", "align": "right" },
+      { "key": "vat",    "thaiHeader": "VAT",        "width": "10%", "align": "right" },
+      { "key": "total",  "thaiHeader": "รวม",        "width": "15%", "align": "right" }
+    ],
+    "rowHeight": "32px",
+    "rowPaddingY": "8px",
+    "rowPaddingX": "10px",
+    "stripeEven": true,
+    "headerStyle": {
+      "background": "{{accentSoft}}",
+      "color": "{{accent}}",
+      "borderBottom": "2px solid {{accent}}",
+      "fontWeight": 700,
+      "rationale": "Soft-fill header with same-hue text — a different table-header treatment than FlowAccount's solid-color reversed-text header. Reads as 'editorial table' instead of 'SaaS dashboard table'."
+    },
+    "rowStyle": {
+      "borderBottom": "1px solid #E2E8F0"
+    }
+  },
+
+  "totalsBlock": {
+    "alignment": "right",
+    "width": "320px",
+    "labelColor": "#475569",
+    "valueColor": "#0F172A",
+    "subtotalRow": { "muted": true, "fontWeight": 400 },
+    "vatRow":      { "background": "#F8FAFC", "color": "#1E293B", "fontWeight": 600 },
+    "grandTotalRow": {
+      "fontSize": "14px",
+      "fontWeight": 800,
+      "borderTop": "2px solid {{accent}}",
+      "borderBottom": "1px solid {{accent}}",
+      "background": "{{accentSoft}}",
+      "color": "{{accent}}",
+      "rationale": "Underline + soft tint instead of FlowAccount's solid-fill totals row. Cleaner for print."
+    }
+  },
+
+  "watermark": {
+    "size": "90px",
+    "weight": 800,
+    "rotateDeg": -28,
+    "opacity": 0.05,
+    "letterSpacing": "8px",
+    "color": "{{accent}}",
+    "note": "Used for COPY / DRAFT / VOID overlays only — not a brand element."
+  },
+
+  "signatureBlock": {
+    "layout": "two-column-flat",
+    "centerElement": "none",
+    "divider": "horizontal-line-only",
+    "rationale": "DELIBERATELY no centered-logo motif between the two signers — FlowAccount uses a centered company-logo decoration between the seller/receiver signature lines as a brand identifier. We use a plain divider (or nothing) to avoid that distinctive pattern.",
+    "signerStyle": {
+      "lineColor": "{{neutral.text}}",
+      "lineThickness": "1px",
+      "roleSize": "11.5px",
+      "roleWeight": 600,
+      "nameSize": "11px",
+      "nameColor": "{{neutral.label}}"
+    }
+  },
+
+  "icons": {
+    "library": "@tabler/icons-react",
+    "sizeDefault": 16,
+    "sizeLarge": 20,
+    "note": "Tabler is MIT-licensed, no trade-dress overlap."
+  },
+
+  "dashboard": {
+    "toolbar": {
+      "buttonPrimary":   { "bg": "#0F766E", "fg": "#FFFFFF", "hover": "#115E59" },
+      "buttonSecondary": { "bg": "#FFFFFF", "fg": "#1E293B", "border": "#CBD5E1", "hover": "#F8FAFC" }
+    },
+    "filterChip": {
+      "bg": "#F0FDFA",
+      "fg": "#0F766E",
+      "border": "#5EEAD4",
+      "removeIcon": "×",
+      "radius": "8px",
+      "paddingX": "10px",
+      "paddingY": "4px",
+      "rationale": "Square-corner-rounded (8px) chips instead of the 9999px pill — visually different from FlowAccount's fully-rounded dashboard chips."
+    },
+    "summaryCard": {
+      "bg": "#FFFFFF",
+      "border": "#E2E8F0",
+      "radius": "10px",
+      "shadow": "0 1px 2px 0 rgb(0 0 0 / 0.04)",
+      "titleAccent": "#0F766E",
+      "padding": "20px",
+      "leftBorder": "3px solid #0F766E",
+      "rationale": "Left-border accent on cards echoes the document left-edge stripe — that becomes GACP's repeatable identity device across PDF + dashboard."
+    },
+    "tabs": {
+      "activeUnderline": "#0F766E",
+      "activeFg": "#0F766E",
+      "inactiveFg": "#64748B",
+      "countBadgeBg": "#F1F5F9",
+      "countBadgeFg": "#334155"
+    },
+    "table": {
+      "headBg": "#F8FAFC",
+      "headFg": "#334155",
+      "linkFg": "#0F766E",
+      "linkHover": "#115E59",
+      "monetaryAlign": "right",
+      "rowHover": "#F8FAFC"
+    },
+    "pagination": {
+      "selectorBg": "#FFFFFF",
+      "selectorBorder": "#CBD5E1",
+      "pageNumActiveBg": "#0F766E",
+      "pageNumActiveFg": "#FFFFFF"
+    }
+  },
+
+  "shadows": {
+    "sm": "0 1px 2px 0 rgb(0 0 0 / 0.04)",
+    "md": "0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.08)",
+    "lg": "0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05)"
+  },
+
+  "radii": {
+    "sm": "4px",
+    "md": "6px",
+    "lg": "10px",
+    "xl": "14px",
+    "pill": "9999px",
+    "note": "Default cards use 10px (not 16px). FlowAccount uses generously rounded 16px cards as part of their SaaS-modern look; the 10px radius is a different feel — more 'government document' than 'consumer SaaS'."
+  },
+
+  "implementationContract": {
+    "cssVariables": [
+      "--accent",
+      "--accent-soft",
+      "--accent-border",
+      "--text-on-fill",
+      "--text-primary",
+      "--text-secondary",
+      "--text-muted",
+      "--text-soft",
+      "--border",
+      "--border-strong",
+      "--surface",
+      "--surface-alt",
+      "--stripe-width"
+    ],
+    "removedCssClasses": [".corner-accent"],
+    "addedCssClasses": [
+      ".identity-stripe",
+      ".identity-stripe__label",
+      ".doc-chip",
+      ".issuer-leaf"
+    ],
+    "loadOrder": "Templates import this file via the PDF render service helper `resolveBrandTokens(docType)` which returns the documentType subtree merged with neutral, page, typography, itemsTable, totalsBlock, signatureBlock and identitySignature."
+  }
+}

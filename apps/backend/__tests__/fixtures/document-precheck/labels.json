@@ -1,0 +1,767 @@
+{
+  "_about": "Task 9 accuracy corpus: the human-set truth for every file in corpus/, decided from what each document actually prints (see make-corpus.js) — never from what the rule layer returns. expected[check] = null means the rule layer does not produce that flag for the slot at all. A warning is any result other than PASS/MATCH.",
+  "now": "2026-09-27T04:00:00.000Z",
+  "references": {
+    "land_deed": {
+      "applicantName": "มาลัย ศรีสุข",
+      "entityName": "บริษัท สวนสมุนไพรมาลัย จำกัด"
+    },
+    "land_lease": {
+      "applicantName": "ประเสริฐ วงศ์ใหญ่",
+      "entityName": "บริษัท ประเสริฐเกษตร จำกัด"
+    },
+    "land_consent": {
+      "applicantName": "บุญมา แก้วประเสริฐ",
+      "entityName": "บริษัท บุญมาเกษตร จำกัด"
+    },
+    "company_reg": {
+      "entityName": "บริษัท สมุนไพรทดสอบ จำกัด",
+      "juristicId": "0999911111221",
+      "directorName": "วีระ ทองคำ"
+    },
+    "id_card": {
+      "applicantName": "กาญจนา รุ่งเรือง",
+      "citizenIdLast4": "0121"
+    },
+    "house_reg": {
+      "applicantName": "ธนา พิทักษ์ไทย"
+    },
+    "previous_cert": {
+      "entityName": "บริษัท สวนสมุนไพรทดสอบ จำกัด"
+    }
+  },
+  "files": [
+    {
+      "file": "land_deed--correct-text.pdf",
+      "slotId": "land_deed",
+      "variant": "correct-text",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "the right document, the applicant's own data, text-layer PDF"
+    },
+    {
+      "file": "land_deed--correct-scan.pdf",
+      "slotId": "land_deed",
+      "variant": "correct-scan",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document as correct-text, rasterised into an image-only PDF"
+    },
+    {
+      "file": "land_deed--scan-blur.png",
+      "slotId": "land_deed",
+      "variant": "scan-blur",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document, blurred (sigma 3.5) but every word still readable by a person"
+    },
+    {
+      "file": "land_deed--scan-rotate3.png",
+      "slotId": "land_deed",
+      "variant": "scan-rotate3",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document, rotated 3 degrees"
+    },
+    {
+      "file": "land_deed--scan-heavy-blur.png",
+      "slotId": "land_deed",
+      "variant": "scan-heavy-blur",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 5): digits readable, Thai words not reliably readable by a person"
+    },
+    {
+      "file": "land_deed--illegible.png",
+      "slotId": "land_deed",
+      "variant": "illegible",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 9): nothing readable by a person"
+    },
+    {
+      "file": "land_deed--wrong-type.pdf",
+      "slotId": "land_deed",
+      "variant": "wrong-type",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "NOT_FOUND",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "a land consent letter uploaded as the deed; it names the deed (\"ตามโฉนดที่ดินเลขที่ 4567\") in its body"
+    },
+    {
+      "file": "land_deed--name-mismatch.pdf",
+      "slotId": "land_deed",
+      "variant": "name-mismatch",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MISMATCH",
+        "VALIDITY": null
+      },
+      "note": "holder is a different person with a near name (มาลี vs มาลัย)"
+    },
+    {
+      "file": "land_lease--correct-text.pdf",
+      "slotId": "land_lease",
+      "variant": "correct-text",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": null,
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "the right document, the applicant's own data, text-layer PDF"
+    },
+    {
+      "file": "land_lease--correct-scan.pdf",
+      "slotId": "land_lease",
+      "variant": "correct-scan",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": null,
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document as correct-text, rasterised into an image-only PDF"
+    },
+    {
+      "file": "land_lease--scan-blur.png",
+      "slotId": "land_lease",
+      "variant": "scan-blur",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": null,
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document, blurred (sigma 3.5) but every word still readable by a person"
+    },
+    {
+      "file": "land_lease--scan-rotate3.png",
+      "slotId": "land_lease",
+      "variant": "scan-rotate3",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": null,
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document, rotated 3 degrees"
+    },
+    {
+      "file": "land_lease--scan-heavy-blur.png",
+      "slotId": "land_lease",
+      "variant": "scan-heavy-blur",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": null,
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 5): digits readable, Thai words not reliably readable by a person"
+    },
+    {
+      "file": "land_lease--illegible.png",
+      "slotId": "land_lease",
+      "variant": "illegible",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": null,
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 9): nothing readable by a person"
+    },
+    {
+      "file": "land_lease--wrong-type.pdf",
+      "slotId": "land_lease",
+      "variant": "wrong-type",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": null,
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "the applicant's ID card uploaded as the lease; DOC_TYPE never runs for land_lease (no sourced phrase)"
+    },
+    {
+      "file": "land_lease--name-mismatch.pdf",
+      "slotId": "land_lease",
+      "variant": "name-mismatch",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": null,
+        "CROSS_MATCH": "MISMATCH",
+        "VALIDITY": null
+      },
+      "note": "lessee is a different person with a near name (วงศ์ใหม่ vs วงศ์ใหญ่ — one letter)"
+    },
+    {
+      "file": "land_consent--correct-text.pdf",
+      "slotId": "land_consent",
+      "variant": "correct-text",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "the right document, the applicant's own data, text-layer PDF"
+    },
+    {
+      "file": "land_consent--correct-scan.pdf",
+      "slotId": "land_consent",
+      "variant": "correct-scan",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document as correct-text, rasterised into an image-only PDF"
+    },
+    {
+      "file": "land_consent--scan-blur.png",
+      "slotId": "land_consent",
+      "variant": "scan-blur",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document, blurred (sigma 3.5) but every word still readable by a person"
+    },
+    {
+      "file": "land_consent--scan-rotate3.png",
+      "slotId": "land_consent",
+      "variant": "scan-rotate3",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document, rotated 3 degrees"
+    },
+    {
+      "file": "land_consent--scan-heavy-blur.png",
+      "slotId": "land_consent",
+      "variant": "scan-heavy-blur",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 5): digits readable, Thai words not reliably readable by a person"
+    },
+    {
+      "file": "land_consent--illegible.png",
+      "slotId": "land_consent",
+      "variant": "illegible",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 9): nothing readable by a person"
+    },
+    {
+      "file": "land_consent--wrong-type.pdf",
+      "slotId": "land_consent",
+      "variant": "wrong-type",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "NOT_FOUND",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "a land deed uploaded as the consent letter, holder = the applicant"
+    },
+    {
+      "file": "land_consent--name-mismatch.pdf",
+      "slotId": "land_consent",
+      "variant": "name-mismatch",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MISMATCH",
+        "VALIDITY": null
+      },
+      "note": "consent is given to a different person with a near name (บุญมาก แก้วประสิทธิ์)"
+    },
+    {
+      "file": "company_reg--correct-text.pdf",
+      "slotId": "company_reg",
+      "variant": "correct-text",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": "PASS"
+      },
+      "note": "the right document, the applicant's own data, text-layer PDF"
+    },
+    {
+      "file": "company_reg--correct-scan.pdf",
+      "slotId": "company_reg",
+      "variant": "correct-scan",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": "PASS"
+      },
+      "note": "same document as correct-text, rasterised into an image-only PDF"
+    },
+    {
+      "file": "company_reg--scan-blur.png",
+      "slotId": "company_reg",
+      "variant": "scan-blur",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": "PASS"
+      },
+      "note": "same document, blurred (sigma 3.5) but every word still readable by a person"
+    },
+    {
+      "file": "company_reg--scan-rotate3.png",
+      "slotId": "company_reg",
+      "variant": "scan-rotate3",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": "PASS"
+      },
+      "note": "same document, rotated 3 degrees"
+    },
+    {
+      "file": "company_reg--scan-heavy-blur.png",
+      "slotId": "company_reg",
+      "variant": "scan-heavy-blur",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": "DATE_NOT_FOUND"
+      },
+      "note": "blurred (sigma 5): digits readable, Thai words not reliably readable by a person"
+    },
+    {
+      "file": "company_reg--illegible.png",
+      "slotId": "company_reg",
+      "variant": "illegible",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": "DATE_NOT_FOUND"
+      },
+      "note": "blurred (sigma 9): nothing readable by a person"
+    },
+    {
+      "file": "company_reg--wrong-type.pdf",
+      "slotId": "company_reg",
+      "variant": "wrong-type",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "NOT_FOUND",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": "DATE_NOT_FOUND"
+      },
+      "note": "the director's ID card uploaded as the company certificate: no company name, no registration number (its 13-digit number is a citizen id), no issue date"
+    },
+    {
+      "file": "company_reg--name-mismatch.pdf",
+      "slotId": "company_reg",
+      "variant": "name-mismatch",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MISMATCH",
+        "VALIDITY": "PASS"
+      },
+      "note": "a different company with a near name (สมุนไพรทดลอง vs สมุนไพรทดสอบ); registration number and director are the applicant's"
+    },
+    {
+      "file": "company_reg--id-mismatch.pdf",
+      "slotId": "company_reg",
+      "variant": "id-mismatch",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MISMATCH",
+        "VALIDITY": "PASS"
+      },
+      "note": "a different, checksum-valid registration number; name and director are the applicant's"
+    },
+    {
+      "file": "company_reg--expired.pdf",
+      "slotId": "company_reg",
+      "variant": "expired",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": "EXPIRED"
+      },
+      "note": "issued 10 มกราคม 2569, more than 6 months before now"
+    },
+    {
+      "file": "company_reg--no-date.pdf",
+      "slotId": "company_reg",
+      "variant": "no-date",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": "DATE_NOT_FOUND"
+      },
+      "note": "no issue-date line; the registration date (3 มีนาคม 2562) is still printed"
+    },
+    {
+      "file": "id_card--correct-text.pdf",
+      "slotId": "id_card",
+      "variant": "correct-text",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "the right document, the applicant's own data, text-layer PDF"
+    },
+    {
+      "file": "id_card--correct-scan.pdf",
+      "slotId": "id_card",
+      "variant": "correct-scan",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document as correct-text, rasterised into an image-only PDF"
+    },
+    {
+      "file": "id_card--scan-blur.png",
+      "slotId": "id_card",
+      "variant": "scan-blur",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document, blurred (sigma 3.5) but every word still readable by a person"
+    },
+    {
+      "file": "id_card--scan-rotate3.png",
+      "slotId": "id_card",
+      "variant": "scan-rotate3",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document, rotated 3 degrees"
+    },
+    {
+      "file": "id_card--scan-heavy-blur.png",
+      "slotId": "id_card",
+      "variant": "scan-heavy-blur",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 5): digits readable, Thai words not reliably readable by a person"
+    },
+    {
+      "file": "id_card--illegible.png",
+      "slotId": "id_card",
+      "variant": "illegible",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 9): nothing readable by a person"
+    },
+    {
+      "file": "id_card--wrong-type.pdf",
+      "slotId": "id_card",
+      "variant": "wrong-type",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "NOT_FOUND",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "the applicant's house registration uploaded as the ID card; it prints the applicant's name and citizen id"
+    },
+    {
+      "file": "id_card--name-mismatch.pdf",
+      "slotId": "id_card",
+      "variant": "name-mismatch",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MISMATCH",
+        "VALIDITY": null
+      },
+      "note": "a different person with a near name (รุ่งโรจน์ vs รุ่งเรือง); citizen id is the applicant's"
+    },
+    {
+      "file": "id_card--id-mismatch.pdf",
+      "slotId": "id_card",
+      "variant": "id-mismatch",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MISMATCH",
+        "VALIDITY": null
+      },
+      "note": "a different, checksum-valid citizen id (different last 4); name is the applicant's"
+    },
+    {
+      "file": "house_reg--correct-text.pdf",
+      "slotId": "house_reg",
+      "variant": "correct-text",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "the right document, the applicant's own data, text-layer PDF"
+    },
+    {
+      "file": "house_reg--correct-scan.pdf",
+      "slotId": "house_reg",
+      "variant": "correct-scan",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document as correct-text, rasterised into an image-only PDF"
+    },
+    {
+      "file": "house_reg--scan-blur.png",
+      "slotId": "house_reg",
+      "variant": "scan-blur",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document, blurred (sigma 3.5) but every word still readable by a person"
+    },
+    {
+      "file": "house_reg--scan-rotate3.png",
+      "slotId": "house_reg",
+      "variant": "scan-rotate3",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "same document, rotated 3 degrees"
+    },
+    {
+      "file": "house_reg--scan-heavy-blur.png",
+      "slotId": "house_reg",
+      "variant": "scan-heavy-blur",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 5): digits readable, Thai words not reliably readable by a person"
+    },
+    {
+      "file": "house_reg--illegible.png",
+      "slotId": "house_reg",
+      "variant": "illegible",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": "NOT_FOUND",
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 9): nothing readable by a person"
+    },
+    {
+      "file": "house_reg--wrong-type.pdf",
+      "slotId": "house_reg",
+      "variant": "wrong-type",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "NOT_FOUND",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "the applicant's ID card uploaded as the house registration"
+    },
+    {
+      "file": "house_reg--name-mismatch.pdf",
+      "slotId": "house_reg",
+      "variant": "name-mismatch",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MISMATCH",
+        "VALIDITY": null
+      },
+      "note": "a different person with a near name (ธนากร vs ธนา)"
+    },
+    {
+      "file": "house_reg--id-mismatch.pdf",
+      "slotId": "house_reg",
+      "variant": "id-mismatch",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": "MATCH",
+        "VALIDITY": null
+      },
+      "note": "a different, checksum-valid citizen id; house_reg compares the name only, so the truth is MATCH (a negative control: an unrelated id must not raise a warning)"
+    },
+    {
+      "file": "previous_cert--correct-text.pdf",
+      "slotId": "previous_cert",
+      "variant": "correct-text",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": null,
+        "VALIDITY": null
+      },
+      "note": "the right document, the applicant's own data, text-layer PDF"
+    },
+    {
+      "file": "previous_cert--correct-scan.pdf",
+      "slotId": "previous_cert",
+      "variant": "correct-scan",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": null,
+        "VALIDITY": null
+      },
+      "note": "same document as correct-text, rasterised into an image-only PDF"
+    },
+    {
+      "file": "previous_cert--scan-blur.png",
+      "slotId": "previous_cert",
+      "variant": "scan-blur",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": null,
+        "VALIDITY": null
+      },
+      "note": "same document, blurred (sigma 3.5) but every word still readable by a person"
+    },
+    {
+      "file": "previous_cert--scan-rotate3.png",
+      "slotId": "previous_cert",
+      "variant": "scan-rotate3",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": null,
+        "VALIDITY": null
+      },
+      "note": "same document, rotated 3 degrees"
+    },
+    {
+      "file": "previous_cert--scan-heavy-blur.png",
+      "slotId": "previous_cert",
+      "variant": "scan-heavy-blur",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": null,
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 5): digits readable, Thai words not reliably readable by a person"
+    },
+    {
+      "file": "previous_cert--illegible.png",
+      "slotId": "previous_cert",
+      "variant": "illegible",
+      "expected": {
+        "READABILITY": "UNREADABLE",
+        "DOC_TYPE": "UNREADABLE",
+        "CROSS_MATCH": null,
+        "VALIDITY": null
+      },
+      "note": "blurred (sigma 9): nothing readable by a person"
+    },
+    {
+      "file": "previous_cert--wrong-type.pdf",
+      "slotId": "previous_cert",
+      "variant": "wrong-type",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "NOT_FOUND",
+        "CROSS_MATCH": null,
+        "VALIDITY": null
+      },
+      "note": "a company registration certificate uploaded as the previous GACP certificate"
+    },
+    {
+      "file": "previous_cert--name-mismatch.pdf",
+      "slotId": "previous_cert",
+      "variant": "name-mismatch",
+      "expected": {
+        "READABILITY": "PASS",
+        "DOC_TYPE": "MATCH",
+        "CROSS_MATCH": null,
+        "VALIDITY": null
+      },
+      "note": "certificate issued to a different company with a near name; CROSS_MATCH never runs for previous_cert (no sourced reference field)"
+    }
+  ]
+}

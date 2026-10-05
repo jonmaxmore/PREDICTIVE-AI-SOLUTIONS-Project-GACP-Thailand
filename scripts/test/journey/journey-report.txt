@@ -1,0 +1,27 @@
+GACP Journey Test Report
+Date: 2026-03-16T12:49:03.069Z
+Target: https://gacpth.com
+Runtime: 98.5s
+
+🟢 J1 Registration & Login: 8/8 (100.0%)
+🟢 J2 Farm Management: 12/12 (100.0%)
+🟢 J3 Wizard Draft & Submit: 10/10 (100.0%)
+🟢 J4 Document Review: 10/10 (100.0%)
+🟢 J5 Audit Workflow: 10/10 (100.0%)
+🟢 J6 Payment & Invoicing: 11/11 (100.0%)
+🟢 J7 Certificate & Verify: 2/2 (100.0%)
+🟢 J8 Rejection & Revision: 10/10 (100.0%)
+🟢 J9 Notifications & Tickets: 10/10 (100.0%)
+🟢 J10 Golden Scenario E2E: 5/5 (100.0%)
+🟢 F1 Frontend Health Pages: 12/12 (100.0%)
+🟢 F2 Frontend Provider Pages: 12/12 (100.0%)
+🟢 B1 Backend Stress & Error: 12/12 (100.0%)
+🟢 B2 Security & Auth: 12/12 (100.0%)
+🟢 D1 Database Integrity: 12/12 (100.0%)
+🟢 D2 Database Performance: 12/12 (100.0%)
+🟢 S1 SEO & Accessibility: 12/12 (100.0%)
+🟢 S2 API Contract: 12/12 (100.0%)
+🟢 S3 Workflow State Machine: 12/12 (100.0%)
+🟢 S4 Cross-Layer Integration: 12/12 (100.0%)
+
+TOTAL: 208/208 (100.0%)

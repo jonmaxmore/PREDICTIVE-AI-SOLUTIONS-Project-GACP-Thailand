@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "2026-03-08",
+  "currentRuntimeProvider": "digitalocean",
+  "selectionStatus": "evaluation_complete_provider_unselected",
+  "selectedProvider": null,
+  "evaluationEvidence": "docs/deployment/provider-evaluation-evidence-2026-03-08.md",
+  "scorecardPath": "docs/deployment/provider-evaluation-scorecard.csv",
+  "candidateOrder": [
+    "aws",
+    "gcp",
+    "azure",
+    "digitalocean"
+  ],
+  "providers": {
+    "aws": {
+      "edge": [
+        "alb",
+        "cloudfront",
+        "waf"
+      ],
+      "appRuntime": [
+        "ecs_or_eks_multi_az"
+      ],
+      "postgres": [
+        "rds_postgresql_multi_az"
+      ],
+      "redis": [
+        "elasticache_multi_az"
+      ],
+      "objectStorage": [
+        "s3"
+      ],
+      "observability": [
+        "cloudwatch"
+      ],
+      "dns": [
+        "route53"
+      ],
+      "secrets": [
+        "secrets_manager"
+      ]
+    },
+    "gcp": {
+      "edge": [
+        "global_external_application_load_balancer",
+        "cloud_cdn",
+        "cloud_armor"
+      ],
+      "appRuntime": [
+        "gke_or_managed_instance_groups_multi_zone"
+      ],
+      "postgres": [
+        "cloud_sql_high_availability"
+      ],
+      "redis": [
+        "memorystore_standard_tier"
+      ],
+      "objectStorage": [
+        "cloud_storage"
+      ],
+      "observability": [
+        "cloud_monitoring"
+      ],
+      "dns": [
+        "cloud_dns"
+      ],
+      "secrets": [
+        "secret_manager"
+      ]
+    },
+    "azure": {
+      "edge": [
+        "front_door",
+        "waf"
+      ],
+      "appRuntime": [
+        "aks_or_vm_scale_sets_across_zones"
+      ],
+      "postgres": [
+        "postgresql_flexible_server_high_availability"
+      ],
+      "redis": [
+        "azure_cache_for_redis_high_availability"
+      ],
+      "objectStorage": [
+        "blob_storage"
+      ],
+      "observability": [
+        "azure_monitor"
+      ],
+      "dns": [
+        "azure_dns"
+      ],
+      "secrets": [
+        "key_vault"
+      ]
+    },
+    "digitalocean": {
+      "edge": [
+        "load_balancer",
+        "cloud_firewalls_partial_waf_gap"
+      ],
+      "appRuntime": [
+        "droplets_or_doks"
+      ],
+      "postgres": [
+        "managed_postgresql"
+      ],
+      "redis": [
+        "managed_valkey_with_standby"
+      ],
+      "objectStorage": [
+        "spaces"
+      ],
+      "observability": [
+        "monitoring_and_alerts"
+      ],
+      "dns": [
+        "managed_dns"
+      ],
+      "secrets": [
+        "external_secret_store_required"
+      ]
+    }
+  }
+}

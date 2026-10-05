@@ -1,0 +1,230 @@
+# GACP Platform Alert Rules - Iter 29 (FINAL SRE Loop)
+# Date: 2026-05-16
+# Owner: SRE on-call (see docs/operations/on-call-rotation-2026-05-16.md)
+#
+# Layered on top of monitoring/prometheus/alerts.yml. This file holds the
+# Iter 29 expansions for application-domain alerts (slip queue, VAT period,
+# audit log writes, PDPA, JWT, admin overrides).
+#
+# Routing: severity=critical -> PagerDuty Tier 1 (24/7)
+#          severity=warning  -> Slack #gacp-alerts + Tier 2 next biz hour
+#          severity=info     -> Slack #gacp-alerts only
+
+groups:
+  # =================================================================
+  # CRITICAL - immediate page, response < 15 min
+  # =================================================================
+  - name: gacp-critical
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_total{job="gacp-backend",status=~"5.."}[5m])) / clamp_min(sum(rate(http_requests_total{job="gacp-backend"}[5m])), 1) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+          tier: 1
+        annotations:
+          summary: "HTTP error rate > 5% for 5min"
+          description: "5xx error ratio is {{ $value | humanizePercentage }} on gacp-backend."
+          runbook_url: "https://wiki.gacp-platform.th/runbooks/high-error-rate"
+
+      - alert: BackendDown
+        expr: up{job="gacp-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: backend
+          tier: 1
+        annotations:
+          summary: "gacp-backend instance unreachable for 1 min"
+          runbook_url: "https://wiki.gacp-platform.th/runbooks/backend-down"
+
+      - alert: DatabaseDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: database
+          tier: 1
+        annotations:
+          summary: "PostgreSQL unreachable"
+          runbook_url: "https://wiki.gacp-platform.th/runbooks/db-down"
+
+      - alert: P99LatencyExtreme
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job="gacp-backend"}[5m])) by (le)) > 5
+        for: 10m
+        labels:
+          severity: critical
+          team: backend
+          tier: 1
+        annotations:
+          summary: "P99 latency > 5s for 10 min"
+
+      - alert: AuditLogWriteFailure
+        expr: increase(audit_log_write_errors_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: backend
+          tier: 1
+        annotations:
+          summary: "AuditLog inserts are failing (Iter 23 immutable log compromised)"
+          description: "If audit writes fail, compliance evidence chain breaks. Escalate immediately."
+
+      - alert: PDPABreachSuspected
+        expr: increase(pdpa_breach_suspected_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+          tier: 1
+        annotations:
+          summary: "Possible PDPA personal-data breach detected"
+          description: "PDPC notification deadline = 72h per PDPA Section 28. Engage DPO + legal."
+
+  # =================================================================
+  # WARNING - investigate during business hours
+  # =================================================================
+  - name: gacp-warning
+    interval: 1m
+    rules:
+      - alert: P95LatencyDegraded
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="gacp-backend"}[5m])) by (le)) > 2
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+          tier: 2
+        annotations:
+          summary: "P95 latency > 2s for 10 min"
+
+      - alert: SlipReviewBacklog
+        expr: payment_slip_pending_count > 50
+        for: 1h
+        labels:
+          severity: warning
+          team: finance-ops
+          tier: 2
+        annotations:
+          summary: "Slip review queue > 50 for 1h"
+          description: "Reviewer capacity exceeded. Assign additional reviewers (Iter 25)."
+
+      - alert: PeriodCloseUnclosable
+        expr: vat_period_uncloseable == 1
+        for: 24h
+        labels:
+          severity: warning
+          team: finance
+          tier: 2
+        annotations:
+          summary: "VAT period cannot be closed (drafts/open invoices remain)"
+          description: "ภ.พ.30 filing window at risk. See docs/finance/period-close.md (Iter 26)."
+
+      - alert: FailedAuthSpike
+        expr: rate(auth_login_failed_total[5m]) > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: security
+          tier: 2
+        annotations:
+          summary: "Failed login rate > 5/sec (possible credential stuffing)"
+
+      - alert: JWTVerificationFailureSpike
+        expr: rate(jwt_verification_failed_total[5m]) > 2
+        for: 10m
+        labels:
+          severity: warning
+          team: security
+          tier: 2
+        annotations:
+          summary: "JWT failures > 2/sec - possible token forgery attempt"
+
+      - alert: AdminForceStatusBurst
+        expr: increase(admin_force_status_total[1h]) > 10
+        for: 0m
+        labels:
+          severity: warning
+          team: security
+          tier: 2
+        annotations:
+          summary: "More than 10 admin force-status overrides in 1h - audit required"
+          description: "Iter 28 admin tooling abuse check. Review AuditLog entries."
+
+      - alert: RateLimitHitsHigh
+        expr: rate(rate_limit_hit_total[5m]) > 10
+        for: 15m
+        labels:
+          severity: warning
+          team: security
+          tier: 2
+        annotations:
+          summary: "Rate-limit hits > 10/sec - possible abuse or misconfigured client"
+
+      - alert: BackendMemoryPressure
+        expr: process_resident_memory_bytes{job="gacp-backend"} / 1024 / 1024 > 1024
+        for: 15m
+        labels:
+          severity: warning
+          team: backend
+          tier: 2
+        annotations:
+          summary: "Backend RSS > 1GB for 15 min"
+
+      - alert: DBQuerySlow
+        expr: histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket{job="gacp-backend"}[5m])) by (le)) > 1
+        for: 10m
+        labels:
+          severity: warning
+          team: database
+          tier: 2
+        annotations:
+          summary: "DB P95 query latency > 1s"
+
+      - alert: ARAgingHigh
+        expr: invoice_ar_aging_thb{bucket="90_plus"} > 500000
+        for: 1d
+        labels:
+          severity: warning
+          team: finance
+          tier: 2
+        annotations:
+          summary: "AR aging 90+ days exceeds THB 500,000"
+
+      - alert: PDPAErasureSLABreach
+        expr: pdpa_erasure_pending_over_30d_count > 0
+        for: 1h
+        labels:
+          severity: warning
+          team: legal
+          tier: 2
+        annotations:
+          summary: "PDPA erasure request pending > 30 days (statutory limit)"
+          description: "PDPA Section 33 requires response within 30 days. Escalate to DPO."
+
+  # =================================================================
+  # INFO - dashboards and trends only
+  # =================================================================
+  - name: gacp-info
+    interval: 5m
+    rules:
+      - alert: ApplicationSubmissionSpike
+        expr: increase(gacp_applications_submitted_total[1h]) > 100
+        for: 10m
+        labels:
+          severity: info
+          team: product
+          tier: 3
+        annotations:
+          summary: "Application submissions > 100/h (capacity check)"
+
+      - alert: NewCertificateIssuedMilestone
+        expr: increase(gacp_certificates_issued_total[1d]) > 50
+        for: 0m
+        labels:
+          severity: info
+          team: product
+          tier: 3
+        annotations:
+          summary: "More than 50 certificates issued in last 24h"

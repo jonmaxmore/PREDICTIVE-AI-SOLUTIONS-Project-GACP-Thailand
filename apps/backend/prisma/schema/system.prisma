@@ -1,0 +1,410 @@
+// Domain: System Configuration & Provider Tools
+
+model Notification {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Owner
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Content
+  title    String
+  message  String
+  type     String // INFO, WARNING, SUCCESS, ERROR, QUOTE_RECEIVED, INVOICE_RECEIVED
+  category String?
+
+  // Status
+  isRead   Boolean   @default(false)
+  readAt   DateTime?
+  priority Int       @default(0)
+
+  // Letter class (R2 M1, operator decision D-9 2026-08-03): "GENERAL" |
+  // "OFFICIAL_LETTER". SSOT vocabulary: apps/backend/shared/notification-kind.js
+  // (String + CHECK idiom — constraint in migration 20260803120000).
+  // OFFICIAL_LETTER rows are a permanent archive: excluded from the weekly
+  // cleanup sweep, PDPA erasure, and the notification opt-out gate.
+  kind String @default("GENERAL")
+
+  // Metadata (JSON)
+  metadata Json?
+
+  // R2 M3 — correction rounds whose official letter is this row (letterId FK,
+  // Restrict: letters are a permanent archive, D-9).
+  correctionRounds CorrectionRound[]
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  // R2 M1: read path for the archived-letters surfaces (M2+) — a user's letters.
+  @@index([userId, kind])
+  @@index([createdAt(sort: Desc)])
+  @@index([organizationId])
+  @@map("notifications")
+}
+
+// AUDIT LOG MODEL (Immutable)
+
+model SystemConfig {
+  key         String   @id // Primary key is now 'key' not 'id' to match database
+  value       String   @default("") // Text value - parse as JSON in controller if needed
+  type        String   @default("STRING") // STRING, BOOLEAN, JSON
+  description String?
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+  @@map("system_configs")
+}
+
+// WIZARD STEP CONFIG MODEL (Dynamic Step Management - API First)
+
+model WizardStepConfig {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Step Identity
+  stepNumber Int    @unique
+  stepKey    String @unique // e.g., "plant_selection", "farm_info", "documents"
+
+  // Display
+  titleTH     String // Thai title: "เลือกพืช"
+  titleEN     String // English title: "Plant Selection"
+  description String? // Help text
+  icon        String? // Lucide icon name
+
+  // Configuration
+  isEnabled    Boolean @default(true) // Toggle step on/off
+  isRequired   Boolean @default(true) // Can user skip this step?
+  displayOrder Int     @default(0) // Sort order (allows reordering)
+
+  // Plant Group Filtering
+  plantGroups Json @default("[\"*\"]") // ["HIGH_CONTROL", "GENERAL"] or ["*"] for all
+
+  // Validation Rules (JSON)
+  validationRules Json? // { minFields: 3, requireUpload: true, ... }
+
+  // Component Mapping
+  componentName String? // Frontend component: "StepPlantSelection"
+
+  // Audit
+  createdBy String?
+  updatedBy String?
+
+  @@index([isEnabled])
+  @@index([displayOrder])
+  @@map("wizard_step_configs")
+}
+
+// PHASE 7: EXTERNAL INTEGRATION MODELS (Drying, Curing, Feedback, Audit)
+
+// Drying Temperature Tracking
+
+model DocumentTemplate {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Template Identity
+  code    String // 'GACP_CERTIFICATE', 'INVOICE', 'APPLICATION_SUMMARY', 'LOT_LABEL'
+  version Int    @default(1)
+
+  // Display
+  titleTH     String // "ใบรับรอง GACP"
+  titleEN     String? // "GACP Certificate"
+  description String? // คำอธิบาย template
+
+  // Status & Lifecycle
+  status        String    @default("DRAFT") // DRAFT, ACTIVE, DEPRECATED
+  effectiveDate DateTime  @default(now()) // วันที่เริ่มใช้งาน
+  retiredDate   DateTime? // วันที่เลิกใช้ (null = ยังใช้อยู่)
+
+  // Template Content
+  htmlTemplate String // Full HTML template with {{PLACEHOLDER}} variables
+  cssOverrides String? // Optional CSS overrides
+
+  // Schema for payload validation
+  payloadSchema Json? // JSON Schema: { CERT_NUMBER: "string", APPLICANT_NAME: "string", ... }
+
+  // Render Configuration
+  paperSize   String @default("A4_LANDSCAPE") // A4, A4_LANDSCAPE, LETTER
+  orientation String @default("landscape") // portrait, landscape
+
+  // Audit
+  createdBy String?
+  updatedBy String?
+
+  @@unique([code, version])
+  @@index([code])
+  @@index([status])
+  @@map("document_templates")
+}
+
+// REPORT SUBMISSION MODEL (Phase 4 — Monthly Reports ภ.ท.27/28)
+
+model ReportSubmission {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id])
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+
+  // Report Identity
+  reportType  String // 'PT27' (ภ.ท.27), 'PT28' (ภ.ท.28), 'PT29', 'PT30', 'PT31', 'PT32'
+  reportMonth Int // 1-12
+  reportYear  Int // พ.ศ. (e.g. 2569)
+
+  // Report Content
+  formData Json // Fields vary by reportType
+
+  // Status
+  status      String    @default("DRAFT") // DRAFT, SUBMITTED, REVIEWED, APPROVED, REJECTED
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  reviewedBy  String?
+  reviewNote  String? // หมายเหตุจากเจ้าหน้าที่
+
+  // Document Attachment
+  attachmentUrl String? // PDF/รูปภาพประกอบ (ถ้ามี)
+
+  // Audit
+  createdBy String?
+  updatedBy String?
+
+  // Soft Delete
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([certificateId, reportType, reportMonth, reportYear])
+  @@index([certificateId])
+  @@index([userId])
+  @@index([reportType])
+  @@index([status])
+  @@index([reportYear, reportMonth])
+  @@index([organizationId])
+  @@map("report_submissions")
+}
+
+// SOP DOCUMENT MODEL (Sprint 5 — SOP Builder drafts)
+
+model SOPDocument {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Owner
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  // SOP Identity
+  sopType String // 'cultivation', 'harvesting', 'drying', 'storage', 'hygiene', 'quality_control', 'pest_management'
+  title   String // ชื่อ SOP
+
+  // Content
+  formData Json @default("{}") // Structured form data from SOP builder
+
+  // Status
+  status      String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED
+  submittedAt DateTime?
+  // pdfUrl was declared but never written in production (0 readers, 0
+  // writers in the codebase, sop_documents table empty). Dropped in
+  // Wave A Phase 39.
+
+  // Soft Delete
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([userId])
+  @@index([sopType])
+  @@index([status])
+  @@index([organizationId])
+  @@map("sop_documents")
+}
+
+// SCOPE OF WORK MODEL (Provider Feature Phase 1)
+
+model ScopeOfWork {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  // SOW Details
+  title           String
+  description     String? @db.Text
+  standardCode    String  @default("GACP")
+  inspectionScope Json? // Array: [{ area, criteria, description }]
+  estimatedDays   Int     @default(1)
+
+  // Assignment (Wave A Phase 18 — was a denormalized name string;
+  // now a proper relation. Display name comes from `assignedAuditor.firstName`
+  // + lastName composed server-side.)
+  assignedAuditorId String?
+  assignedAuditor   User?   @relation("ScopeOfWorkAuditor", fields: [assignedAuditorId], references: [id])
+
+  // Status
+  status     String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, IN_PROGRESS, COMPLETED
+  approvedBy String?
+  approvedAt DateTime?
+
+  // Audit
+  createdBy String?
+  updatedBy String?
+
+  // Soft delete (Wave A Phase 15)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([applicationId])
+  @@index([status])
+  @@index([isDeleted])
+  @@index([organizationId])
+  // DB-06: index FK column
+  @@index([assignedAuditorId])
+  @@map("scope_of_works")
+}
+
+// AUDIT CHECKLIST MODEL (Provider Feature Phase 3)
+
+model AuditChecklist {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  // Checklist Template
+  templateName String // "GACP_GENERAL", "GACP_CANNABIS", "GACP_KRATOM", etc.
+  version      Int    @default(1)
+
+  // Checklist Data
+  sections       Json // Array: [{ sectionName, items: [{ criteria, result, evidence, notes }] }]
+  completedItems Int    @default(0)
+  totalItems     Int    @default(0)
+  score          Float? // Overall score (0-100)
+
+  // Auditor (Wave A Phase 18 — was a denormalized name string;
+  // now a proper relation. Display name comes from `auditor.firstName` +
+  // lastName composed server-side.)
+  auditorId String
+  auditor   User   @relation("AuditChecklistAuditor", fields: [auditorId], references: [id])
+
+  // Status
+  status      String    @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, SUBMITTED
+  submittedAt DateTime?
+
+  // Audit
+  createdBy String?
+  updatedBy String?
+
+  // Soft delete (Wave A Phase 15)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Onsite evidence capture (Phase B, cert-integrity fix, 2026-08-16) —
+  // reverse relations for the two models onsite-evidence-gate.js counts.
+  // See prisma/schema/audit-onsite-evidence.prisma.
+  checklistItems FarmAuditChecklistItem[]
+  photos         FarmAuditPhoto[]
+
+  @@index([applicationId])
+  @@index([auditorId])
+  @@index([status])
+  @@index([isDeleted])
+  @@index([organizationId])
+  @@map("audit_checklists")
+
+  /// ผลรายลักษณะพื้นที่ของการตรวจครั้งนี้ (operator 2026-09-11 — M4)
+  scopeResults AuditScopeResult[]
+}
+
+// MEETING ROOM MODEL (Provider Feature Phase 3 — VDO Call)
+
+model MeetingRoom {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reference
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  // Meeting Details
+  roomName    String
+  roomUrl     String // Jitsi/Zoom/Google Meet URL
+  provider    String   @default("JITSI") // JITSI, ZOOM, GOOGLE_MEET, CUSTOM
+  scheduledAt DateTime
+  duration    Int      @default(60) // Minutes
+
+  // Participants (Wave A Phase 18 — host name was denormalized;
+  // now a proper relation. Display name comes from `host.firstName` +
+  // lastName composed server-side.)
+  hostId         String
+  host           User   @relation("MeetingRoomHost", fields: [hostId], references: [id])
+  participantIds Json // Array of user IDs
+
+  // Status
+  status       String    @default("SCHEDULED") // SCHEDULED, ACTIVE, COMPLETED, CANCELLED
+  startedAt    DateTime?
+  endedAt      DateTime?
+  recordingUrl String?
+
+  // Notes
+  notes String? @db.Text
+
+  // Audit
+  createdBy String?
+
+  // Soft delete (Wave A Phase 15)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([applicationId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([isDeleted])
+  @@index([organizationId])
+  // DB-06: index FK column
+  @@index([hostId])
+  @@map("meeting_rooms")
+}

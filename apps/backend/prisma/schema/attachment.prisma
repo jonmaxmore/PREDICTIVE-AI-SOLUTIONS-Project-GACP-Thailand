@@ -1,0 +1,85 @@
+// Domain: Polymorphic Attachment (Wave A Phase 32 / G1 foundation)
+//
+// The 2026-04-30 ERP gap analysis flagged that ~25 file-pointer fields
+// are scattered across 15+ models:
+//   - Application.attachments  (Json blob with mixed shapes)
+//   - PaymentSlip.fileUrl      (already structured — proof the pattern works)
+//   - AuditChecklist.sections.evidence (nested JSON)
+//   - Certificate.pdfUrl
+//   - PostAuditTask.documents  (Json array)
+//   - ReportSubmission.attachmentUrl
+//   - SOPDocument.pdfUrl
+//   - Lot.labTestReportUrl
+//   - WaterSource / SoilTest / etc. test reports
+//   - …
+//
+// Consequences of the scatter:
+//   1. PDPA "delete every file uploaded by user X" needs N queries across
+//      N tables instead of one DELETE.
+//   2. No central virus-scan / mime-validation pipeline.
+//   3. Dedup-by-hash impossible across resources.
+//   4. Storage migration (e.g. local FS → S3) requires touching every
+//      writer.
+//
+// This phase adds the canonical `Attachment` model + service. NO consumer
+// migration in this PR — existing fields stay where they are. Each
+// migrated model becomes a follow-up PR. The pattern mirrors how
+// PaymentSlip already structures its file metadata, so that's the proof
+// the shape scales.
+//
+// Polymorphism is via (resModel, resId, field): not a Prisma relation
+// (Prisma doesn't support polymorphic FKs natively). Joins are done
+// through the `attachment-service.js` API. The polymorphic-attachment
+// pattern is well-trodden in mature ORMs and works fine when paired
+// with an index on (resModel, resId).
+
+model Attachment {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Polymorphic reference. resModel is the Prisma model name (e.g.
+  // 'Application', 'PaymentSlip'); resId is the parent row's UUID.
+  // `field` is optional — distinguishes multiple attachment slots on
+  // the same parent (e.g. Application has both `attachments` and a
+  // future `signedFormData` slot).
+  resModel String
+  resId    String
+  field    String?
+
+  // File metadata
+  fileName String
+  fileUrl  String // Storage URL — local /storage path today; S3/CDN later
+  fileSize Int // Bytes
+  mimeType String?
+  fileHash String? // SHA-256 hex; enables dedup + integrity check
+
+  // Lifecycle
+  uploadedBy String?
+
+  // Soft delete (Wave A Phase 15 pattern)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Hot-path indexes:
+  //   - (resModel, resId)        : list-attachments-for-resource
+  //   - (resModel, resId, field) : list-attachments-for-slot
+  //   - uploadedBy               : PDPA "every file from user X"
+  //   - fileHash                 : dedup lookups
+  //   - isDeleted                : soft-delete auto-filter
+  //   - organizationId           : tenant scoping
+  @@index([resModel, resId])
+  @@index([resModel, resId, field])
+  @@index([uploadedBy])
+  @@index([fileHash])
+  @@index([isDeleted])
+  @@index([organizationId])
+  @@map("attachments")
+}

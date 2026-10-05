@@ -1,0 +1,555 @@
+<title>เส้นแช่แข็งของ Track &amp; Trace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Trirong:wght@500;600;700&display=swap">
+
+<style>
+  :root {
+    --ground:     #EDEAE3;
+    --ground-2:   #E3DFD5;
+    --card:       #F7F5F0;
+    --ink:        #1C1F19;
+    --ink-soft:   #55594E;
+    --ink-faint:  #86897D;
+    --accent:     #2F6B4F;
+    --accent-2:   #24543E;
+    --accent-wash:#DFE9E1;
+    --freeze:     #1D4E6B;
+    --freeze-wash:#DCE7EE;
+    --breach:     #B03A2E;
+    --breach-wash:#F2DFDB;
+    --rule:       #CFC9BC;
+    --rule-soft:  #DED9CE;
+
+    --f-display: "Trirong", "Noto Serif Thai", Georgia, serif;
+    --f-body:    "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif;
+    --f-mono:    "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+
+    --s--1: clamp(.78rem, .76rem + .1vw, .84rem);
+    --s-0:  clamp(.95rem, .92rem + .16vw, 1.03rem);
+    --s-1:  clamp(1.12rem, 1.04rem + .36vw, 1.3rem);
+    --s-2:  clamp(1.42rem, 1.24rem + .84vw, 1.95rem);
+    --s-3:  clamp(2rem, 1.55rem + 2vw, 3.2rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:     #14150F;
+      --ground-2:   #1D1F17;
+      --card:       #1F2119;
+      --ink:        #E9E7DC;
+      --ink-soft:   #ADAB9C;
+      --ink-faint:  #83816F;
+      --accent:     #74BC93;
+      --accent-2:   #9BD6B4;
+      --accent-wash:#1B3427;
+      --freeze:     #6FB2D6;
+      --freeze-wash:#152B37;
+      --breach:     #E58072;
+      --breach-wash:#3A1D18;
+      --rule:       #34362B;
+      --rule-soft:  #282A21;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:     #14150F;
+    --ground-2:   #1D1F17;
+    --card:       #1F2119;
+    --ink:        #E9E7DC;
+    --ink-soft:   #ADAB9C;
+    --ink-faint:  #83816F;
+    --accent:     #74BC93;
+    --accent-2:   #9BD6B4;
+    --accent-wash:#1B3427;
+    --freeze:     #6FB2D6;
+    --freeze-wash:#152B37;
+    --breach:     #E58072;
+    --breach-wash:#3A1D18;
+    --rule:       #34362B;
+    --rule-soft:  #282A21;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--f-body); font-size: var(--s-0); line-height: 1.68;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 76rem; margin: 0 auto; padding: clamp(2rem,5vw,5rem) clamp(1.1rem,4vw,3rem) 6rem; }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  .eyebrow { font-family: var(--f-mono); font-size: var(--s--1); letter-spacing: .15em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; }
+  h1 { font-family: var(--f-display); font-size: var(--s-3); font-weight: 700; line-height: 1.1; margin: .6rem 0 0; text-wrap: balance; }
+  .standfirst { max-width: 60ch; color: var(--ink-soft); font-size: var(--s-1); line-height: 1.55; margin: .9rem 0 0; text-wrap: pretty; }
+  header.masthead { padding-bottom: 2rem; border-bottom: 1px solid var(--rule); }
+  .meta { display: flex; flex-wrap: wrap; gap: .4rem 1.6rem; font-family: var(--f-mono); font-size: var(--s--1); color: var(--ink-faint); margin-top: 1.1rem; }
+  .meta b { color: var(--ink-soft); font-weight: 500; }
+
+  section { margin-top: clamp(3rem, 7vw, 5.5rem); }
+  h2 { font-family: var(--f-display); font-size: var(--s-2); font-weight: 600; margin: 0 0 .5rem; text-wrap: balance; }
+  h3 { font-family: var(--f-display); font-size: var(--s-1); font-weight: 600; margin: 0 0 .35rem; }
+  .lede { max-width: 64ch; color: var(--ink-soft); margin: 0 0 2rem; text-wrap: pretty; }
+
+  /* ── the chain ────────────────────────────────────────────── */
+  .chain { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: .5rem; }
+  @media (max-width: 68rem) { .chain { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+  @media (max-width: 40rem) { .chain { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+  .link {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 2px;
+    padding: .8rem .7rem; display: flex; flex-direction: column; gap: .4rem; min-width: 0;
+  }
+  .link-n { font-family: var(--f-mono); font-size: var(--s--1); color: var(--ink-faint); }
+  .link-t { font-weight: 600; font-size: .92rem; line-height: 1.3; }
+  .link-who { font-size: .78rem; color: var(--ink-faint); }
+  .link-foot { margin-top: auto; padding-top: .5rem; display: flex; flex-direction: column; gap: .3rem; }
+  .qr {
+    font-family: var(--f-mono); font-size: .68rem; letter-spacing: .06em;
+    background: var(--accent-wash); color: var(--accent-2); border-radius: 2px;
+    padding: .12rem .38rem; align-self: flex-start;
+  }
+  .qr.none { background: transparent; color: var(--ink-faint); padding-left: 0; }
+  .until { font-size: .74rem; color: var(--freeze); line-height: 1.35; }
+  .link.gap-here { border-color: var(--breach); border-width: 1px 1px 3px; }
+  .link.gap-here .until { color: var(--breach); font-weight: 600; }
+
+  /* ── freeze tracks ────────────────────────────────────────── */
+  .tracks { display: grid; gap: 1.1rem; }
+  .track { display: grid; grid-template-columns: 9rem minmax(0,1fr); gap: 0 1rem; align-items: center; }
+  @media (max-width: 46rem) { .track { grid-template-columns: 1fr; gap: .4rem; } }
+  .track-name { font-weight: 600; font-size: .92rem; }
+  .track-name small { display: block; font-weight: 400; font-size: .74rem; color: var(--ink-faint); font-family: var(--f-mono); }
+  .bar { position: relative; height: 2.9rem; background: var(--ground-2); border: 1px solid var(--rule); border-radius: 2px; overflow: hidden; }
+  .seg { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding: 0 .6rem; font-size: .76rem; white-space: nowrap; overflow: hidden; }
+  .seg.open { left: 0; background: var(--accent-wash); color: var(--accent-2); }
+  .seg.frozen { right: 0; background: var(--freeze-wash); color: var(--freeze); justify-content: flex-end; }
+  .seg.leak { right: 0; background: var(--breach-wash); color: var(--breach); justify-content: flex-end; font-weight: 600; }
+  .cut { position: absolute; top: -1px; bottom: -1px; width: 2px; background: var(--freeze); }
+  .cut.broken { background: repeating-linear-gradient(to bottom, var(--breach) 0 4px, transparent 4px 8px); width: 3px; }
+  .cut-label {
+    position: absolute; top: 50%; transform: translate(-50%, -50%);
+    font-family: var(--f-mono); font-size: .64rem; letter-spacing: .05em;
+    background: var(--freeze); color: var(--card); padding: .1rem .35rem; border-radius: 2px; white-space: nowrap;
+  }
+  .cut-label.broken { background: var(--breach); }
+
+  /* ── generic blocks ───────────────────────────────────────── */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); }
+  table.grid { width: 100%; border-collapse: collapse; font-size: var(--s--1); min-width: 40rem; }
+  table.grid th, table.grid td { padding: .68rem .85rem; text-align: left; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  table.grid thead th { font-size: .69rem; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; background: var(--ground-2); position: sticky; top: 0; }
+  table.grid tbody tr:last-child td { border-bottom: 0; }
+  code { font-family: var(--f-mono); font-size: .9em; background: var(--accent-wash); color: var(--accent-2); padding: .06rem .3rem; border-radius: 2px; word-break: break-word; }
+  .yes { color: var(--accent-2); font-weight: 600; }
+  .no  { color: var(--breach); font-weight: 600; }
+  .tier { font-family: var(--f-mono); font-size: .72rem; color: var(--breach); }
+  .tier.b { color: var(--ink-faint); }
+
+  pre.code {
+    margin: 0; padding: 1rem 1.1rem; background: var(--ground-2); border: 1px solid var(--rule);
+    border-left: 3px solid var(--breach); border-radius: 0 3px 3px 0;
+    font-family: var(--f-mono); font-size: .78rem; line-height: 1.6; overflow-x: auto; color: var(--ink);
+  }
+  pre.code b { color: var(--breach); font-weight: 500; }
+
+  .finding { display: grid; gap: .9rem; margin-bottom: 2.2rem; }
+  .src { font-family: var(--f-mono); font-size: .74rem; color: var(--ink-faint); }
+
+  /* ── scope tiers ──────────────────────────────────────────── */
+  .tiers { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1rem; align-items: start; }
+  @media (max-width: 60rem) { .tiers { grid-template-columns: 1fr; } }
+  .tier-card { background: var(--card); border: 1px solid var(--rule); border-top: 3px solid var(--accent); border-radius: 2px; padding: 1.1rem 1.15rem; display: grid; gap: .7rem; }
+  .tier-card h3 { margin: 0; }
+  .tier-card .who { font-family: var(--f-mono); font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .tier-card ul { margin: 0; padding-left: 1.05rem; display: grid; gap: .4rem; color: var(--ink-soft); font-size: .88rem; }
+  .tier-card li::marker { color: var(--accent); }
+  .law { border-top: 1px dashed var(--rule); padding-top: .65rem; font-size: .8rem; color: var(--ink-soft); }
+  .law b { font-family: var(--f-mono); font-weight: 500; color: var(--freeze); font-size: .78rem; }
+
+  .callout { border-left: 3px solid var(--freeze); background: var(--ground-2); padding: 1rem 1.2rem; border-radius: 0 3px 3px 0; display: grid; gap: .5rem; }
+  .callout.warn { border-left-color: var(--breach); }
+  .callout h3 { margin: 0; font-size: var(--s-0); font-family: var(--f-body); font-weight: 700; }
+  .callout p { margin: 0; color: var(--ink-soft); max-width: 68ch; }
+
+  .open { display: grid; gap: 0; }
+  .open-item { padding: 1rem 0; border-top: 1px solid var(--rule-soft); display: grid; grid-template-columns: 1.8rem minmax(0,1fr); gap: 0 .8rem; }
+  .open-item::before { content: "?"; font-family: var(--f-mono); color: var(--breach); font-size: var(--s-0); }
+  .open-item p { margin: .2rem 0 0; color: var(--ink-soft); max-width: 62ch; }
+
+  footer { margin-top: 5rem; padding-top: 1.4rem; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: var(--s--1); }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">ร่างเพื่อขออนุมัติ · 2026-09-05</p>
+    <h1>เส้นแช่แข็งของ Track &amp; Trace</h1>
+    <p class="standfirst">
+      ข้อมูลการเพาะปลูกแก้ได้จนถึงวันตัด แล้วต้องแช่แข็ง เพราะหลังจากนั้นมันไม่ใช่บันทึกของเกษตรกร
+      อีกต่อไป แต่เป็นคำกล่าวอ้างที่เดินทางไปกับสินค้า วันนี้เส้นนั้นขาดอยู่หนึ่งช่วง
+    </p>
+    <div class="meta">
+      <span><b>โค้ด T&amp;T</b> แช่แข็งที่ 297ea85d — เอกสารนี้ออกแบบอย่างเดียว</span>
+      <span><b>ฐานกฎหมาย</b> PDPA 2562 · พ.ร.บ.ภูมิปัญญาฯ 2542 ม.44-46</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>loop เต็ม เจ็ดขั้น</h2>
+    <p class="lede">
+      แต่ละขั้นบอกสองอย่าง: ออก QR หรือไม่ และแก้ได้ถึงเมื่อไร
+      ขั้นที่ 3 คือขั้นเดียวที่ยังไม่มีหน้าจอให้เกษตรกรแก้ และเป็นขั้นที่เส้นแช่แข็งรั่ว
+    </p>
+    <div class="chain">
+      <div class="link">
+        <span class="link-n">01</span>
+        <span class="link-t">ขออนุญาต</span>
+        <span class="link-who">เกษตรกร · กทล.1</span>
+        <span class="link-foot"><span class="qr none">ไม่มี QR</span><span class="until">แก้ได้จนกดยื่น</span></span>
+      </div>
+      <div class="link">
+        <span class="link-n">02</span>
+        <span class="link-t">ใบรับรอง GACP</span>
+        <span class="link-who">ระบบออกให้</span>
+        <span class="link-foot"><span class="qr">QR ใบรับรอง</span><span class="until">แก้ไม่ได้ · เพิกถอนได้</span></span>
+      </div>
+      <div class="link gap-here">
+        <span class="link-n">03</span>
+        <span class="link-t">เปิดรอบปลูก</span>
+        <span class="link-who">เกษตรกร</span>
+        <span class="link-foot"><span class="qr">QR ① ที่ดิน · ถาวร</span><span class="until">ควรแช่แข็งวันตัด — วันนี้ยังไม่</span></span>
+      </div>
+      <div class="link">
+        <span class="link-n">04</span>
+        <span class="link-t">บันทึกกิจกรรม</span>
+        <span class="link-who">เกษตรกร</span>
+        <span class="link-foot"><span class="qr none">ไม่มี QR</span><span class="until">เพิ่มได้เสมอ ทับไม่ได้</span></span>
+      </div>
+      <div class="link">
+        <span class="link-n">05</span>
+        <span class="link-t">เก็บเกี่ยว</span>
+        <span class="link-who">เกษตรกร</span>
+        <span class="link-foot"><span class="qr">QR ② รุ่น · ส่งแลป</span><span class="until">แช่แข็งเมื่อออกล็อตแรก</span></span>
+      </div>
+      <div class="link">
+        <span class="link-n">06</span>
+        <span class="link-t">บรรจุล็อต</span>
+        <span class="link-who">เกษตรกร</span>
+        <span class="link-foot"><span class="qr">QR ③ ถุง</span><span class="until">แช่แข็งเมื่อพิมพ์ QR</span></span>
+      </div>
+      <div class="link">
+        <span class="link-n">07</span>
+        <span class="link-t">สแกน</span>
+        <span class="link-who">ใครก็ได้ ไม่ล็อกอิน</span>
+        <span class="link-foot"><span class="qr none">อ่านอย่างเดียว</span><span class="until">—</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>เส้นแช่แข็งสามราง — รางบนขาด</h2>
+    <p class="lede">
+      สองรางล่างทำถูกแล้วในโค้ดวันนี้ และทำถูกแบบเดียวกัน คือ<strong>ปฏิเสธเสียงดัง</strong>
+      เมื่อมีคนพยายามแก้หลังเส้น รางบนล็อกไว้เหมือนกัน แต่มีห้าฟิลด์ลอดออกไปได้เงียบ ๆ
+    </p>
+
+    <div class="tracks">
+      <div class="track">
+        <div class="track-name">รอบปลูก<small>planting-service.js</small></div>
+        <div class="bar">
+          <div class="seg open" style="right:42%">แก้ได้</div>
+          <div class="seg leak" style="left:58%">5 ฟิลด์ยังแก้ได้ — 4 อยู่บนหน้าสาธารณะ</div>
+          <div class="cut broken" style="left:58%"></div>
+          <div class="cut-label broken" style="left:58%">รั่ว</div>
+        </div>
+      </div>
+      <div class="track">
+        <div class="track-name">รุ่นเก็บเกี่ยว<small>harvest-service.js</small></div>
+        <div class="bar">
+          <div class="seg open" style="right:42%">แก้ได้</div>
+          <div class="seg frozen" style="left:58%">แช่แข็ง · ปฏิเสธเสียงดัง</div>
+          <div class="cut" style="left:58%"></div>
+          <div class="cut-label" style="left:58%">ออกล็อตแรก</div>
+        </div>
+      </div>
+      <div class="track">
+        <div class="track-name">ล็อตบรรจุ<small>trace/lots.js</small></div>
+        <div class="bar">
+          <div class="seg open" style="right:42%">แก้ได้ (allow-list)</div>
+          <div class="seg frozen" style="left:58%">แช่แข็ง · 403 พร้อมข้อความไทย</div>
+          <div class="cut" style="left:58%"></div>
+          <div class="cut-label" style="left:58%">พิมพ์ QR</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>ช่องที่รั่ว — พบจากการอ่านโค้ดวันนี้</h2>
+
+    <div class="finding">
+      <h3>บล็อกคัดลอกค่าอยู่<em>เหนือ</em>ด่าน</h3>
+      <pre class="code">const metadataFields = ['notes', <b>'seedSource'</b>, <b>'varietyName'</b>, <b>'irrigationType'</b>, <b>'soilType'</b>];
+for (const field of metadataFields) {
+    if (data[field] !== undefined) { updateData[field] = data[field]; }
+}
+if (!isLocked) { <span style="opacity:.6">/* ...ที่เหลือถึงจะถูกกัน... */</span> }</pre>
+      <p class="src">apps/backend/services/planting-service.js:366</p>
+      <p style="color:var(--ink-soft);max-width:66ch;margin:0">
+        <code>isLocked</code> คำนวณถูกต้อง — ตัดแล้วหรือมีรุ่นเก็บเกี่ยวแล้วก็ล็อก
+        แต่ห้าฟิลด์นี้ถูกคัดลอกลงไปก่อนจะถึงบรรทัดที่ตรวจ
+      </p>
+    </div>
+
+    <div class="callout warn">
+      <h3>สี่ในห้าฟิลด์นั้น อยู่บนหน้าที่ใครก็สแกนได้โดยไม่ต้องล็อกอิน</h3>
+      <p>
+        <code>resolve-generic.js:150,155,156,157</code> ส่งออก <code>variety</code>,
+        <code>seedSource</code>, <code>soilType</code>, <code>irrigationType</code>
+        แปลว่าหลังตัดแล้ว หลังพิมพ์ QR แล้ว หลังของออกสู่ตลาดแล้ว เจ้าของรอบปลูกยังแก้
+        <strong>สายพันธุ์</strong> และ <strong>แหล่งที่มาของเมล็ด</strong>
+        ที่หน้าสแกนประกาศอยู่ได้ — เงียบ ๆ ไม่มีบันทึก
+        นี่คือสิ่งที่ Track &amp; Trace มีไว้ป้องกันโดยตรง
+      </p>
+    </div>
+
+    <div class="callout" style="margin-top:1.2rem">
+      <h3>แบบที่ถูกต้องมีอยู่แล้วในรีโปนี้ ไม่ต้องคิดใหม่</h3>
+      <p>
+        คอมเมนต์ในชั้นรุ่นเก็บเกี่ยวเขียนเหตุผลไว้เอง — <em>“Refuse loudly rather than dropping
+        the keys silently. A farmer editing notes and a weight in one request must not be told
+        the whole edit succeeded when half of it was discarded”</em> —
+        ชั้นรอบปลูกทำสิ่งที่คอมเมนต์นี้ห้ามไว้พอดี
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>หน้าที่ยังไม่มี — “แก้ไขรอบปลูก”</h2>
+    <p class="lede">
+      <code>planting-service.ts:136</code> มี <code>updateCycle()</code> พร้อมใช้ แต่
+      <strong>ไม่มีไฟล์ไหนในทั้ง <code>apps/web-app/src</code> เรียกมัน</strong> —
+      ประตูฝั่ง server เปิดอยู่ ในหน้าเว็บไม่มีปุ่ม กติกา “แก้ได้จนตัด” จึงยังไม่เคยถูกใช้จริง
+    </p>
+
+    <div class="scroll">
+      <table class="grid">
+        <thead><tr><th>ฟิลด์</th><th>ก่อนตัด</th><th>หลังตัด</th><th>อยู่บนหน้าสาธารณะ</th></tr></thead>
+        <tbody>
+          <tr><td><code>varietyName</code> สายพันธุ์</td><td class="yes">แก้ได้</td><td class="no">ต้องปิด — วันนี้ยังแก้ได้</td><td class="yes">ใช่</td></tr>
+          <tr><td><code>seedSource</code> แหล่งเมล็ด</td><td class="yes">แก้ได้</td><td class="no">ต้องปิด — วันนี้ยังแก้ได้</td><td class="yes">ใช่</td></tr>
+          <tr><td><code>soilType</code> · <code>irrigationType</code></td><td class="yes">แก้ได้</td><td class="no">ต้องปิด — วันนี้ยังแก้ได้</td><td class="yes">ใช่</td></tr>
+          <tr><td><code>cycleName</code> ชื่อรอบ</td><td class="yes">แก้ได้</td><td>ปิดแล้ว</td><td>ไม่ (มติ 5 ก.ย.)</td></tr>
+          <tr><td><code>expectedHarvestDate</code></td><td class="yes">แก้ได้</td><td>ปิดแล้ว</td><td>ไม่</td></tr>
+          <tr><td>แปลงที่ผูก · <code>status</code></td><td class="yes">แก้ได้</td><td>ปิดแล้ว</td><td>ทางอ้อม</td></tr>
+          <tr><td><code>notes</code> บันทึกภายใน</td><td class="yes">แก้ได้</td><td class="yes">แก้ได้ต่อ</td><td>ไม่ — ไม่เคยส่งออก</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="color:var(--ink-soft);max-width:66ch;margin-top:1.2rem">
+      <code>notes</code> เป็นฟิลด์เดียวที่ควรแก้ได้หลังแช่แข็ง เพราะเป็นบันทึกของเกษตรกรถึงตัวเอง
+      ไม่ปรากฏบนหน้าสแกน จึงไม่ใช่คำกล่าวอ้างต่อผู้ซื้อ — ต่างจากอีกสี่ฟิลด์ที่วันนี้กองอยู่ใน
+      ลิสต์เดียวกันโดยไม่มีเหตุผลแยกแยะ
+    </p>
+
+    <h3 style="margin-top:2.2rem">หลังแช่แข็งแล้วต้องแก้จริง ๆ ทำอย่างไร</h3>
+    <p style="color:var(--ink-soft);max-width:66ch">
+      ไม่เปิดประตูเดิม แต่ใช้เส้นทางขออนุมัติ: เกษตรกรระบุฟิลด์ · จากค่าอะไรเป็นอะไร ·
+      เหตุผล (บังคับ ≥ 10 ตัวอักษร แบบเดียวกับด่านขอเอกสารเพิ่ม) → เจ้าหน้าที่อนุมัติหรือปฏิเสธ →
+      ระบบเขียน<strong>แถวใหม่ ไม่ทับของเดิม</strong> และ<strong>หน้าสแกนแสดงว่าเคยถูกแก้</strong>
+    </p>
+    <div class="callout">
+      <h3>ทำไมคนสแกนต้องเห็นว่ามีการแก้</h3>
+      <p>
+        ถ้าแก้ได้เงียบ ๆ แม้จะผ่านการอนุมัติ ผู้ซื้อที่สแกนก่อนและหลังจะเห็นข้อความต่างกัน
+        โดยไม่มีทางรู้ว่าเกิดอะไรขึ้น ซึ่งทำลายความน่าเชื่อถือของการสแกนทั้งระบบ
+        มากกว่าตัวข้อมูลที่ผิดเสียอีก
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>สาม QR คือสามสิ่ง ไม่ใช่ใบเดียวที่เปลี่ยนสถานะ</h2>
+    <p class="lede">
+      รวมเป็นใบเดียวไม่ได้ เพราะแปลงหนึ่งออกได้หลายรุ่นต่อฤดู และถุงยังไม่เกิดตอนที่รุ่นกำลังตาก —
+      ถ้าใช้ใบเดียว รุ่นที่กำลังตากจะไม่มีตัวตน ซึ่งผิด มกษ. 3502-2561 ข้อ 8(2)
+      ที่คลุมถึง “การเก็บรักษาและขนย้าย” ไม่ใช่แค่ของที่บรรจุขาย
+    </p>
+    <div class="scroll">
+      <table class="grid">
+        <thead><tr><th></th><th>ของจริงที่มันชี้ถึง</th><th>เกิดเมื่อ</th><th>อายุ</th><th>ใครสแกนแล้วเห็นอะไร</th></tr></thead>
+        <tbody>
+          <tr><td class="tier b">①</td><td><strong>ที่ดิน</strong> — พื้นที่ที่ปลูกเหมือนกัน</td><td>ลงทะเบียนพื้นที่</td><td class="yes">ถาวร ไม่เปลี่ยนตามฤดู</td><td>เกษตรกรบันทึก · ผู้ตรวจ · คนทั่วไปเห็นแบบปิดบัง</td></tr>
+          <tr><td class="tier b">②</td><td><strong>รุ่นที่กำลังแปรรูป</strong> — HarvestBatch</td><td>กดเก็บเกี่ยว</td><td>จนกดบรรจุ</td><td>คนอื่นเห็นแค่ เลขรุ่น · วันตัด · เลขใบรับรอง</td></tr>
+          <tr><td class="tier b">③</td><td><strong>ถุงบรรจุ</strong> — Lot</td><td>กดบรรจุ</td><td>แช่แข็งตลอดกาล</td><td>ผู้บริโภคเห็นที่มาทั้งสาย ณ วันบรรจุ</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn" style="margin-top:1.4rem">
+      <h3>① ยังไม่ถาวรจริงในโค้ด — ที่ดินผืนเดิมได้ QR ใหม่ทุกฤดู</h3>
+      <p>
+        มติ 2026-08-24 สั่งให้จุดยึดเป็น <code>plots.plotCode</code> ที่ถาวร และคอลัมน์นั้น
+        <strong>มีอยู่แล้ว</strong> (migration <code>20260824100000_plot_permanent_code_expand</code>
+        + <code>prisma/backfill-plot-codes.js</code>) แต่โค้ดที่ mint QR ยังยึดกับ
+        <code>PlantingCyclePlot.id</code> ซึ่งเป็นแถว<em>รายรอบปลูก</em>
+        (<code>planting-cycle-service.js:102</code> ใช้ที่ <code>:364</code>, <code>:397</code>)
+        ⇒ เปิดรอบใหม่บนที่ดินผืนเดิม = entityId ใหม่ = QR ใหม่ = ต้องพิมพ์สติกเกอร์ใหม่ไปติดที่เดิม
+        ซึ่งเป็นสิ่งที่มตินี้ตั้งใจยกเลิก · expand ทำแล้ว เหลือย้ายจุดยึดกับ contract
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>ผลแลป — ตัวอย่างไปกับ QR ② และแนบ COA ก่อนพิมพ์ป้ายล็อต</h2>
+    <p class="lede">
+      ตัวอย่างถูกเก็บจากรุ่นที่กำลังตาก <strong>ก่อนบรรจุ</strong> จึงแปะ QR ②
+      · ① คือที่ดิน มันไม่เดินทาง · ③ ถุงยังไม่เกิด และถ้ารอตรวจหลังบรรจุ ผลไม่ผ่านก็แก้อะไรไม่ได้
+      ของถูกซีลไปแล้ว
+    </p>
+
+    <div class="scroll">
+      <table class="grid">
+        <thead><tr><th>สิ่งที่ควรมี</th><th>สถานะจริงวันนี้</th></tr></thead>
+        <tbody>
+          <tr><td>โมเดล <code>BatchLabResult</code> — ผลตรวจระดับ<strong>รุ่น</strong> (สเปก 2026-08-20 §4.3 สั่งไว้)</td><td class="no">ไม่มีในรีโปเลย — 0 ไฟล์</td></tr>
+          <tr><td>ฟิลด์ผลแลปบน HarvestBatch</td><td class="no">ไม่มี</td></tr>
+          <tr><td>ฟิลด์ผลแลปบน Lot</td><td class="yes">มี — <code>labTestReportUrl</code>, <code>thcContent</code>, <code>cbdContent</code>, <code>moistureContent</code>, <code>testStatus</code></td></tr>
+          <tr><td>หน้าจอให้เกษตรกรอัปโหลด COA</td><td class="no">ไม่มี — ค่าเข้ามาเป็นฟิลด์ใน body ของ POST/PUT ล็อต</td></tr>
+          <tr><td>หน้าสาธารณะ</td><td class="no">เดิมเปิดแค่ <code>tested: true/false</code> — <strong>มติ 5 ก.ย. สั่งให้เปิดไฟล์ COA และค่าผลตรวจด้วย</strong> ⇒ ต้องแก้</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="color:var(--ink-soft);max-width:66ch;margin-top:1.2rem">
+      <strong>ไม่ใช่ “มีแค่ติ๊กว่ามีผลแลป”</strong> — ระบบเก็บ file pointer จริง ค่าตัวเลขจริง
+      และสถานะผ่าน/ไม่ผ่าน สิ่งที่ขาดคือ<strong>ประตูให้เกษตรกรใส่มันเข้าไป</strong>
+      และ<strong>ที่ยึดของผลตรวจระดับรุ่น</strong>
+    </p>
+
+    <div class="callout" style="margin-top:1.4rem;border-left-color:var(--accent)">
+      <h3>มติ 5 ก.ย. — แนบ COA หลังได้ผล แล้วค่อยพิมพ์ป้ายล็อต</h3>
+      <p>
+        “ต้องหาทางแนบผลแลปให้ได้ เราจะไม่ได้พิมพ์บอกค่าเท่าไหร่ เราจะอัพโหลดผลแลป …
+        หรือว่าอัพโหลดได้หลังได้รับ COA เพื่อทำ print” — <strong>ใช่ และลำดับนี้แก้ปัญหาข้างบนพอดี
+        โดยไม่ต้องแตะการแช่แข็งเลย</strong>
+      </p>
+      <pre class="code" style="margin:.5rem 0 .2rem;border-left-color:var(--accent)">เก็บเกี่ยว → พิมพ์ป้ายรุ่น <b>[QR ②]</b> → เก็บตัวอย่างแปะ QR ② ส่งแลป
+                                      ↓ 3-14 วัน
+                            COA กลับมา → <b>อัปโหลดใส่ “รุ่น”</b>
+                                      ↓
+                            บรรจุ → พิมพ์ป้ายล็อต <b>[QR ③]</b></pre>
+      <p>
+        เส้นตายที่เคยชนกันหายไป เพราะ QR ที่ต้องพิมพ์<em>ก่อน</em>ส่งแลปคือ ② ไม่ใช่ ③ —
+        ② พิมพ์ตอนเก็บเกี่ยวซึ่งเกิดก่อนอยู่แล้ว ส่วน ③ พิมพ์หลังบรรจุ ซึ่งเกิดหลัง COA กลับมา
+      </p>
+    </div>
+
+    <div class="scroll" style="margin-top:1.4rem">
+      <table class="grid">
+        <thead><tr><th>COA ผูกกับอะไร</th><th>ผลที่ตามมา</th></tr></thead>
+        <tbody>
+          <tr><td><strong>รุ่น ② — เลือกอันนี้</strong></td><td class="yes">ห้องแลปตรวจรุ่น ไม่ได้ตรวจถุง · หนึ่งรุ่นออกได้หลายล็อต แนบครั้งเดียว ทุกล็อตสืบทอด</td></tr>
+          <tr><td>ล็อต ③</td><td class="no">ต้องอัปโหลดไฟล์เดิมซ้ำทุกล็อต และวันหนึ่งจะไม่ตรงกัน</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="color:var(--ink-soft);max-width:66ch;margin-top:1.2rem">
+      การอัปโหลดเป็นการ<strong>เพิ่ม</strong> ไม่ใช่การ<strong>แก้</strong> จึงไม่ชนกับการแช่แข็งน้ำหนักของรุ่น —
+      <code>FROZEN_ONCE_PACKED</code> คุมน้ำหนักกับวันเก็บเกี่ยว ไม่ได้คุมเอกสารแนบ
+    </p>
+
+    <div class="callout" style="margin-top:1.4rem">
+      <h3>ไม่พิมพ์ค่าเอง — ไฟล์คือหลักฐาน</h3>
+      <p>
+        “เราจะไม่ได้พิมพ์บอกค่าเท่าไหร่” ⇒ <strong>ไม่มีช่องกรอก THC / CBD / ความชื้น</strong>
+        ทั้งบนหน้าจอและที่ประตู API · เหตุผลเดียวกับที่ operator สั่งเรื่อง hardcode:
+        ตัวเลขที่คนพิมพ์เองคือตัวเลขที่พิมพ์ผิดได้ และเมื่อมันขัดกับไฟล์ COA จะไม่มีใครรู้ว่าอันไหนจริง
+      </p>
+    </div>
+
+    <div class="callout warn" style="margin-top:1.2rem">
+      <h3>ต้องตัดสิน — ไม่มี COA พิมพ์ป้ายล็อตได้ไหม</h3>
+      <p>
+        R7 บอกว่าผลแลปเป็น optional ทั้งขา และมติวันนี้ไม่ได้ยกเลิกข้อนั้น ·
+        <strong>ผมเสนอให้คงตาม R7</strong> — พิมพ์ได้ หน้าสแกนบอกตามจริงว่า “ยังไม่มีผลตรวจ”
+        เพราะทางที่เข้มกว่าจะทำให้เกษตรกรที่ทำถูกทุกอย่างขายของไม่ได้เพราะคิวแลป
+        ถ้าอยากได้แบบเข้ม สั่งได้
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="callout warn">
+      <h3>ข้อเดียวที่ยังไม่เปลี่ยน และขอให้ยืนยัน — พิกัด GPS</h3>
+      <p>
+        ต่างจากชื่อฟาร์ม ที่อยู่ และ COA ตรงที่มันไม่ใช่เรื่องความเป็นส่วนตัว แต่เป็น
+        <strong>ความปลอดภัยทางกายภาพ</strong> — พิกัดพาคนไปถึงแปลงได้ และแปลงกัญชาเป็นเป้าการโจรกรรม ·
+        ที่ตั้งระดับตำบล/อำเภอ/จังหวัดเปิดอยู่แล้วและตรวจสอบที่มาได้จริง
+        ถ้าต้องการเปิดพิกัดด้วย สั่งมาได้ จะเปิดให้
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>สิ่งที่ต้องแก้ในโค้ด</h2>
+    <p class="lede">เรียงตามลำดับที่ควรทำ · T1 เป็นข้อเดียวที่ปิดช่องที่เปิดอยู่จริงวันนี้ และเป็น diff เล็กที่สุด</p>
+    <div class="scroll">
+      <table class="grid">
+        <thead><tr><th>#</th><th>สิ่งที่ต้องทำ</th><th>ที่ไหน</th><th>ชั้น</th></tr></thead>
+        <tbody>
+          <tr><td class="tier">T1</td><td>ย้าย <code>metadataFields</code> ลงใต้ <code>if (!isLocked)</code> เหลือ <code>notes</code> ตัวเดียว และ<strong>ปฏิเสธเสียงดัง</strong> ไม่ตัดคีย์เงียบ</td><td><code>planting-service.js:366</code></td><td class="tier">C</td></tr>
+          <tr><td class="tier b">T2</td><td>หน้า “แก้ไขรอบปลูก” ฝั่งเกษตรกร ตามสามสถานะ: แก้ได้ · แช่แข็งแล้ว · อ่านไม่ได้</td><td><code>/health/planting/[id]/edit</code> ใหม่</td><td class="tier b">B</td></tr>
+          <tr><td class="tier b">T3</td><td>ด่านห้ามทับบันทึกกิจกรรม — กติกามีแล้วแต่ไม่มีเครื่องบังคับ</td><td><code>planting-cycles-activity-harvest-routes.js</code></td><td class="tier b">B</td></tr>
+          <tr><td class="tier">T4</td><td>เส้นทาง “ขอแก้ไขข้อมูลที่แช่แข็ง” + แสดงบนหน้าสแกนว่าเคยแก้</td><td>ใหม่ ทั้งสองฝั่ง</td><td class="tier">C</td></tr>
+          <tr><td class="tier">T5</td><td>audit log ทุกการเปิดดูฟาร์มของพนักงานติดตาม</td><td>ใหม่</td><td class="tier">C</td></tr>
+          <tr><td class="tier">T8</td><td>ย้ายจุดยึด QR ① จาก <code>PlantingCyclePlot.id</code> → <code>plots.plotCode</code> แล้ว contract ของเดิม</td><td><code>planting-cycle-service.js:102,364,397</code></td><td class="tier">C</td></tr>
+          <tr><td class="tier">T9</td><td>โมเดล <code>BatchLabResult</code> — COA ผูกกับ<strong>รุ่น</strong> · ไฟล์ + ชื่อแลป + วันตรวจ · <strong>ไม่มีช่องค่าตัวเลข</strong></td><td>schema ใหม่</td><td class="tier">C</td></tr>
+          <tr><td class="tier b">T10</td><td>หน้าอัปโหลด COA ที่หน้ารุ่นเก็บเกี่ยว — <strong>ไฟล์อย่างเดียว ไม่มีช่องกรอกค่า</strong></td><td>ใหม่ ทั้งสองฝั่ง</td><td class="tier b">B</td></tr>
+          <tr><td class="tier">T10b</td><td>ปิดช่องรับค่า <code>thcContent</code>/<code>cbdContent</code>/<code>moistureContent</code> ที่ประตูล็อต</td><td><code>lots.js:79,153,340</code></td><td class="tier">C</td></tr>
+          <tr><td class="tier">T12</td><td>เปิดชื่อฟาร์ม · ที่อยู่ติดต่อ · ไฟล์ COA + ค่าผลตรวจ บนหน้าสแกน (มติ 5 ก.ย.)</td><td><code>trace-service/resolve-*.js</code></td><td class="tier">C</td></tr>
+          <tr><td class="tier">T11</td><td>ล็อตสืบทอด COA จากรุ่นที่มันมา — ไม่ต้องแนบซ้ำ และไม่มีทางแตกต่างกัน</td><td><code>trace-service/*</code></td><td class="tier">C</td></tr>
+          <tr><td class="tier b">T6-T7 ✅</td><td>บันทึกมติสองข้อลง <code>tnt-data-scope.md</code> — ทำแล้ววันนี้</td><td>docs</td><td class="tier b">A</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>ที่ยังต้องตัดสิน</h2>
+    <div class="open">
+      <div class="open-item">
+        <div>
+          <h3>ชื่อฟาร์มบนหน้าสาธารณะ</h3>
+          <p>
+            ชื่อฟาร์มไทยมักเป็นชื่อบุคคล — “ไร่ลุงมี” “สวนสมุนไพรป้าแดง” ปัจจุบันแสดงเต็ม
+            เสนอ: ให้เกษตรกรตั้ง “ชื่อที่แสดงต่อสาธารณะ” เอง เป็นความยินยอมตาม PDPA ม.19
+            และระบบไม่ต้องเดาว่าคำไหนเป็นชื่อคน
+          </p>
+        </div>
+      </div>
+      <div class="open-item">
+        <div>
+          <h3>ปลดแช่แข็งโค้ด T&amp;T หรือยัง</h3>
+          <p>T1-T5 ทำไม่ได้เลยถ้ายังแช่แข็งที่ <code>297ea85d</code> — และ T1 คือช่องที่เปิดอยู่จริงวันนี้</p>
+        </div>
+      </div>
+      <div class="open-item">
+        <div>
+          <h3>ใครอนุมัติคำขอแก้ข้อมูลที่แช่แข็ง</h3>
+          <p>ผู้ตรวจเอกสาร หรือพนักงานติดตาม — คนละสายงาน คนละหน้าจอ</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    เอกสารประกอบ · <code>docs/design/2026-09-05-tnt-loop-and-farmer-updates.md</code> ·
+    ขอบเขตข้อมูล <code>design note 2026-09-05-tnt-data-scope</code> ·
+    QR <code>docs/architecture/qr-codes-2026-09-05.md</code>
+  </footer>
+
+</div>

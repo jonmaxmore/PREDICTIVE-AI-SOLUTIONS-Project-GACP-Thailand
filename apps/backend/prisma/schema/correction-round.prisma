@@ -1,0 +1,53 @@
+// Domain: Correction loop — per-stage round ledger (R2 M3, operator 2026-08-03)
+//
+// FINAL ข้อ 2 (evidence/R2-special-reopen/final-requirements.md, verbatim):
+// "นับเลขครั้งต่อ stage — reset ทุกรอบ วนไม่จำกัดครั้ง". One row is APPENDED
+// per correction decision by services/decision-letter-service.js inside the
+// SAME transaction as the status write + official letter (D-8). Rows are
+// append-only (FINAL ข้อ 4): no update/delete path exists anywhere — grep-
+// pinned by __tests__/unit/correction-round.test.js.
+//
+// EXPAND (Law 3.10): this ledger sits BESIDE the legacy RevisionDeadline
+// row-per-application upsert (audit.prisma), which keeps working unchanged.
+// Draining RevisionDeadline is future work, not M3.
+
+model CorrectionRound {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Reference
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // 'DOC_REVIEW' | 'FIELD_AUDIT' — SSOT vocabulary
+  // apps/backend/shared/correction-round-stage.js (String + CHECK idiom;
+  // constraint in migration 20260803122000_add_correction_rounds).
+  stage String
+
+  // Per-stage round number (1, 2, 3, ... — no cap; D-2 revoked the 3-strike
+  // rule). Uniqueness of (applicationId, stage, roundNo) is the race guard:
+  // concurrent decisions computing the same number abort the transaction.
+  roundNo Int
+
+  // When the decision was recorded (same tx as the status write) and the
+  // resubmission deadline stamped into the letter (Thai-calendar canonical,
+  // computed by the deciding surface — never here).
+  decidedAt DateTime
+  dueAt     DateTime
+
+  // The official letter (Notification kind=OFFICIAL_LETTER, M1) minted with
+  // this round. Nullable per M3 spec; Restrict — letters are a permanent
+  // archive (D-9) and must never be deleted out from under their round.
+  letterId String?
+  letter   Notification? @relation(fields: [letterId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Tenancy (ADR-014) — stamped explicitly by decision-letter-service
+  // (transaction clients bypass the tenant extension; M1 letter idiom).
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([applicationId, stage, roundNo])
+  @@index([applicationId, stage])
+  @@index([organizationId])
+  @@map("correction_rounds")
+}

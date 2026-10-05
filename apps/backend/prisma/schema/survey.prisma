@@ -1,0 +1,170 @@
+// SURVEY MODULE — สัญญา C05F680149 ต้นแบบที่ 2 "ระบบสำรวจความต้องการ (1 ชุด)"
+// (2.1 แบบสอบถามดิจิทัล 4 ภาค · 2.2 ระบบบันทึกการสัมภาษณ์ผู้เชี่ยวชาญ)
+//
+// ERP document pattern (mirrors quotation/invoice conventions):
+//   SurveyTemplate  = master document with a status machine DRAFT→ACTIVE→CLOSED
+//   SurveyQuestion  = template line items (typed questions)
+//   SurveyResponse  = POSTED transactional document — immutable after submit
+//   SurveyAnswer    = response line items (one per answered question)
+//   ExpertInterview = 2.2 interview record (transcript masked at write —
+//                     maskThaiIdsInText, PII invariant)
+//
+// All models are tenant-scoped (ADR-014): registered in TENANT_SCOPED_MODELS
+// (services/tenant-prisma-extension.js) so organizationId auto-injects on
+// create within request context. respondentUserId/createdBy/recordedBy store
+// User.id (UUID) — NEVER a national id (PDPA scalar-audit rule).
+
+model SurveyTemplate {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Identity (per-org unique short code, e.g. "FARMER-NEEDS-2569")
+  code        String
+  title       String
+  description String? @db.Text
+
+  // Targeting per the proposal: farmer questionnaires + expert/DTAM surveys
+  targetGroup String @default("FARMER") // FARMER | EXPERT | DTAM_STAFF | OPERATOR
+
+  // Status machine: DRAFT (editable) → ACTIVE (accepting responses) → CLOSED
+  status      String    @default("DRAFT")
+  version     Int       @default(1)
+  activatedAt DateTime?
+  closedAt    DateTime?
+
+  createdBy String? // User.id (UUID)
+
+  questions SurveyQuestion[]
+  responses SurveyResponse[]
+
+  // Soft delete
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([status])
+  @@index([isDeleted])
+  @@map("survey_templates")
+}
+
+model SurveyQuestion {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  templateId String
+  template   SurveyTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  sortOrder    Int     @default(0)
+  section      String? // หมวดคำถาม (optional grouping)
+  questionText String  @db.Text
+  questionType String  @default("TEXT") // TEXT | TEXTAREA | RATING_5 | SINGLE_CHOICE | MULTI_CHOICE | NUMBER
+  choices      Json? // for *_CHOICE types: array of choice strings
+  isRequired   Boolean @default(true)
+
+  answers SurveyAnswer[]
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([templateId])
+  @@index([organizationId])
+  @@map("survey_questions")
+}
+
+model SurveyResponse {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  templateId String
+  template   SurveyTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+
+  // Respondent (UUID linkage only; never a national id)
+  respondentUserId String?
+  respondentType   String  @default("FARMER")
+
+  // สัญญากำหนดครอบคลุม 4 ภาค: NORTH | CENTRAL | NORTHEAST | SOUTH
+  region   String
+  province String?
+
+  // Posted document — no update path exists by design (ERP posted state)
+  status      String   @default("SUBMITTED")
+  submittedAt DateTime @default(now())
+
+  answers SurveyAnswer[]
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([templateId])
+  @@index([region])
+  @@index([organizationId])
+  @@map("survey_responses")
+}
+
+model SurveyAnswer {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  responseId String
+  response   SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+
+  questionId String
+  question   SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  // TEXT/TEXTAREA/choices → valueText (masked; MULTI_CHOICE = JSON array string)
+  // RATING_5/NUMBER → valueNumber (not money — Float is correct here, TFRS
+  // Decimal rule applies to monetary amounts only)
+  valueText   String? @db.Text
+  valueNumber Float?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([responseId, questionId])
+  @@index([responseId])
+  @@index([questionId])
+  @@index([organizationId])
+  @@map("survey_answers")
+}
+
+model ExpertInterview {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  title           String
+  intervieweeName String
+  intervieweeOrg  String?
+  intervieweeRole String? // เช่น ผู้เชี่ยวชาญกรมการแพทย์แผนไทยฯ
+  interviewDate   DateTime
+  mode            String   @default("ONSITE") // ONSITE | ONLINE
+
+  // Semi-structured interview record — transcript + key insights are masked
+  // with maskThaiIdsInText at write time (free text can contain typed IDs,
+  // same class as ApplicationComment.content)
+  transcript  String @db.Text
+  keyInsights Json? // array of short insight strings
+
+  recordedBy String? // User.id (UUID)
+
+  // Soft delete
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([organizationId])
+  @@index([interviewDate])
+  @@index([isDeleted])
+  @@map("expert_interviews")
+}

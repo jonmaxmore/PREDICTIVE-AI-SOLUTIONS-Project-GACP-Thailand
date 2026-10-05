@@ -1,0 +1,2022 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "GACP Certification API",
+    "version": "3.0.0",
+    "description": "\n## GACP Certification Platform API\n\nAPI Documentation สำหรับระบบรับรองมาตรฐาน GACP (Good Agricultural and Collection Practices)\n\n### Features:\n- 🌱 **Plants** - จัดการข้อมูลพืชสมุนไพร\n- 🌾 **Harvest Batches** - ติดตาม Lot และ Traceability\n- 📋 **Config** - เทมเพลตแบบฟอร์มและมาตรฐาน\n- ✅ **Validation** - ตรวจสอบก่อนยื่นใบสมัคร\n- 🔐 **Auth** - ระบบ Authentication\n\n### Thai ID Validation:\nรองรับการตรวจสอบเลขบัตรประชาชนไทย 13 หลักตามมาตรฐานกระทรวงมหาดไทย\n            ",
+    "contact": {
+      "name": "GACP Support",
+      "email": "support@gacp.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://gacpth.com",
+      "description": "Production Server"
+    },
+    {
+      "url": "http://localhost:8000",
+      "description": "Development Server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Authentication and user management"
+    },
+    {
+      "name": "Admin",
+      "description": "Admin CMS routes (requires admin role)"
+    },
+    {
+      "name": "Farms",
+      "description": "Farm management"
+    },
+    {
+      "name": "PlantingCycles",
+      "description": "Planting cycle management"
+    },
+    {
+      "name": "PlantUnits",
+      "description": "Plant unit tracking with lifecycle (DRAFT → PLANTED → GROWING → HARVESTED → SOLD)"
+    },
+    {
+      "name": "HarvestBatches",
+      "description": "Harvest batch and lot tracking"
+    },
+    {
+      "name": "Certificates",
+      "description": "GACP certificate management"
+    },
+    {
+      "name": "Applications",
+      "description": "GACP application management"
+    },
+    {
+      "name": "Payments",
+      "description": "Payment processing and webhook handling"
+    },
+    {
+      "name": "Quotes",
+      "description": "Quote management and invoice generation (requires finance role)"
+    },
+    {
+      "name": "Cron",
+      "description": "Cron job endpoints (requires CRON_SECRET header)"
+    },
+    {
+      "name": "Lab",
+      "description": "Lab integration and webhook callbacks (requires LAB_API_KEY)"
+    },
+    {
+      "name": "Trace",
+      "description": "Public QR traceability API"
+    },
+    {
+      "name": "Config",
+      "description": "Configuration endpoints (document slots, templates, standards, pricing)"
+    },
+    {
+      "name": "Plants",
+      "description": "Plant species management"
+    },
+    {
+      "name": "Validation",
+      "description": "Pre-submission validation"
+    },
+    {
+      "name": "Invoices",
+      "description": "Invoice management and payments"
+    },
+    {
+      "name": "Pricing",
+      "description": "Fee and pricing management"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token from /api/auth/health/login or /api/auth/provider/login"
+      },
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "API key for M2M callbacks (lab webhooks). Set via LAB_API_KEY env var."
+      },
+      "CronSecret": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-cron-secret",
+        "description": "Secret token for cron job endpoints. Set via CRON_SECRET env var."
+      }
+    },
+    "schemas": {
+      "PlantSpecies": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thaiName": {
+            "type": "string",
+            "example": "กัญชา"
+          },
+          "scientificName": {
+            "type": "string",
+            "example": "Cannabis sativa L."
+          },
+          "englishName": {
+            "type": "string",
+            "example": "Cannabis"
+          },
+          "gacpCategory": {
+            "type": "string",
+            "enum": [
+              "CONTROLLED",
+              "MEDICINAL",
+              "ORNAMENTAL"
+            ]
+          },
+          "cultivationType": {
+            "type": "string",
+            "enum": [
+              "SELF_GROWN",
+              "CONTRACT_FARMING",
+              "PURCHASED"
+            ]
+          }
+        }
+      },
+      "HarvestBatch": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batchNumber": {
+            "type": "string",
+            "example": "LOT-ABC12345-2025-001"
+          },
+          "farmId": {
+            "type": "integer"
+          },
+          "speciesId": {
+            "type": "integer"
+          },
+          "plantingDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "harvestDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PLANNED",
+              "GROWING",
+              "HARVESTED",
+              "PROCESSING",
+              "COMPLETED"
+            ]
+          },
+          "actualYield": {
+            "type": "number",
+            "example": 150.5
+          },
+          "yieldUnit": {
+            "type": "string",
+            "example": "kg"
+          },
+          "qualityGrade": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "REJECTED"
+            ]
+          }
+        }
+      },
+      "PreSubmissionValidation": {
+        "type": "object",
+        "properties": {
+          "isReady": {
+            "type": "boolean"
+          },
+          "completionPercentage": {
+            "type": "integer",
+            "example": 75
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "percentage": {
+                  "type": "integer"
+                },
+                "missing": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "missingRequired": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "DocumentSlot": {
+        "type": "object",
+        "properties": {
+          "slotId": {
+            "type": "string",
+            "example": "license_bt11"
+          },
+          "name": {
+            "type": "string",
+            "example": "ใบอนุญาต บท.11"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "conditionalRequired": {
+            "type": "boolean"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "User ID"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "health",
+              "auditor",
+              "admin"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "active",
+              "suspended"
+            ]
+          }
+        }
+      },
+      "PlantUnit": {
+        "type": "object",
+        "description": "Plant unit with sustainable lifecycle tracking",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "example": "UNIT-2026-0001"
+          },
+          "variety": {
+            "type": "string",
+            "example": "Thai Sativa",
+            "description": "Plant variety/cultivar"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PLANTED",
+              "GROWING",
+              "HARVESTED",
+              "SOLD",
+              "DIED",
+              "REMOVED"
+            ],
+            "description": "Lifecycle status: DRAFT → PLANTED → GROWING → HARVESTED → SOLD"
+          },
+          "qrCode": {
+            "type": "string",
+            "example": "PU-ABC123"
+          },
+          "qrUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "plantedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "harvestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "soldAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dataLockedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When data was permanently locked"
+          },
+          "latitude": {
+            "type": "number",
+            "example": 13.7563
+          },
+          "longitude": {
+            "type": "number",
+            "example": 100.5018
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      },
+      "PlantUnitLifecycle": {
+        "type": "object",
+        "description": "Plant unit lifecycle information",
+        "properties": {
+          "currentStage": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PLANTED",
+              "GROWING",
+              "HARVESTED",
+              "SOLD"
+            ]
+          },
+          "allowedTransitions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "gracePeriodEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isInGracePeriod": {
+            "type": "boolean"
+          },
+          "isDataLocked": {
+            "type": "boolean"
+          },
+          "isPrinted": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/admin/applications": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Cross-tenant list of all applications (ADMIN-only)",
+        "description": "Returns a paginated list across every applicant for admin CMS use.\nHealth IDs are masked per Sprint 6 C2 PII rule\n(`1101900000005` → `1-****-*****-**-5`). The route file is gated\nby `authenticateProvider` at the admin router mount; status\nfiltering is restricted to the canonical workflow allow-list.\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "description": "Optional workflow status filter (e.g. REGISTERED, SUBMITTED, APPROVED). Unknown values are ignored."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of applications with masked health IDs"
+          },
+          "401": {
+            "description": "AUTH_ERROR — missing or invalid token"
+          },
+          "403": {
+            "description": "Forbidden — admin role required"
+          },
+          "500": {
+            "description": "Failed to list applications"
+          }
+        }
+      }
+    },
+    "/api/applications/draft": {
+      "post": {
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Create or upsert a DRAFT application (HEALTH role only)",
+        "description": "Saves a wizard step payload onto the applicant's open draft, creating\na fresh DRAFT row when one does not already exist. Provider tokens\nare rejected with HEALTH_ROLE_REQUIRED (V1-D D2 gate).\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "applicationId": {
+                    "type": "string",
+                    "description": "Existing draft id to upsert into"
+                  },
+                  "serviceType": {
+                    "type": "string",
+                    "example": "new_application"
+                  },
+                  "areaType": {
+                    "type": "string",
+                    "example": "OUTDOOR"
+                  },
+                  "step": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9,
+                    "description": "1-9 master step being persisted"
+                  },
+                  "certificationPurpose": {
+                    "type": "string"
+                  },
+                  "certificationPurposes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "previousCertNumber": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Draft saved; returns draftId + applicationNumber + per-step validation summary"
+          },
+          "401": {
+            "description": "AUTH_ERROR — missing or invalid token"
+          },
+          "403": {
+            "description": "HEALTH_ROLE_REQUIRED — provider tokens are rejected"
+          },
+          "500": {
+            "description": "Failed to save application"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Fetch the applicant's latest open DRAFT (HEALTH role)",
+        "description": "Returns the most recent open draft for the authenticated HEALTH user, or null when none exists.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Draft payload (data is null when no open draft exists)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "draftId": {
+                          "type": "string"
+                        },
+                        "applicationNumber": {
+                          "type": "string"
+                        },
+                        "areaType": {
+                          "type": "string"
+                        },
+                        "serviceType": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "formData": {
+                          "type": "object"
+                        },
+                        "steps": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH_ERROR — missing or invalid token"
+          },
+          "500": {
+            "description": "Failed to fetch draft"
+          }
+        }
+      }
+    },
+    "/api/applications/submit": {
+      "post": {
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Submit a DRAFT for review (HEALTH role only)",
+        "description": "Transitions the applicant's draft into the canonical review workflow.\nSupports the four resubmit paths: DRAFT|REGISTERED → PENDING_DOC_FEE,\nREVISION_REQUESTED → ASSIGNED_FOR_REVIEW, CAR_PENDING → CAR_REVIEWING.\nWorkspace capability SUBMIT_APPLICATION is enforced when an active\nentity is on the request.\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "applicationId": {
+                    "type": "string"
+                  },
+                  "draftId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Submitted (or already in a submitted state); returns id + applicationNumber + status + nextRequiredAction"
+          },
+          "403": {
+            "description": "HEALTH_ROLE_REQUIRED or CAPABILITY_DENIED"
+          },
+          "404": {
+            "description": "Application draft not found"
+          },
+          "409": {
+            "description": "INVALID_STATUS_FOR_SUBMIT — current status cannot submit"
+          },
+          "422": {
+            "description": "APPLICATION_INCOMPLETE — required wizard fields missing"
+          },
+          "500": {
+            "description": "Failed to submit application"
+          }
+        }
+      }
+    },
+    "/api/wizard/draft": {
+      "post": {
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Persist a wizard step payload (auto-save)",
+        "description": "Saves an arbitrary partial wizard payload onto the authenticated applicant's draft. Idempotent — called repeatedly by the auto-save loop in the frontend.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Wizard step payload — shape is dictated by the active wizard config"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Draft saved"
+          },
+          "401": {
+            "description": "AUTH_ERROR — missing or invalid token"
+          },
+          "500": {
+            "description": "Failed to save draft"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Applications"
+        ],
+        "summary": "Load the applicant's current wizard draft",
+        "description": "Returns the latest wizard draft snapshot for the authenticated HEALTH user so the wizard can resume mid-step.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current draft snapshot (or null when no draft exists)"
+          },
+          "401": {
+            "description": "AUTH_ERROR — missing or invalid token"
+          },
+          "500": {
+            "description": "Failed to load draft"
+          }
+        }
+      }
+    },
+    "/api/audits": {
+      "get": {
+        "summary": "Get all audits (Unified list) (Provider only)",
+        "tags": [
+          "Audits"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of audits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "audits": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "integer"
+                              },
+                              "auditNumber": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "plantType": {
+                                "type": "string"
+                              },
+                              "scheduledDate": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audits/pending-schedule": {
+      "get": {
+        "summary": "Get pending applications for scheduling (Provider only)",
+        "tags": [
+          "Audits"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pending applications"
+          }
+        }
+      }
+    },
+    "/api/audits/{id}": {
+      "get": {
+        "summary": "Get Audit Detail (Provider only)",
+        "tags": [
+          "Audits"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Audit ID or Application ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit details"
+          },
+          "404": {
+            "description": "Audit not found"
+          }
+        }
+      }
+    },
+    "/api/audits/schedule": {
+      "post": {
+        "summary": "Schedule an audit (Provider only)",
+        "tags": [
+          "Audits"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "applicationId",
+                  "scheduledDate"
+                ],
+                "properties": {
+                  "applicationId": {
+                    "type": "string"
+                  },
+                  "scheduledDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "scheduledTime": {
+                    "type": "string",
+                    "example": "09:00"
+                  },
+                  "auditMode": {
+                    "type": "string",
+                    "enum": [
+                      "ONSITE",
+                      "ONLINE"
+                    ]
+                  },
+                  "auditorId": {
+                    "type": "string"
+                  },
+                  "meetingUrl": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scheduled successfully"
+          }
+        }
+      }
+    },
+    "/api/audits/{id}/result": {
+      "post": {
+        "summary": "Submit audit result (Pass/Fail) (Provider only)",
+        "tags": [
+          "Audits"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "result"
+                ],
+                "properties": {
+                  "result": {
+                    "type": "string",
+                    "enum": [
+                      "PASS",
+                      "FAIL"
+                    ]
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "checklist": {
+                    "type": "array"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Result submitted"
+          }
+        }
+      }
+    },
+    "/api/audit/onsite/{auditId}/start": {
+      "post": {
+        "tags": [
+          "Audits"
+        ],
+        "summary": "Begin an on-site audit inspection (AUDITOR role)",
+        "description": "Records the auditor's GPS at start time and returns the canonical checklist template. AUDITOR-scoped — only the assigned auditor (or ADMIN) may start.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "auditId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "gpsLat",
+                  "gpsLng"
+                ],
+                "properties": {
+                  "gpsLat": {
+                    "type": "number"
+                  },
+                  "gpsLng": {
+                    "type": "number"
+                  },
+                  "gpsAccuracy": {
+                    "type": "number",
+                    "nullable": true,
+                    "description": "Optional accuracy in metres"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inspection started; returns checklist + gpsVerificationLog row"
+          },
+          "400": {
+            "description": "ONSITE_START_FAILED — validation rejection"
+          },
+          "403": {
+            "description": "AUDIT_AUDITOR_MISMATCH — assigned auditor does not match caller"
+          },
+          "404": {
+            "description": "AUDIT_NOT_FOUND"
+          },
+          "409": {
+            "description": "AUDIT_STATUS_INVALID — audit not in startable state"
+          }
+        }
+      }
+    },
+    "/api/audit/onsite/{auditId}/decision": {
+      "post": {
+        "tags": [
+          "Audits"
+        ],
+        "summary": "File the final on-site audit decision (AUDITOR role)",
+        "description": "Finalises the audit with PASS / FAIL / NEEDS_REVIEW and writes the workflow transition. Service-level guards enforce required-photo and complete-checklist preconditions.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "auditId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "decision"
+                ],
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "PASS",
+                      "FAIL",
+                      "NEEDS_REVIEW"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "criticalFindings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision recorded; returns the persisted decision row + transition"
+          },
+          "400": {
+            "description": "ONSITE_DECISION_FAILED — validation rejection"
+          },
+          "404": {
+            "description": "AUDIT_NOT_FOUND"
+          },
+          "409": {
+            "description": "AUDIT_STATUS_INVALID — audit not in decidable state"
+          },
+          "422": {
+            "description": "INSUFFICIENT_PHOTOS or INCOMPLETE_CHECKLIST"
+          }
+        }
+      }
+    },
+    "/api/auth/health/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Health applicant login with 13-digit Thai Health ID",
+        "description": "Authenticates a HEALTH-role applicant and returns a JWT access token plus refresh cookies. Rate-limited at the server boundary.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "healthId",
+                  "password"
+                ],
+                "properties": {
+                  "healthId": {
+                    "type": "string",
+                    "description": "13-digit Thai national ID",
+                    "example": "1101900000005"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated — returns access token + user payload"
+          },
+          "400": {
+            "description": "VALIDATION_ERROR — schema check failed"
+          },
+          "401": {
+            "description": "INVALID_CREDENTIALS — Health ID / password mismatch"
+          },
+          "429": {
+            "description": "Rate limit exceeded (authLimiter)"
+          }
+        }
+      }
+    },
+    "/api/auth/health/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register a new HEALTH-role applicant with Thai national ID",
+        "description": "Creates a new applicant account. Optional ID-card image upload (multipart/form-data) is hashed and retained per PDPA. Rate-limited.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "healthId",
+                  "password",
+                  "firstName",
+                  "lastName"
+                ],
+                "properties": {
+                  "healthId": {
+                    "type": "string",
+                    "description": "13-digit Thai national ID"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  },
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "idCardImage": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Optional ID-card image (JPG/PNG/PDF, <= 5 MB)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created — applicant registered; returns user + token payload"
+          },
+          "400": {
+            "description": "VALIDATION_ERROR — schema check failed"
+          },
+          "409": {
+            "description": "CONFLICT_ERROR — Health ID already registered"
+          },
+          "429": {
+            "description": "Rate limit exceeded (registerLimiter)"
+          }
+        }
+      }
+    },
+    "/api/auth/health/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Sign out the current applicant session",
+        "description": "Clears the access/refresh/CSRF cookies and invalidates the refresh token server-side. Safe to call when no session is present (always returns 200).",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session cleared"
+          }
+        }
+      }
+    },
+    "/api/auth/health/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Return the authenticated applicant's profile",
+        "description": "Returns the current HEALTH user's profile, role, status, and tenant context derived from the JWT.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH_ERROR — missing or invalid token"
+          }
+        }
+      }
+    },
+    "/api/certificates": {
+      "get": {
+        "tags": [
+          "Certificates"
+        ],
+        "summary": "List GACP certificates (scope depends on caller role)",
+        "description": "Provider roles (ADMIN/SCHEDULER/REVIEWER/AUDITOR/ACCOUNT*) get the\ncross-tenant view (up to 100 rows). HEALTH applicants get a\nself-scoped view. For public QR verification use the\n/api/trace/* endpoints — those need no auth.\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returns the list of certificates with a count"
+          },
+          "401": {
+            "description": "AUTH_ERROR — missing or invalid token"
+          },
+          "500": {
+            "description": "Failed to fetch certificates"
+          }
+        }
+      }
+    },
+    "/api/certificates/{id}": {
+      "get": {
+        "tags": [
+          "Certificates"
+        ],
+        "summary": "Fetch a single certificate by id (RBAC-aware)",
+        "description": "Provider roles get any certificate via findById; HEALTH users only see their own (IDOR-safe through service-layer ownership filter).",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Certificate detail with linked applicationNumber"
+          },
+          "401": {
+            "description": "AUTH_ERROR — missing or invalid token"
+          },
+          "404": {
+            "description": "Certificate not found (or HEALTH user is not the owner)"
+          },
+          "500": {
+            "description": "Failed to fetch certificate"
+          }
+        }
+      }
+    },
+    "/api/farms": {
+      "get": {
+        "summary": "Get all farms for authenticated user",
+        "tags": [
+          "Farms"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of farms"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create new farm",
+        "tags": [
+          "Farms"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "farmName": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "evidence_photo": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/farms/my": {
+      "get": {
+        "summary": "Get all my farms",
+        "tags": [
+          "Farms"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of farms"
+          }
+        }
+      }
+    },
+    "/api/farms/my/eligible-for-planting": {
+      "get": {
+        "summary": "Get farms eligible for planting cycle creation",
+        "tags": [
+          "Farms"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of farms with active certificate and at least one plot"
+          }
+        }
+      }
+    },
+    "/api/farms/{id}": {
+      "get": {
+        "summary": "Get farm details",
+        "tags": [
+          "Farms"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Update farm",
+        "tags": [
+          "Farms"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Delete farm",
+        "tags": [
+          "Farms"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/farms/{id}/qrcode": {
+      "get": {
+        "summary": "Get Farm QR Code Sticker",
+        "tags": [
+          "Farms"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/harvest-batches": {
+      "get": {
+        "summary": "List harvest batches for authenticated user",
+        "tags": [
+          "HarvestBatches"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "farmId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of batches"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create new harvest batch (Growing Phase)",
+        "tags": [
+          "HarvestBatches"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "farmId",
+                  "speciesId",
+                  "plantingDate"
+                ],
+                "properties": {
+                  "farmId": {
+                    "type": "string"
+                  },
+                  "speciesId": {
+                    "type": "integer"
+                  },
+                  "plantingDate": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/harvest-batches/{id}": {
+      "get": {
+        "summary": "Get harvest batch details",
+        "tags": [
+          "HarvestBatches"
+        ]
+      },
+      "put": {
+        "summary": "Update harvest batch",
+        "tags": [
+          "HarvestBatches"
+        ]
+      }
+    },
+    "/api/harvest-batches/lot/{batchNumber}": {
+      "get": {
+        "summary": "Traceability lookup by Lot Number (Public)",
+        "tags": [
+          "HarvestBatches"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batchNumber",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/harvest-batches/{id}/harvest": {
+      "post": {
+        "summary": "Record harvest (Complete Batch)",
+        "tags": [
+          "HarvestBatches"
+        ]
+      }
+    },
+    "/api/harvest-batches/stats/{farmId}": {
+      "get": {
+        "summary": "Get harvest statistics",
+        "tags": [
+          "HarvestBatches"
+        ]
+      }
+    },
+    "/api/invoices": {
+      "get": {
+        "summary": "List all invoices (Provider only)",
+        "tags": [
+          "Invoices"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invoices/my": {
+      "get": {
+        "summary": "Get my invoices (Health Only)",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/api/invoices/summary": {
+      "get": {
+        "summary": "Get financial summary (Provider only)",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/api/invoices/{invoiceId}": {
+      "get": {
+        "summary": "Get invoice details",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/api/invoices/{invoiceId}/pdf": {
+      "get": {
+        "summary": "Download Invoice PDF",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/api/payments": {
+      "get": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "List payment invoices (applicant or finance staff view)",
+        "description": "HEALTH users see invoices for their own applications. ADMIN /\nACCOUNT_DTAM / ACCOUNT_PLATFORM / ACCOUNT see the system-wide\nview. All other provider roles receive INVOICE_LISTING_FORBIDDEN.\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returns the list of invoices and a total count"
+          },
+          "401": {
+            "description": "AUTH_ERROR — missing or invalid token"
+          },
+          "403": {
+            "description": "INVOICE_LISTING_FORBIDDEN — provider role lacks finance permission"
+          },
+          "500": {
+            "description": "Failed to list payments"
+          }
+        }
+      }
+    },
+    "/api/payments/create": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Initiate a payment for an application (auto-detects phase)",
+        "description": "Canonical entry point — resolves Phase 1 vs Phase 2 from the\napplication status (or explicit `phase` override) and returns the\npayment URL. Ownership is enforced server-side; non-owner HEALTH\nusers get 404. Every event hashes into the audit chain\n(PAYMENT_INITIATED / PAYMENT_INITIATE_FAILED).\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "applicationId"
+                ],
+                "properties": {
+                  "applicationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "PHASE_1",
+                      "PHASE_2",
+                      "1",
+                      "2",
+                      "DOC",
+                      "AUDIT"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment created (or existing) — includes invoiceId, paymentUrl, expiresAt, fee breakdown"
+          },
+          "400": {
+            "description": "APPLICATION_ID_REQUIRED — missing/invalid id"
+          },
+          "401": {
+            "description": "Unauthorized — no healthId on token"
+          },
+          "404": {
+            "description": "Application not found"
+          },
+          "409": {
+            "description": "PAYMENT_PHASE_UNAVAILABLE — current status disallows new payment"
+          },
+          "429": {
+            "description": "Rate limit exceeded (paymentLimiter)"
+          }
+        }
+      }
+    },
+    "/api/payments/phase1/{applicationId}": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Initiate Phase 1 (document-fee) payment",
+        "description": "Generates the Phase 1 invoice + PromptPay URL for the applicant's own application. Audit-logged as PAYMENT_PHASE1_INITIATED.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "applicationId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice created — returns invoiceId, paymentUrl, requiredInvoices, phasePaid flag"
+          },
+          "400": {
+            "description": "Invalid application ID format or service-level rejection"
+          },
+          "401": {
+            "description": "Unauthorized — no healthId on token"
+          },
+          "404": {
+            "description": "Application not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded (paymentLimiter)"
+          }
+        }
+      }
+    },
+    "/api/payments/phase2/{applicationId}": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Initiate Phase 2 (audit-fee) payment",
+        "description": "Provider-only endpoint — SCHEDULER or ADMIN can trigger after document review is approved. Audit-logged as PAYMENT_PHASE2_INITIATED (or PAYMENT_PHASE2_INITIATE_DENIED on RBAC failure).",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "applicationId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice created — returns invoiceId, paymentUrl, requiredInvoices, phasePaid flag"
+          },
+          "400": {
+            "description": "Service-level rejection (validation, transition failure)"
+          },
+          "403": {
+            "description": "Unauthorized to initiate phase 2 payment (role must be SCHEDULER or ADMIN)"
+          },
+          "429": {
+            "description": "Rate limit exceeded (paymentLimiter)"
+          }
+        }
+      }
+    },
+    "/api/payments/slip/upload": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Upload a bank-transfer payment slip (HEALTH applicant)",
+        "description": "Multipart upload of a JPG/PNG/PDF (<= 5 MB). The slip is hashed\n(SHA-256, persisted) and linked to either an application or a\nsubscription invoice. Audit-logged as PAYMENT_SLIP_UPLOADED.\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "invoiceId"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Slip image/PDF (<= 5 MB)"
+                  },
+                  "invoiceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "applicationId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Provide exactly one of applicationId or subscriptionId"
+                  },
+                  "subscriptionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "PHASE_1",
+                      "PHASE_2"
+                    ]
+                  },
+                  "bankRef": {
+                    "type": "string"
+                  },
+                  "transferredAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "amountClaimed": {
+                    "type": "number"
+                  },
+                  "payerNote": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Slip recorded; returns the created PaymentSlip record"
+          },
+          "400": {
+            "description": "NO_FILE / INVALID_INVOICE_ID / INVALID_TARGET / VALIDATION_ERROR / INVALID_PHASE"
+          },
+          "403": {
+            "description": "Forbidden — only HEALTH applicants may upload"
+          },
+          "404": {
+            "description": "NOT_FOUND — invoice/application missing"
+          },
+          "409": {
+            "description": "INVALID_STATE_FOR_UPLOAD — invoice already settled"
+          },
+          "429": {
+            "description": "Rate limit exceeded (paymentLimiter)"
+          }
+        }
+      }
+    },
+    "/api/payments/slip/{id}/approve": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Approve a payment slip (finance reviewer or ADMIN)",
+        "description": "Marks the slip APPROVED and triggers the linked invoice payment.\nSide-of-business is enforced: ACCOUNT_DTAM only reviews STATE-fee\nslips, ACCOUNT_PLATFORM only reviews PLATFORM-fee/subscription\nslips; ADMIN bypasses with an [admin-override] audit marker.\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amountVerified": {
+                    "type": "number",
+                    "description": "Reviewer-confirmed amount (defaults to amountClaimed)"
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Slip approved; returns the updated PaymentSlip record"
+          },
+          "400": {
+            "description": "INVALID_ID"
+          },
+          "403": {
+            "description": "PAYMENT_SLIP_REVIEW_FORBIDDEN or INVALID_REVIEWER_SIDE"
+          },
+          "404": {
+            "description": "NOT_FOUND — slip not in caller's organization"
+          },
+          "409": {
+            "description": "INVALID_SLIP_STATE — slip already decided"
+          }
+        }
+      }
+    },
+    "/api/pricing/fees": {
+      "get": {
+        "summary": "Get platform fees",
+        "tags": [
+          "Pricing"
+        ],
+        "description": "Returns current application and inspection fees",
+        "responses": {
+          "200": {
+            "description": "Fee structure"
+          }
+        }
+      }
+    },
+    "/api/pricing/invoice/{phase}": {
+      "get": {
+        "summary": "Get invoice template for phase",
+        "tags": [
+          "Pricing"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "phase",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "phase1",
+                "phase2"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/api/pricing/calculate": {
+      "post": {
+        "summary": "Calculate total fees",
+        "tags": [
+          "Pricing"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "serviceType": {
+                    "type": "string",
+                    "enum": [
+                      "NEW",
+                      "RENEWAL",
+                      "MODIFY"
+                    ]
+                  },
+                  "areaTypes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "includeInspection": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

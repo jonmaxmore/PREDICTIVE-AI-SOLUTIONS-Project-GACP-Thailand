@@ -1,0 +1,13 @@
+// GACP Platform - Prisma Schema (Multi-File)
+// PostgreSQL Database with UUID, Audit Trail, Soft Delete, Legal Retention
+
+generator client {
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+  previewFeatures = ["prismaSchemaFolder"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}

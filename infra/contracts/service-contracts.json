@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "2026-03-08",
+  "stableInterfaceContracts": {
+    "frontendHttpPort": 3000,
+    "backendHttpPort": 8000,
+    "routePrefixes": [
+      "/",
+      "/api/"
+    ],
+    "healthPaths": [
+      "/nginx-health",
+      "/health",
+      "/api/health"
+    ],
+    "dataProtocols": {
+      "database": "postgresql",
+      "cache": "redis",
+      "objectStorage": "s3_compatible_or_adapter"
+    }
+  },
+  "services": {
+    "edge": {
+      "required": true,
+      "publicEntryPoint": true,
+      "requiredBehaviors": [
+        "terminate_tls",
+        "route_web_traffic",
+        "route_api_traffic",
+        "run_health_checks",
+        "preserve_real_client_ip"
+      ]
+    },
+    "app_runtime": {
+      "required": true,
+      "publicEntryPoint": false,
+      "requiredBehaviors": [
+        "run_frontend_container",
+        "run_backend_container",
+        "inject_environment_variables",
+        "expose_http_health_checks"
+      ]
+    },
+    "postgres": {
+      "required": true,
+      "publicEntryPoint": false,
+      "requiredBehaviors": [
+        "provide_postgresql_connection_string",
+        "support_backup_restore",
+        "support_controlled_schema_migrations"
+      ]
+    },
+    "redis": {
+      "required": true,
+      "publicEntryPoint": false,
+      "requiredBehaviors": [
+        "provide_redis_connection_string",
+        "support_cache_and_queue_usage"
+      ]
+    },
+    "object_storage": {
+      "required": true,
+      "publicEntryPoint": false,
+      "requiredBehaviors": [
+        "store_application_uploads",
+        "support_s3_compatible_or_adapter_access",
+        "support_backup_artifacts"
+      ]
+    },
+    "observability": {
+      "required": true,
+      "publicEntryPoint": false,
+      "requiredBehaviors": [
+        "collect_metrics",
+        "collect_logs",
+        "publish_alerts",
+        "support_slo_reporting"
+      ]
+    },
+    "dns": {
+      "required": true,
+      "publicEntryPoint": true,
+      "requiredBehaviors": [
+        "manage_public_records",
+        "support_controlled_cutover",
+        "support_tls_hostnames"
+      ]
+    },
+    "secrets": {
+      "required": true,
+      "publicEntryPoint": false,
+      "requiredBehaviors": [
+        "store_runtime_secrets",
+        "support_rotation",
+        "limit_operator_exposure"
+      ]
+    }
+  }
+}

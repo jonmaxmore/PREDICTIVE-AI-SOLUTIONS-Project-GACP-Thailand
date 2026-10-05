@@ -1,0 +1,310 @@
+{
+  "id": "eu-organic-834-2007",
+  "name": "EU Organic Production Regulation 834/2007",
+  "version": "834/2007",
+  "authority": "European Commission",
+  "effectiveDate": "2009-01-01",
+  "country": "European Union",
+  "language": "en",
+  "description": "EU regulation on organic production and labeling of organic products",
+  "applicableProducts": ["herbs", "medicinal_plants", "agricultural_products", "food_crops"],
+  "categories": [
+    {
+      "id": "conversion",
+      "name": "Conversion Period",
+      "weight": 10,
+      "description": "Transition to organic production",
+      "criteria": [
+        {
+          "id": "eu-conv-1",
+          "code": "EU-CONV-001",
+          "name": "Conversion Duration",
+          "description": "Minimum conversion period requirements",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 10,
+            "partial": 0,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Minimum 2 years for annual crops",
+            "Minimum 3 years for perennial crops",
+            "Documented conversion start date",
+            "No prohibited substances used during conversion"
+          ],
+          "evidence": ["Conversion plan", "Field history records", "Input purchase records"]
+        }
+      ]
+    },
+    {
+      "id": "soil-fertility",
+      "name": "Soil Fertility and Plant Nutrition",
+      "weight": 20,
+      "description": "Organic soil management practices",
+      "criteria": [
+        {
+          "id": "eu-soil-1",
+          "code": "EU-SOIL-001",
+          "name": "Organic Fertilization",
+          "description": "Use of organic and natural fertilizers only",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 10,
+            "partial": 5,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Only EU-approved organic fertilizers",
+            "No synthetic nitrogen fertilizers",
+            "Manure from organic farms preferred",
+            "Compost properly matured"
+          ],
+          "evidence": [
+            "Fertilizer list and certificates",
+            "Purchase invoices",
+            "Compost production records"
+          ]
+        },
+        {
+          "id": "eu-soil-2",
+          "code": "EU-SOIL-002",
+          "name": "Soil Protection",
+          "description": "Practices to maintain soil health",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 10,
+            "partial": 5,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Crop rotation implemented",
+            "Green manure or mulching used",
+            "No soil erosion",
+            "Biodiversity maintained"
+          ],
+          "evidence": ["Crop rotation plan", "Field management records", "Biodiversity assessment"]
+        }
+      ]
+    },
+    {
+      "id": "pest-disease",
+      "name": "Pest and Disease Management",
+      "weight": 25,
+      "description": "Organic pest control methods",
+      "criteria": [
+        {
+          "id": "eu-pest-1",
+          "code": "EU-PEST-001",
+          "name": "Preventive Measures",
+          "description": "Prevention-first approach to pest management",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 10,
+            "partial": 5,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Resistant varieties selected",
+            "Crop rotation for disease break",
+            "Natural predators encouraged",
+            "Mechanical/physical control methods"
+          ],
+          "evidence": ["Variety selection records", "IPM plan", "Biodiversity measures"]
+        },
+        {
+          "id": "eu-pest-2",
+          "code": "EU-PEST-002",
+          "name": "Permitted Plant Protection Products",
+          "description": "Only EU-approved organic pesticides",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 15,
+            "partial": 7,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Products listed in Annex II only",
+            "No synthetic pesticides",
+            "Proper application documentation",
+            "Resistance management strategy"
+          ],
+          "evidence": ["Product certificates", "Application records", "EU approval documentation"]
+        }
+      ]
+    },
+    {
+      "id": "seeds-propagation",
+      "name": "Seeds and Vegetative Propagation Material",
+      "weight": 15,
+      "description": "Organic seed and plant material requirements",
+      "criteria": [
+        {
+          "id": "eu-seed-1",
+          "code": "EU-SEED-001",
+          "name": "Organic Seed Requirement",
+          "description": "Use of organically produced seeds and plants",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 10,
+            "partial": 5,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Certified organic seeds used",
+            "Derogation documented if unavailable",
+            "No GMO seeds",
+            "Seed suppliers certified"
+          ],
+          "evidence": [
+            "Organic seed certificates",
+            "Derogation permissions",
+            "Supplier certifications"
+          ]
+        },
+        {
+          "id": "eu-seed-2",
+          "code": "EU-SEED-002",
+          "name": "Seed Treatment",
+          "description": "Prohibition of chemical seed treatments",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 5,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "No synthetic chemical treatment",
+            "Only approved natural treatments",
+            "Treatment records maintained",
+            "Variety preservation"
+          ],
+          "evidence": ["Seed treatment records", "Product certificates", "Variety documentation"]
+        }
+      ]
+    },
+    {
+      "id": "contamination",
+      "name": "Prevention of Contamination",
+      "weight": 15,
+      "description": "Measures to prevent organic integrity loss",
+      "criteria": [
+        {
+          "id": "eu-cont-1",
+          "code": "EU-CONT-001",
+          "name": "Contamination Prevention",
+          "description": "Measures to avoid contamination from non-organic sources",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 8,
+            "partial": 4,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Buffer zones established",
+            "Separate storage areas",
+            "Dedicated equipment or cleaning",
+            "Temporal separation in processing"
+          ],
+          "evidence": [
+            "Field maps with buffer zones",
+            "Equipment cleaning protocols",
+            "Storage area photos"
+          ]
+        },
+        {
+          "id": "eu-cont-2",
+          "code": "EU-CONT-002",
+          "name": "Prohibited Substance Control",
+          "description": "No use of prohibited substances",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 7,
+            "partial": 0,
+            "fail": 0
+          },
+          "checkpoints": [
+            "No synthetic pesticides",
+            "No synthetic fertilizers",
+            "No GMOs",
+            "No ionizing radiation"
+          ],
+          "evidence": ["Input records", "Supplier declarations", "Test results"]
+        }
+      ]
+    },
+    {
+      "id": "record-keeping",
+      "name": "Record Keeping and Traceability",
+      "weight": 15,
+      "description": "Documentation and traceability systems",
+      "criteria": [
+        {
+          "id": "eu-rec-1",
+          "code": "EU-REC-001",
+          "name": "Comprehensive Records",
+          "description": "Detailed records of all operations",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 8,
+            "partial": 4,
+            "fail": 0
+          },
+          "checkpoints": [
+            "All inputs recorded with invoices",
+            "Field operations logged",
+            "Harvest and sales recorded",
+            "Records kept minimum 5 years"
+          ],
+          "evidence": ["Field diaries", "Purchase invoices", "Sales records", "Stock records"]
+        },
+        {
+          "id": "eu-rec-2",
+          "code": "EU-REC-002",
+          "name": "Traceability System",
+          "description": "Full traceability from seed to sale",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 7,
+            "partial": 3,
+            "fail": 0
+          },
+          "checkpoints": [
+            "Batch coding system",
+            "Origin traceable",
+            "Processing steps documented",
+            "Chain of custody maintained"
+          ],
+          "evidence": ["Batch records", "Traceability matrix", "Processing logs"]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "maxScore": 100,
+    "passingScore": 80,
+    "levels": [
+      {
+        "level": "certified",
+        "minScore": 80,
+        "maxScore": 100,
+        "certification": "EU Organic Certified",
+        "color": "#388E3C"
+      },
+      {
+        "level": "non-certified",
+        "minScore": 0,
+        "maxScore": 79,
+        "certification": "Not EU Organic Certified",
+        "color": "#D32F2F"
+      }
+    ]
+  },
+  "compliance": {
+    "mandatoryRequirements": "All criteria must be fully compliant",
+    "documentationRequired": true,
+    "annualInspection": true,
+    "certificationBody": "EU-approved certification body required",
+    "labelingRules": "EU organic logo usage regulated",
+    "importRules": "Third country equivalence or compliance required"
+  }
+}

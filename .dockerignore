@@ -1,0 +1,74 @@
+**/node_modules
+.git
+.vscode
+.idea
+logs
+temp
+build
+dist
+coverage
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+# On the staging box the build context is the live checkout at
+# /opt/gacp-platform, which carries things a build context must never carry:
+# database dumps with plaintext PII in backups/, per-run gate artifacts in
+# evidence/, and the real .env.staging / .env.production. Both Dockerfiles COPY
+# explicit paths, so none of it ever reached an image — but the entire context
+# is still shipped to the docker daemon on every build (~90MB of it dumps), and
+# one future `COPY . .` would turn that from waste into a leak. Excluded here
+# so the context cannot carry them at all.
+backups/
+evidence/
+*.dump
+*.tgz
+.env.staging
+.env.production
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── W1-5 (2026-08-22): secrets that WERE reaching the image ───────────────
+# The block above reasoned that "both Dockerfiles COPY explicit paths, so none
+# of it ever reached an image". That is true for backups/ and evidence/ but
+# NOT for apps/backend: apps/backend/Dockerfile:28 does `COPY apps/backend
+# ./apps/backend` and line 96 carries /app/apps/backend into the FINAL runtime
+# stage. Everything under apps/backend was therefore baked into every image
+# built from a working checkout — including the certificate-signing private
+# key, the real .env, and farmer uploads. Verified against the repo on
+# 2026-08-22: apps/backend/keys/private.pem, apps/backend/.env and 85 files
+# under apps/backend/public/uploads/ all existed and all matched none of the
+# rules above (`.env` at the top of this file matches ONLY the context-root
+# .env — it does not match apps/backend/.env).
+#
+# Excluding these does not break the image. docker-compose.production.yml
+# supplies both directories as named volumes at runtime
+# (gacp_signing_keys → /app/apps/backend/keys:206,
+#  gacp_uploads      → /app/apps/backend/public/uploads:201),
+# and the volume mount shadows whatever the image contains — so a baked-in
+# dev key was never even used, only extractable from the image layers.
+
+# Private keys and certificates, at any depth. The signing key is mounted
+# from a volume in production and generated on demand in dev; no build step
+# and no runtime path needs one to be present in the image.
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.crt
+# Explicit belt-and-braces for the known key directory.
+apps/backend/keys/
+
+# Env files at ANY depth, not just the context root. Covers apps/backend/.env
+# (Supabase credentials, JWT secrets) and every future nested one. The
+# *.example templates go too: nothing in the image reads them.
+**/.env
+**/.env.*
+
+# Farmer-uploaded documents (PDPA personal data). Runtime serves these from
+# the gacp_uploads volume, never from the image.
+apps/backend/public/uploads/
+**/public/uploads/

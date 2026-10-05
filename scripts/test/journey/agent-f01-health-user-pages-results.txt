@@ -1,0 +1,16 @@
+Agent F01 — Health User Pages Results
+Date: 2026-03-13T14:03:07.697Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Home landing | HTTP 200
+PASS | Login page | HTTP 200
+PASS | Register page | HTTP 200
+PASS | Forgot password | HTTP 200
+PASS | Health portal home | HTTP 200
+PASS | Health dashboard | HTTP 200
+PASS | Applications list | HTTP 200
+PASS | New application | HTTP 200
+PASS | Profile page | HTTP 200
+PASS | Notifications | HTTP 200
+PASS | Tracking overview | HTTP 200
+PASS | Certificates | HTTP 200

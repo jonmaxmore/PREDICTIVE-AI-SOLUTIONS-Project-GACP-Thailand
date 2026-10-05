@@ -1,0 +1,13 @@
+Agent J1 — Registration & Login Results
+Date: 2026-03-16T12:47:28.834Z
+Pass: 8 | Fail: 0 | Skip: 1 | Rate: 88.9%
+
+PASS | Register new health user | status: 201
+PASS | Login with credentials | got token
+PASS | Get user profile | status: 200
+PASS | Access dashboard | status: 200
+PASS | Dashboard stats | status: 200
+PASS | Get notifications | status: 200
+PASS | My applications (empty) | 0 applications
+PASS | Reject wrong password | status: 401
+SKIP | Cleanup test user | E2E disabled in production

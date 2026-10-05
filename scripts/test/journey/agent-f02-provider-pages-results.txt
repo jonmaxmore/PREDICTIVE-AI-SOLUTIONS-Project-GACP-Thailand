@@ -1,0 +1,16 @@
+Agent F02 — Provider Pages Results
+Date: 2026-03-13T14:03:12.195Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Provider login | HTTP 200
+PASS | Provider home | HTTP 200
+PASS | Provider dashboard | HTTP 200
+PASS | Applications | HTTP 200
+PASS | Audits | HTTP 200
+PASS | Certificates | HTTP 200
+PASS | Accounting | HTTP 200
+PASS | Receipts | HTTP 200
+PASS | Analytics | HTTP 200
+PASS | Calendar | HTTP 200
+PASS | Settings | HTTP 200
+PASS | Trace page | HTTP 200

@@ -1,0 +1,38 @@
+-- ============================================================================
+-- Update phase{1,2}Amount column defaults — semantic drift fix.
+--
+-- BEFORE:
+--   applications.phase1Amount  DEFAULT 5000   (state-only, pre-canonicalisation)
+--   applications.phase2Amount  DEFAULT 25000  (state-only, pre-canonicalisation)
+--
+-- AFTER:
+--   applications.phase1Amount  DEFAULT 5535   (state 5000 + platform 500 + VAT 35)
+--   applications.phase2Amount  DEFAULT 27675  (state 25000 + platform 2500 + VAT 175)
+--
+-- WHY
+-- Per the canonical-billing-amount fix
+-- (`fix/phase-amount-caller-canonical-semantics`), `phase1Amount` and
+-- `phase2Amount` are canonically the FULL phase total — what the user is
+-- actually charged at the gateway (state fee + 10% platform fee + 7% VAT
+-- on platform). Every code-path writer now sources this value from
+-- `feeService.calculatePhase1Fee(...).phaseTotal` (or `.total` once the
+-- fee-service P0 lands).
+--
+-- The Prisma column defaults, however, were still 5000 / 25000 — the OLD
+-- state-only amounts. If a row were ever inserted without an explicit
+-- amount (e.g. from a future migration, a misconfigured admin tool, or a
+-- defensively-defaulted ORM call), the column would silently hold the
+-- state-only value and disagree with every writer in the rest of the
+-- system.
+--
+-- This migration aligns the defaults with the canonical full-phase total.
+--
+-- SAFETY
+-- ALTER COLUMN ... SET DEFAULT only changes the default for FUTURE
+-- inserts that do not specify the column. EXISTING rows are untouched.
+-- This is purely additive; no data backfill, no row rewrite, no rollout
+-- coordination required.
+-- ============================================================================
+
+ALTER TABLE "applications" ALTER COLUMN "phase1Amount" SET DEFAULT 5535;
+ALTER TABLE "applications" ALTER COLUMN "phase2Amount" SET DEFAULT 27675;

@@ -1,0 +1,25 @@
+-- ============================================================================
+-- email-OTP 2FA, PR1 — add the twoFactorMethod discriminator (inert)
+-- ============================================================================
+--
+-- Migration name: add_two_factor_method
+--
+-- Adds a single nullable discriminator column to `users` so a future email-OTP
+-- two-factor method can coexist with the existing TOTP (authenticator-app) one.
+--
+--   NULL or 'TOTP'  => existing authenticator-app behaviour (unchanged).
+--   'EMAIL'         => emailed 6-digit OTP (added in later PRs).
+--
+-- This PR is INERT: no code reads `twoFactorMethod` for a behavioural decision
+-- yet (the /mfa/verify select just carries it through). The DEFAULT 'TOTP'
+-- backfills every existing row to 'TOTP', which is identical to NULL for the
+-- login/verify logic — so existing 2FA (TOTP) users and non-2FA users are
+-- completely unaffected. The OTP value itself is NEVER stored in this column
+-- (it lives transiently in Redis); `twoFactorSecret` remains the TOTP base32
+-- seed and is null for the EMAIL method.
+--
+-- Matches the Prisma field: `twoFactorMethod String? @default("TOTP")`.
+-- Additive, non-breaking. Run with `prisma migrate deploy` (no backfill script).
+-- ============================================================================
+
+ALTER TABLE "users" ADD COLUMN "twoFactorMethod" TEXT DEFAULT 'TOTP';

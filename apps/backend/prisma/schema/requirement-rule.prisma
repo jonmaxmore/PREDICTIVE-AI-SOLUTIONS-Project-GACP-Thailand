@@ -1,0 +1,96 @@
+// Domain: Requirement Engine — the list of mandatory documents becomes DATA
+// (operator ruling G2, 2026-08-15:
+// design note 2026-08-15-membership-m2-documents-and-poa-design §3).
+//
+// G2 verbatim: "รายการเอกสารบังคับ = ข้อมูลในฐานข้อมูล มีผลตามวันที่ — เจ้าหน้าที่กรมฯ
+// แก้ได้ไม่ต้อง deploy · คำขอถูกตัดสินด้วยชุดกติกา ณ วันยื่น". Until now the answer to
+// "which documents are mandatory?" lived in four places that did not talk to each
+// other (constants/document-slots.js, journey.js, the FE/mobile lists, and the
+// dead-end DocumentRequirement table) and every ministry change needed a deploy.
+// This table is the single dated source the submit gate reads.
+//
+// APPEND-ONLY — this is the point of the table, not a style preference.
+// A rule that has ever been in force is evidence: it is the law an application
+// was judged by on the day it was filed (AC3, ตรวจย้อนได้). Editing a row would
+// silently rewrite the past for every application already decided under it.
+// So: a change = close the old row (effectiveTo) + INSERT a new one.
+// The ONLY columns any writer may ever UPDATE are the three closing columns —
+// effectiveTo / closedBy / closedAt (services/requirement-rule-service.js
+// closeRule, M2a Task 2). There is deliberately NO updatedAt column: nothing
+// about the body of a rule is meant to change, so a "last modified" stamp would
+// be advertising a door that does not exist.
+//
+// NO organizationId — this is national ministry policy, not tenant
+// configuration; every tenant is judged by the same law. Same precedent as
+// CertificationStandard (certification.prisma:152), which is also a catalog with
+// no tenant column.
+//
+// NOT built on the existing DocumentRequirement model (spec §3, review M-6):
+// its key requires plantCode, it has no slotId, and seed-plants.js:273-281 does
+// deleteMany + createMany on every reseed — which would sweep away exactly the
+// rows the ministry edited. DocumentRequirement is declared dead weight awaiting
+// a cleanup wave.
+
+model RequirementRule {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // ---- Dimensions: NULL means "every value of this dimension" ----
+  // A rule with every dimension NULL applies to every application.
+
+  // Entity.type of the holder — INDIVIDUAL | JURISTIC | COMMUNITY_ENTERPRISE
+  // (entity.prisma:33). String, matching Entity.type; the accepted set is
+  // enforced by the admin API whitelist (M2a Task 3).
+  holderType String?
+
+  // NEW | RENEWAL | REPLACEMENT — the vocabulary of constants/document-slots.js
+  // (requiredFor.applicationTypes). One vocabulary only: never 'RENEW'.
+  requestType String?
+
+  // Plant/herb code the rule is limited to, when it is limited at all.
+  plantCode String?
+
+  // ---- กทล.1 case dimensions (2026-09-01 spec §2.1) — NULL = every value ----
+  // Land tenure of the application's site: OWNED | STATE_PERMITTED | RENTED.
+  landTenure String?
+  // Area type of the site: OUTDOOR | INDOOR | GREENHOUSE | OTHER.
+  areaType String?
+  // Certification scope requested: PLANTING | PROCESSING.
+  certScope String?
+
+  // ---- What the rule demands ----
+
+  // Central document slot (constants/document-slots.js .slotId), stored in the
+  // CANONICAL form produced by getCanonicalSlotId
+  // (routes/api/applications/validation-slot-utils.js) — e.g. 'company_reg'.
+  // Both sides canonicalize before comparing, so a rule written through an alias
+  // still fires instead of becoming a silent no-op.
+  slotId String
+
+  isRequired Boolean @default(true)
+
+  // G4 freshness: how old the document may be, counted from its issuedDate.
+  // The column is born here so the rule that governs freshness is written by the
+  // same ministry edit that makes a document mandatory — but NOTHING reads it
+  // yet: enforcement arrives with the entity document vault (M2b). Declared
+  // inert on purpose; see the M2a plan's out-of-scope list.
+  maxDocumentAgeMonths Int?
+
+  // ---- Effective dating: which law was in force on the filing date ----
+  effectiveFrom DateTime
+  // NULL = still in force. Set once, by closeRule, to retire the rule.
+  effectiveTo   DateTime?
+
+  // ---- Provenance (audit rows are written by the service; these keep the
+  // reason on the row itself, so a closed rule still explains itself) ----
+  createdBy String
+  reason    String?
+  closedBy  String?
+  closedAt  DateTime?
+
+  // Read path of the gate: "which rules mention this slot".
+  @@index([slotId])
+  // Read path of rulesAt(): effectiveFrom <= at AND (effectiveTo IS NULL OR effectiveTo > at).
+  @@index([effectiveFrom, effectiveTo])
+  @@map("requirement_rules")
+}

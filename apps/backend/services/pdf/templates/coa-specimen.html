@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>ใบรายงานผลการวิเคราะห์ (ตัวอย่าง)</title>
+<!--
+  แผ่น COA พร้อมพิมพ์ — แปลจากแบบที่ออกแบบไว้ docs/design/artifacts/2026-09-05-coa-anatomy.html
+  (ส่วน "แผ่นตัวอย่าง" เท่านั้น รางคำอธิบายด้านขวาไม่ใช่ส่วนหนึ่งของเอกสาร)
+
+  ลายน้ำและบรรทัดท้ายกระดาษที่บอกว่านี่คือเอกสารตัวอย่าง ห้ามถอด — แพลตฟอร์มไม่ใช่
+  ห้องปฏิบัติการ เอกสารที่เราสร้างเองแล้วดูเหมือนรายงานผลจริงคือเอกสารปลอม ไม่ใช่ตัวอย่าง
+  ฟอนต์: Sarabun ฝังมาจาก pdf-assets อัตโนมัติ ห้ามลิงก์ฟอนต์ภายนอก (allowlist = data: เท่านั้น)
+-->
+<style>
+  @page { size: A4; margin: 12mm 12mm 14mm; }
+  * { box-sizing: border-box; }
+  :root {
+    --ink:#15181D; --ink-soft:#4A5058; --ink-faint:#7D848D;
+    --accent:#8E2F62; --accent-wash:#F1E3EB;
+    --pass:#2E6B4A; --pass-wash:#DEEBE3;
+    --rule:#C3C8CF; --rule-soft:#DDE1E6;
+  }
+  html, body { margin:0; padding:0; }
+  body {
+    font-family:'Sarabun','Noto Sans Thai',sans-serif;
+    font-size:9.2pt; line-height:1.45; color:var(--ink);
+    background:#fff; position:relative;
+  }
+  .watermark {
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    transform:rotate(-24deg); font-size:34pt; font-weight:700; line-height:1.25;
+    color:var(--accent); opacity:.075; text-align:center; letter-spacing:.04em;
+    z-index:0; pointer-events:none;
+  }
+  .sheet { position:relative; z-index:1; }
+
+  .lab-head { display:flex; justify-content:space-between; gap:10mm;
+    border-bottom:1.6pt solid var(--accent); padding-bottom:3mm; }
+  .lab-id strong { display:block; font-size:12pt; font-weight:700; color:var(--accent); }
+  .lab-id span { display:block; font-size:7.6pt; color:var(--ink-soft); }
+  .rep-id { text-align:right; font-size:7.6pt; color:var(--ink-soft); min-width:46mm; }
+  .rep-id b { display:block; font-size:9.4pt; font-weight:600; color:var(--ink);
+    font-variant-numeric:tabular-nums; margin-bottom:1.5mm; }
+
+  .doc-title { text-align:center; margin:5mm 0 4mm; font-size:15pt; font-weight:700; letter-spacing:.01em; }
+  .doc-title small { display:block; font-size:8pt; font-weight:600; letter-spacing:.16em;
+    color:var(--ink-faint); margin-top:.6mm; }
+
+  .blk { margin-bottom:4mm; break-inside:avoid; }
+  .blk-h { font-size:8.2pt; font-weight:700; letter-spacing:.08em; color:var(--accent);
+    background:var(--accent-wash); padding:1.2mm 2.5mm; border-radius:1.2mm; margin-bottom:2mm; }
+  dl.kv { display:grid; grid-template-columns:34mm 1fr; gap:1mm 3mm; margin:0; padding:0 1mm; }
+  dl.kv dt { color:var(--ink-faint); font-size:8.4pt; }
+  dl.kv dd { margin:0; font-size:8.8pt; }
+
+  table.res { width:100%; border-collapse:collapse; font-size:8.2pt; }
+  table.res th { text-align:left; font-weight:600; font-size:7.6pt; letter-spacing:.05em;
+    color:var(--ink-soft); border-bottom:1pt solid var(--rule); padding:1.4mm 1.6mm; }
+  table.res td { padding:1.2mm 1.6mm; border-bottom:.5pt solid var(--rule-soft); vertical-align:top; }
+  table.res .n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  table.res th.n { text-align:right; }
+  tr.grp td { background:#F4F5F7; font-weight:700; font-size:7.8pt; color:var(--ink-soft);
+    letter-spacing:.04em; padding:1.4mm 1.6mm; }
+  .v { display:inline-block; padding:.3mm 1.8mm; border-radius:1mm; font-size:7.4pt; font-weight:600; }
+  .v.p { background:var(--pass-wash); color:var(--pass); }
+
+  .sign { display:flex; justify-content:space-between; align-items:flex-end;
+    margin-top:7mm; break-inside:avoid; }
+  .who { font-size:8pt; color:var(--ink-soft); width:70mm; }
+  .who .line { border-top:.8pt solid var(--ink-faint); margin-bottom:1.5mm; height:14mm; }
+  .who span { display:block; font-size:7.4pt; color:var(--ink-faint); }
+  .verify { text-align:right; font-size:7.6pt; color:var(--ink-soft); }
+  .verify b { display:block; font-size:10pt; letter-spacing:.1em; color:var(--ink);
+    font-variant-numeric:tabular-nums; }
+
+  .fineprint { margin-top:5mm; padding-top:2.5mm; border-top:.5pt solid var(--rule);
+    font-size:7.2pt; line-height:1.5; color:var(--ink-faint); }
+  .fineprint strong { color:var(--accent); }
+</style>
+</head>
+<body>
+  <div class="watermark">เอกสารตัวอย่างเพื่อการออกแบบระบบ<br>ไม่ใช่รายงานผลการวิเคราะห์จริง</div>
+
+  <div class="sheet">
+    <div class="lab-head">
+      <div class="lab-id">
+        <strong>{{LAB_NAME}}</strong>
+        <span>Analytical Laboratory — SPECIMEN, not a real issuer</span>
+        <span>ทะเบียนรับรองความสามารถ ISO/IEC 17025 เลขที่ {{LAB_ACCREDITATION}}</span>
+        <span>{{LAB_CONTACT}}</span>
+      </div>
+      <div class="rep-id">
+        เลขที่รายงาน<b>{{REPORT_NUMBER}}</b>
+        วันที่ออกรายงาน<b>{{REPORTED_AT}}</b>
+        หน้า<b>1 / 1</b>
+      </div>
+    </div>
+
+    <div class="doc-title">ใบรายงานผลการวิเคราะห์<small>CERTIFICATE OF ANALYSIS</small></div>
+
+    <div class="blk">
+      <div class="blk-h">ผู้ขอรับบริการ</div>
+      <dl class="kv">
+        <dt>ชื่อ</dt><dd>{{CLIENT_NAME}}</dd>
+        <dt>ที่อยู่</dt><dd>{{CLIENT_ADDRESS}}</dd>
+        <dt>อ้างอิงใบรับรอง GACP</dt><dd>{{CERTIFICATE_NUMBER}}</dd>
+      </dl>
+    </div>
+
+    <div class="blk">
+      <div class="blk-h">รายละเอียดตัวอย่าง</div>
+      <dl class="kv">
+        <dt>ชื่อตัวอย่าง</dt><dd>{{SAMPLE_NAME}}</dd>
+        <dt>รหัสตัวอย่างของผู้ส่ง</dt><dd><strong>{{BATCH_CODE}}</strong> · รหัสรุ่นเก็บเกี่ยวที่ติดมากับถุงตัวอย่าง</dd>
+        <dt>ลักษณะตัวอย่าง</dt><dd>{{SAMPLE_CONDITION}}</dd>
+        <dt>ปริมาณที่รับ</dt><dd>{{SAMPLE_AMOUNT}}</dd>
+        <dt>วันที่รับตัวอย่าง</dt><dd>{{RECEIVED_AT}}</dd>
+        <dt>วันที่วิเคราะห์</dt><dd>{{ANALYSED_AT}}</dd>
+        <dt>ผู้เก็บตัวอย่าง</dt><dd>ผู้ขอรับบริการเป็นผู้ส่งตัวอย่างเอง</dd>
+      </dl>
+    </div>
+
+    <div class="blk">
+      <div class="blk-h">ผลการวิเคราะห์</div>
+      <table class="res">
+        <thead>
+          <tr><th>รายการ</th><th class="n">ผล</th><th class="n">หน่วย</th><th>เกณฑ์</th><th>วิธีทดสอบ</th><th>สรุป</th></tr>
+        </thead>
+        <tbody>{{RESULT_ROWS_HTML}}</tbody>
+      </table>
+    </div>
+
+    <div class="sign">
+      <div class="who">
+        <div class="line"></div>
+        ผู้มีอำนาจลงนาม (ตัวอย่าง)
+        <span>ตำแหน่ง · วันที่ลงนาม {{REPORTED_AT}}</span>
+      </div>
+      <div class="verify">
+        รหัสตรวจสอบรายงาน
+        <b>{{VERIFICATION_CODE}}</b>
+      </div>
+    </div>
+
+    <p class="fineprint">
+      ผลการทดสอบนี้เกี่ยวข้องเฉพาะกับตัวอย่างที่ได้รับเท่านั้น ·
+      ห้ามทำสำเนารายงานนี้บางส่วนโดยไม่ได้รับอนุญาตเป็นลายลักษณ์อักษรจากห้องปฏิบัติการ ·
+      <strong>เอกสารตัวอย่างเพื่อการออกแบบระบบ ไม่ใช่รายงานผลจริง ห้ามใช้อ้างอิงทางการค้าหรือทางกฎหมาย</strong>
+    </p>
+  </div>
+</body>
+</html>

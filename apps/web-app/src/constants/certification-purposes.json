@@ -1,0 +1,23 @@
+[
+  {
+    "code": "RESEARCH",
+    "label": "ศึกษาวิจัย",
+    "licenceCode": "ภ.ท. 09",
+    "licenceName": "ใบอนุญาตให้ศึกษาวิจัยสมุนไพรควบคุม",
+    "slotId": "licence_pt09"
+  },
+  {
+    "code": "EXPORT",
+    "label": "ส่งออกเพื่อการค้า",
+    "licenceCode": "ภ.ท. 10",
+    "licenceName": "ใบอนุญาตให้ส่งออกสมุนไพรควบคุมเพื่อการค้า",
+    "slotId": "licence_pt10"
+  },
+  {
+    "code": "PROCESSING",
+    "label": "แปรรูปหรือจำหน่ายเพื่อการค้า",
+    "licenceCode": "ภ.ท. 11",
+    "licenceName": "ใบอนุญาตให้จำหน่าย หรือแปรรูปสมุนไพรควบคุมเพื่อการค้า",
+    "slotId": "licence_pt11"
+  }
+]

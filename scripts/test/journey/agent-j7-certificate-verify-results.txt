@@ -1,0 +1,7 @@
+Agent J7 — Certificate & Verify Results
+Date: 2026-03-16T12:47:57.898Z
+Pass: 2 | Fail: 0 | Skip: 1 | Rate: 66.7%
+
+SKIP | Golden Scenario (E2E disabled) | Production mode — testing public APIs instead
+PASS | Get GACP standards | status: 200
+PASS | Certificate verify endpoint | status: 200 (response)

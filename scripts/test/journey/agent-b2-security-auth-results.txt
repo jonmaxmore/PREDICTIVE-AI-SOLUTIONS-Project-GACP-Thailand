@@ -1,0 +1,16 @@
+Agent B2 — Security & Auth Results
+Date: 2026-03-16T12:48:33.120Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Invalid token rejected | status: 401
+PASS | No-auth rejected | status: 401
+PASS | Notifications reject no-auth | status: 401
+PASS | Security headers present | x-content-type: nosniff, nosniff, nosniff
+PASS | XSS in query handled | status: 200 — no crash
+PASS | Path traversal rejected | status: 404
+PASS | 404 for unknown route | status: 404
+PASS | Malformed JWT rejected | status: 401
+PASS | Empty token rejected | status: 401
+PASS | Long auth header handled | status: 401
+PASS | Public endpoints accessible | 3/3 OK
+PASS | Random bearer token rejected | status: 401

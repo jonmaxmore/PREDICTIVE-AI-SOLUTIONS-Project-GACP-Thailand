@@ -1,0 +1,354 @@
+// Domain: Certification & Standards
+
+model Certificate {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Certificate Number
+  certificateNumber String @unique
+  verificationCode  String
+  qrData            String
+
+  // Relations
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+
+  // Farm Info
+  farmId        String
+  // T-010 (subtask 1c) — promote loose `farmId` scalar into a proper FK.
+  // Certificates are legal records (validity period, audit trail), so
+  // ON DELETE Restrict — farm hard-delete must NOT cascade-destroy
+  // its certificates. Operators must explicitly archive certificates
+  // before farm deletion. Migration: 20260505020000_certificate_farm_fk.
+  farm          Farm   @relation(fields: [farmId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  farmName      String
+  applicantName String
+
+  // M1 (2026-08-15): the farm holds the certificate, the person merely submits.
+  // Old userId/applicantName are frozen history — never dropped here (contract PR comes after drain).
+  submittedByUserId String?  // ผู้ยื่นในบันทึก — backfill = ค่า userId เดิม
+  holderDisplayName String?  // ชื่อผู้ถือใบ (Entity.displayName) — fallback = applicantName เดิม
+  holderType        String?  // INDIVIDUAL | JURISTIC | COMMUNITY_ENTERPRISE | LEGACY_PERSON
+
+  cropType      String
+  farmSize      Float
+
+  // Location
+  province    String
+  district    String
+  subDistrict String
+  address     String?
+
+  // Standard (Certification Standard Relation)
+  standardCode String? // 'THAI_GACP', 'FDA', 'WHO', 'ASEAN'
+  certStandard CertificationStandard? @relation(fields: [standardCode], references: [code])
+  standardId   String // Legacy - can be removed later
+  standardName String
+
+  // Status & Dates
+  status        String   @default("active") // active, expired, revoked, renewed, suspended
+  issuedDate    DateTime @default(now())
+  expiryDate    DateTime
+  validityYears Int      @default(3)
+  issuedBy      String
+
+  // PDF — pdfUrl was a "cached PDF URL" column that was never populated
+  // (the certificate-template-service generates PDFs on-demand into a
+  // Buffer; nothing wrote pdfUrl in production). Dropped in Wave A
+  // Phase 39 after verifying 0 of 13 prod rows had it set and the
+  // single frontend reader (web-app/.../official-documents) uses
+  // `cert.pdfUrl || undefined` so the omission is transparent.
+  pdfGenerated   Boolean   @default(false)
+  pdfGeneratedAt DateTime?
+
+  // Usage Tracking
+  downloadCount     Int       @default(0)
+  verificationCount Int       @default(0)
+  lastDownloadedAt  DateTime?
+  lastVerifiedAt    DateTime?
+
+  // Revocation
+  revokedAt     DateTime?
+  revokedBy     String?
+  revokedReason String?
+
+  // Suspension (ISO/IEC 17065 §7.11 — temporary, reversible withdrawal of
+  // certification, distinct from permanent revocation). A suspended certificate
+  // is NOT valid during the suspension window but can be reinstated to 'active'
+  // once the non-conformity is closed, or escalated to 'revoked'. Nullable +
+  // additive — no backfill; existing rows are unaffected.
+  suspendedAt     DateTime?
+  suspendedBy     String?
+  suspendedReason String?
+  reinstatedAt    DateTime?
+  reinstatedBy    String?
+
+  // Renewal Chain
+  renewedCertificateId  String?
+  previousCertificateId String?
+
+  // ฉบับแก้ไข (2026-08-27, spec design note 2026-08-27-certificate-revision-design):
+  // a correction of the SYSTEM's own error is re-signed under the SAME number as
+  // revision n+1; the superseded signed document is archived in CertificateRevision.
+  // The row's identity (id, number, QR, planting cycles) never changes.
+  // Every certificate that exists today is its own revision 1, so the default is a fact.
+  revisionNo     Int       @default(1)
+  revisedAt      DateTime?
+  revisedBy      String?
+  revisionReason String? // reasonCode of the latest revision, e.g. SYSTEM_DATA_CORRECTION
+  revisions      CertificateRevision[]
+
+  // Document Integrity
+  documentHash String?
+  signedBy     String?
+  signedAt     DateTime?
+
+  // CERT-01: PKI digital signature over `documentHash` (RSA-SHA256 hex),
+  // produced at issuance with the certificate signing key (per-issuer
+  // namespace when provisioned, else the default key). Gives non-repudiation /
+  // third-party cryptographic verification beyond the SHA-256 content hash —
+  // required for a government e-certificate. Nullable for LEGACY rows only:
+  // since Ruling 2 (2026-08-22) issuance FAILS CLOSED when it cannot sign, so
+  // no newly-minted certificate can carry a null signature.
+  signature          String?
+  signatureAlgorithm String?
+  signatureKeyId     String?
+
+  // RULING 2 (2026-08-22), EXPAND-only: the PEM public key that verifies
+  // `signature`, pinned onto the row at issuance.
+  //
+  // Without it, verification depended on whichever key happened to be loaded on
+  // the machine at verify time, so rotating the key, rebuilding the container or
+  // moving to the ministry's hardware would make every certificate already
+  // issued read as forged. With it a certificate carries its own proof and the
+  // verifier stops caring where the key lives — which is also what turns a later
+  // move to an HSM/KMS into a swap instead of a migration.
+  //
+  // Nullable because rows issued before this migration have none; the verifier
+  // falls back to the loaded key for exactly those.
+  signaturePublicKey String?
+
+  // Print History (JSON)
+  printHistory Json?
+
+  // Audit Trail
+  createdBy String?
+  updatedBy String?
+
+  // Soft Delete
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  deleteReason String?
+
+  // Legal Retention (5 years)
+  retainUntil DateTime @default(dbgenerated("(now() + '5 years'::interval)"))
+  legalHold   Boolean  @default(false)
+
+  // Planting Cycles using this certificate
+  plantingCycles PlantingCycle[]
+
+  // Phase 7 Relations
+  consumerFeedbacks ConsumerFeedback[]
+
+  // Phase 4 — Monthly Reports
+  reportSubmissions ReportSubmission[]
+
+  // Tenancy (ADR-014, Phase 1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([certificateNumber])
+  @@index([expiryDate])
+  @@index([isDeleted])
+  @@index([organizationId])
+  /// ขอบข่ายที่ใบนี้ครอบคลุม — หนึ่งแถวต่อหนึ่งลักษณะพื้นที่
+  scopes CertificateScope[]
+
+  // DB-06: index FK columns (joins + ON DELETE Restrict parent-delete scans)
+  @@index([applicationId])
+  @@index([farmId])
+  @@index([standardCode])
+  @@map("certificates")
+}
+
+/// ขอบข่ายการรับรองของใบหนึ่งใบ — **หนึ่งแถวที่ยังมีผลต่อหนึ่งใบ**
+///
+/// operator 2026-09-11: ออกใบ **แยกตามรูปแบบการปลูก** ⇒ ใบหนึ่งใบครอบคลุมลักษณะพื้นที่
+/// แบบเดียว · ผ่านสองรูปแบบ = สองใบ คนละเลข คนละวันหมดอายุ และใบที่ผ่านแล้วออกได้ทันที
+/// โดยไม่ต้องรอรูปแบบที่ยังไม่ผ่าน
+///
+/// ทำไมยังเป็นตาราง ไม่ใช่คอลัมน์เดียวบน Certificate: ตารางนี้คือ **บันทึกของใบ** ว่ารับรอง
+/// อะไรไว้ ณ วันที่ตัดสิน พร้อมชี้กลับไปที่งานตรวจที่พิสูจน์ · ก่อนหน้านี้ `certified-scope`
+/// อ่านลักษณะพื้นที่จาก `cert.application` สด ๆ แปลว่าขอบข่ายที่ **ตัดสินไปแล้ว** เปลี่ยนได้
+/// ทุกครั้งที่ข้อมูลคำขอเปลี่ยน — ซึ่งไม่ใช่สิ่งที่ใบรับรองเป็น (ISO/IEC 17065 §7.7.1(d)
+/// ให้ใบระบุ "the scope of certification")
+///
+/// **ไม่มี expiryDate ต่อแถว**: อายุอยู่ที่ `Certificate.expiryDate` ของใบนั้น
+/// (ISO §7.7.1(e) — "the term or expiry date of certification" หนึ่งอายุต่อหนึ่งใบ)
+/// และเมื่อหนึ่งใบมีหนึ่งรูปแบบ อายุของใบ **คือ** อายุของรูปแบบนั้นอยู่แล้ว
+model CertificateScope {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  /// OUTDOOR | GREENHOUSE | INDOOR — คำชุดเดียวกับที่ประตูยื่นถือ
+  /// (validation/canonical-application-validator.js AREA_TYPES)
+  areaType String
+
+  /// วันที่ขอบข่ายนี้เข้ามาอยู่ในใบ = วันออกใบ · เก็บไว้เพื่อตอบว่า "รับรองเมื่อไร"
+  /// โดยไม่ต้องไปอ่าน Certificate.issuedDate ซ้ำ
+  grantedDate DateTime @default(now())
+
+  /// active | reduced | suspended — ลดขอบข่ายรายรายการได้โดยไม่ล้มทั้งใบ (ISO §7.11)
+  status String @default("active")
+
+  /// งานตรวจที่พิสูจน์ขอบข่ายนี้ · null = แถวที่ backfill มาจากใบยุคก่อนมีตารางนี้
+  auditId String?
+
+  @@unique([certificateId, areaType])
+  @@index([certificateId])
+  @@index([areaType])
+  @@map("certificate_scopes")
+}
+
+/// One archived, superseded revision of a certificate — the signed document exactly
+/// as it stood before a correction. The live Certificate row is always the current
+/// revision; this table only ever grows (append-only, no soft delete).
+/// Migration: 20260827130000_certificate_revisions_expand.
+model CertificateRevision {
+  id            String      @id @default(uuid())
+  createdAt     DateTime    @default(now())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// The number of THIS archived revision (1 = the original issue).
+  revisionNo    Int
+  /// Every certificateCanonicalJson field plus address, verbatim at signing time.
+  snapshot      Json
+  // The archived proof, copied verbatim from the certificate row it superseded.
+  documentHash       String?
+  signature          String?
+  signatureAlgorithm String?
+  signatureKeyId     String?
+  signaturePublicKey String?
+  signedBy           String?
+  signedAt           DateTime?
+  /// When revision n+1 replaced this one, and the admin user id that pressed it.
+  supersededAt    DateTime
+  supersededBy    String
+  reasonCode      String // SYSTEM_DATA_CORRECTION (the only value the design defines)
+  reasonText      String? // the admin's words — never shown publicly
+  /// Which certificate columns changed, e.g. province, district, subDistrict, address.
+  correctedFields String[] @default([])
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([certificateId, revisionNo])
+  @@index([certificateId])
+  @@index([organizationId])
+  @@map("certificate_revisions")
+}
+
+model CertificationStandard {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Standard Info
+  code        String  @unique // 'THAI_GACP', 'FDA', 'WHO', 'ASEAN'
+  name        String // 'Thai GACP'
+  nameTH      String // 'มาตรฐาน GACP ไทย'
+  description String?
+  version     String  @default("v2024") // Standard version
+
+  // Configuration
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+  logoUrl   String? // URL to standard logo
+
+  // Target Market
+  targetMarket String? // 'DOMESTIC', 'USA', 'GLOBAL', 'ASEAN'
+
+  // Relations
+  requirements StandardRequirement[]
+  applications Application[]
+  certificates Certificate[]
+
+  @@index([code])
+  @@index([isActive])
+  @@map("certification_standards")
+}
+
+// STANDARD REQUIREMENT MODEL (ข้อกำหนดมาตรฐาน)
+
+model StandardRequirement {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to Standard
+  standardId String
+  standard   CertificationStandard @relation(fields: [standardId], references: [id])
+
+  // Requirement Info
+  category    String // 'FACILITY', 'DOCUMENTATION', 'TESTING', 'PROCESS'
+  name        String
+  nameTH      String
+  description String?
+
+  // Validation
+  isRequired Boolean @default(true)
+  sortOrder  Int     @default(0)
+
+  @@index([standardId])
+  @@index([category])
+  @@map("standard_requirements")
+}
+
+// LOT MODEL (ล็อตย่อย - Package Level Tracking)
+
+model SupplementaryCriterion {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Category (หมวดหมู่)
+  category   String // เช่น "การทดสอบ", "ขั้นตอนการผลิต", "สุขอนามัย"
+  categoryTH String? // ชื่อภาษาไทย
+
+  // Criterion details
+  code        String  @unique // รหัสเกณฑ์ เช่น "CONTAMINANT_TEST"
+  label       String // ชื่อเกณฑ์ เช่น "ผลตรวจสารปนเปื้อน"
+  description String? // คำอธิบายเพิ่มเติม
+
+  // Display settings
+  sortOrder Int     @default(0) // ลำดับการแสดง
+  icon      String? // Emoji หรือ icon name
+
+  // Validation
+  isRequired Boolean @default(false) // บังคับกรอก?
+  inputType  String  @default("checkbox") // checkbox, text, file, number
+
+  // Status
+  isActive Boolean @default(true)
+
+  // Audit
+  createdBy String?
+  updatedBy String?
+
+  @@index([category])
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("supplementary_criteria")
+}
+
+// SYSTEM CONFIG MODEL (Dynamic Feature Flags)

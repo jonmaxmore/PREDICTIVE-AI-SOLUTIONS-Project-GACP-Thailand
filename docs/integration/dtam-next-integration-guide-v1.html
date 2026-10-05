@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>คู่มือเชื่อมต่อ API — GACP Platform × DTAM Next</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Sarabun', 'Leelawadee UI', 'Tahoma', sans-serif; font-size: 13.5px; line-height: 1.65; color: #1a2b22; }
+  h1 { font-size: 22px; color: #14532d; margin-bottom: 2px; }
+  h2 { font-size: 16.5px; color: #14532d; border-bottom: 2px solid #34b56a; padding-bottom: 4px; margin: 26px 0 10px; }
+  h3 { font-size: 14.5px; color: #166534; margin: 16px 0 6px; }
+  p { margin: 6px 0; }
+  .cover { border: 2px solid #14532d; border-radius: 10px; padding: 22px 26px; background: linear-gradient(180deg, #f2fbf5 0%, #ffffff 60%); margin-bottom: 22px; }
+  .cover .agency { font-size: 12px; color: #4b5f52; letter-spacing: .4px; }
+  .cover .subtitle { font-size: 15px; color: #1d4c33; margin-top: 4px; }
+  .meta { margin-top: 12px; font-size: 12px; color: #40534a; display: flex; gap: 24px; flex-wrap: wrap; }
+  .meta b { color: #14532d; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 12.5px; }
+  th { background: #e7f6ec; color: #14532d; text-align: left; }
+  th, td { border: 1px solid #cfe5d6; padding: 6px 9px; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafdfb; }
+  code, pre { font-family: 'Consolas', 'Courier New', monospace; }
+  code { background: #eef5f0; border: 1px solid #d8e8dd; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+  pre { background: #0f2318; color: #d7f2df; border-radius: 8px; padding: 12px 14px; font-size: 11.5px; line-height: 1.5; overflow-x: hidden; white-space: pre-wrap; word-break: break-all; margin: 8px 0 12px; }
+  pre .k { color: #8fe3ad; }
+  .note { border-left: 4px solid #f0b429; background: #fdf7e7; padding: 8px 12px; border-radius: 0 6px 6px 0; margin: 10px 0; font-size: 12.5px; }
+  .ok { border-left: 4px solid #34b56a; background: #eefaf2; padding: 8px 12px; border-radius: 0 6px 6px 0; margin: 10px 0; font-size: 12.5px; }
+  ul, ol { margin: 6px 0 10px 22px; }
+  li { margin: 3px 0; }
+  .footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #cfe5d6; font-size: 11px; color: #62786c; }
+  .pagebreak { page-break-before: always; }
+  .tag { display: inline-block; background: #14532d; color: #fff; border-radius: 4px; padding: 1px 8px; font-size: 10.5px; margin-right: 6px; vertical-align: middle; }
+  .tag.pub { background: #2563eb; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="agency">แพลตฟอร์มรับรองมาตรฐาน GACP · กรมการแพทย์แผนไทยและการแพทย์ทางเลือก (DTAM)</div>
+  <h1>คู่มือเชื่อมต่อ API สำหรับระบบ DTAM Next</h1>
+  <div class="subtitle">Partner Interoperability API — ตรวจสอบที่มาที่ไปของ QR / รหัสสินค้า และเข้าถึงระบบ Trace (ต้นน้ำ → กลางน้ำ/ปลายน้ำ)</div>
+  <div class="meta">
+    <span><b>เวอร์ชันเอกสาร:</b> 1.0</span>
+    <span><b>วันที่:</b> 8 กรกฎาคม 2569 (2026)</span>
+    <span><b>สถานะ API:</b> ใช้งานจริงบน Production</span>
+    <span><b>จัดทำโดย:</b> Predictive AI Solution Co., Ltd. (ผู้ให้บริการแพลตฟอร์ม)</span>
+  </div>
+</div>
+
+<h2>1. ภาพรวม</h2>
+<p>แพลตฟอร์ม GACP เป็นระบบ<b>ต้นน้ำ</b>ของห่วงโซ่ข้อมูลสมุนไพร — เก็บข้อมูลตั้งแต่การรับรองฟาร์ม (ใบรับรอง GACP), รอบการปลูก, ต้นพืชรายต้น (1 ต้น = 1 QR), การเก็บเกี่ยว (batch) จนถึงล็อตบรรจุ (lot) พร้อมชั้นความเชื่อมั่นเชิงคริปโต (ลายเซ็น RSA-SHA256 + hash chain)</p>
+<p>ระบบ <b>DTAM Next</b> (กลางน้ำ/ปลายน้ำ) เชื่อมต่อผ่านชุด API นี้เพื่อ (ก) <b>ตรวจสอบว่า QR หรือรหัสใด ๆ ที่พบ มีที่มาที่ไปอย่างไร</b> และ (ข) เข้าถึงข้อมูลทะเบียนใบรับรอง/การเพิกถอน/เหตุการณ์ trace แบบ machine-to-machine</p>
+
+<table>
+  <tr><th style="width:32%">สภาพแวดล้อม</th><th>Base URL</th></tr>
+  <tr><td>Production</td><td><code>https://gacpth.com/api/interoperability</code></td></tr>
+  <tr><td>Staging (สำหรับทดสอบ integration)</td><td><code>https://staging.gacpth.com/api/interoperability</code></td></tr>
+</table>
+
+<h2>2. การยืนยันตัวตนและข้อกำหนดการใช้งาน</h2>
+<ul>
+  <li>Endpoint กลุ่ม <span class="tag">PARTNER</span> ต้องส่ง header <code>x-api-key: &lt;secret&gt;</code> — secret ออกให้ต่อหน่วยงาน (partner id: <code>dtam-next</code>) โดยผู้ดูแลแพลตฟอร์ม; ไม่มี key หรือ key ผิด → <code>401</code> เสมอ (fail-closed)</li>
+  <li>Endpoint กลุ่ม <span class="tag pub">PUBLIC</span> เรียกได้โดยไม่ต้องมี key (โควตากลาง 1,000 req/15 นาที/IP)</li>
+  <li>โควตากลุ่ม PARTNER: <b>120 requests / 15 นาที ต่อหน่วยงาน</b> (แยกจาก IP — ใช้ NAT ร่วมกันได้)</li>
+  <li>ทุกการเรียกของ partner ถูกบันทึก access log (หน่วยงาน, endpoint, รหัสที่ค้น, ผลลัพธ์) เพื่อการตรวจสอบย้อนหลังร่วมกัน</li>
+  <li>การส่งข้อมูล: REST / JSON / UTF-8 · ทุกคำตอบมี field <code>success</code></li>
+</ul>
+
+<h2>3. Endpoint หลัก — ตรวจสอบที่มาที่ไปของรหัสใด ๆ (Universal Resolver)</h2>
+<p><span class="tag">PARTNER</span> <code>GET /v1/resolve?code=&lt;สตริงที่สแกน/รหัส/URL&gt;</code></p>
+<p>ส่งอะไรมาก็ได้ที่พบบนสินค้า/เอกสาร — ระบบจำแนกชนิดและตอบ<b>ที่มาที่ไปครบในคำขอเดียว</b>:</p>
+<table>
+  <tr><th style="width:38%">รูปแบบที่รองรับ</th><th>จำแนกเป็น</th></tr>
+  <tr><td><code>GACP-*</code> (เช่น GACP-TH-2569-A3F7B2)</td><td>ใบรับรอง (CERTIFICATE)</td></tr>
+  <tr><td><code>UNIT-*</code> (รหัสต้น) / <code>PU-*</code> (QR ต้น)</td><td>ต้นพืชรายต้น (PLANT_UNIT)</td></tr>
+  <tr><td><code>BATCH-*</code> / <code>BT-*</code></td><td>ล็อตเก็บเกี่ยว (HARVEST_BATCH)</td></tr>
+  <tr><td><code>LOT-*</code></td><td>ล็อตบรรจุ (PACKAGING_LOT) ก่อน แล้วจึงตรวจ batch รูปแบบเก่า</td></tr>
+  <tr><td>UUID เปล่า</td><td>ตรวจดัชนี QR-seal ก่อน แล้วไล่ตามลำดับที่กำหนดในเอกสารสัญญา</td></tr>
+  <tr><td>URL เต็มจาก QR (<code>…/trace/plant/…</code>, <code>…/verify/…</code> ฯลฯ)</td><td>normalize อัตโนมัติแล้วจำแนกตามชนิด</td></tr>
+</table>
+
+<h3>ตัวอย่างจริง: สแกน QR ต้นพืช → ล็อตไหน แปลงไหน รอบนี้ปลูกกี่ต้น ฟาร์มอะไร</h3>
+<pre>GET /v1/resolve?code=PU-1783487000001-UATA01
+x-api-key: ********
+
+{
+  "success": true, "resolved": true,
+  "matched": { "entityType": "PLANT_UNIT", "keyKind": "plantQr" },
+  "provenance": {
+    "plant":  { "code": "UNIT-2026-UAT1-00001", "status": "HARVESTED",
+                "plantedAt": "2026-04-14…", "harvestedAt": "2026-06-28…" },
+    "plot":   { "name": "แปลง UAT-A1", "solarSystem": "GREENHOUSE",
+                "plannedPlantCount": 120 },              ← แปลงไหน + ระบบปลูก
+    "cycle":  { "status": "HARVESTING", "plantedCount": 3,
+                "estimatedPlantCount": 150 },            ← รอบนี้ปลูกกี่ต้น (นับจริง/แผน)
+    "batch":  { "batchNumber": "LOT-2569-CFBC-001" },    ← มาจากล็อตเก็บเกี่ยวไหน
+    "lots":   [],                                        ← ล็อตบรรจุ (ถ้ามี)
+    "farm":   { "name": "Certified Farm", "province": "…", "district": "…" },
+    "certificateNumber": "GACP-TH-2569-52BB9F",
+    "certificateStatus": "active"
+  },
+  "links": { "traceEvents": "/api/interoperability/v1/trace/events/PLANT_UNIT/…",
+             "publicTrace": "/trace/plant/PU-1783487000001-UATA01" }
+}</pre>
+<ul>
+  <li>ต้นที่ยังไม่เก็บเกี่ยว → <code>"batch": null, "lots": []</code></li>
+  <li>รหัสที่ไม่รู้จัก → <code>404</code> พร้อม <code>{"resolved": false, "probed": [...]}</code> (รายการที่ระบบลองค้นแล้ว)</li>
+  <li>ระบบขัดข้อง → <code>500</code> เท่านั้น — จะไม่ตอบ "ไม่พบ" ปลอม ๆ</li>
+  <li><b>ไม่มีข้อมูลส่วนบุคคล</b> (ชื่อผู้ยื่น/เลขบัตรประชาชน) ในคำตอบทุกกรณี</li>
+</ul>
+
+<div class="pagebreak"></div>
+
+<h2>4. Endpoint ทั้งหมด</h2>
+<table>
+  <tr><th style="width:6%">กลุ่ม</th><th style="width:44%">Endpoint</th><th>ใช้ทำอะไร</th></tr>
+  <tr><td><span class="tag">P</span></td><td><code>GET /v1/resolve?code=</code></td><td>จำแนกรหัสใด ๆ + ที่มาที่ไปครบในคำขอเดียว (ข้อ 3)</td></tr>
+  <tr><td><span class="tag">P</span></td><td><code>GET /v1/trace/events/{type}/{id}</code></td><td>timeline เหตุการณ์ของ entity — type: CERTIFICATE, PLANTING_CYCLE, HARVEST_BATCH, PACKAGING_LOT, PLANT_UNIT (id รับทั้ง id/เลขที่/qrCode)</td></tr>
+  <tr><td><span class="tag">P</span></td><td><code>GET /v1/trust/registry</code></td><td>ทะเบียนใบรับรอง (แบ่งหน้า, ค้นหา, กรองจังหวัด/สถานะ) สำหรับ sync</td></tr>
+  <tr><td><span class="tag">P</span></td><td><code>GET /v1/trust/revocations?since=</code></td><td>feed การเพิกถอนใบรับรอง (REVOCATION_TRANSPARENCY)</td></tr>
+  <tr><td><span class="tag">P</span></td><td><code>GET /v1/certificates/{no}/e-certificate</code></td><td>ใบรับรองอิเล็กทรอนิกส์แบบมีลายเซ็น RSA-SHA256</td></tr>
+  <tr><td><span class="tag">P</span></td><td><code>GET /v1/certificates/{no}/signed-envelope</code></td><td>เหมือนข้างบน + แนบ public key ในตัว</td></tr>
+  <tr><td><span class="tag pub">PUB</span></td><td><code>GET /v1/verification?certificateNumber=</code></td><td>ตรวจสถานะใบรับรอง (trustStatus: ACTIVE/REVOKED/EXPIRED/INVALID)</td></tr>
+  <tr><td><span class="tag pub">PUB</span></td><td><code>GET /v1/trust/public-key</code></td><td>public key + fingerprint สำหรับตรวจลายเซ็น</td></tr>
+  <tr><td><span class="tag pub">PUB</span></td><td><code>POST /v1/signatures/verify</code></td><td>ตรวจลายเซ็นเอกสาร (payload/payloadHash + signature)</td></tr>
+  <tr><td><span class="tag pub">PUB</span></td><td><code>GET /v1/data-contracts/traceability</code><br><code>GET /v1/event-contracts/trace-events</code></td><td>data contract / event contract ฉบับ machine-readable</td></tr>
+</table>
+<div class="note"><b>ข้อกำหนดฝั่ง client:</b> ต้องทนต่อค่า <code>trustStatus</code> ที่ไม่อยู่ใน 4 ค่าหลัก (ระบบอาจส่งสถานะดิบผ่านมาได้) และ <code>eventId</code> ของ trace events ไม่คงที่ระหว่างคำขอ — ใช้ <code>entityId + eventType + occurredAt</code> ในการ dedupe</div>
+
+<h2>5. การทดสอบด้วย Postman</h2>
+<ol>
+  <li>Import 3 ไฟล์จากชุดส่งมอบ: <code>gacp-partner-api.postman_collection.json</code> + environment (<code>staging</code>/<code>production</code>)</li>
+  <li>เลือก environment <b>staging</b> → ตั้งค่าตัวแปร <code>apiKey</code> = secret ที่ได้รับ</li>
+  <li>กด <b>Run Collection</b> — ทุก request มี test script ตรวจอัตโนมัติ (status, โครงสร้างคำตอบ, การไม่มี PII)</li>
+</ol>
+<table>
+  <tr><th style="width:36%">ตัวแปร</th><th>ค่าตัวอย่างบน staging (พร้อมยิงจริง)</th></tr>
+  <tr><td><code>certNumber</code></td><td><code>GACP-TH-2569-52BB9F</code></td></tr>
+  <tr><td><code>plantCode</code> (QR ต้นพืช)</td><td><code>PU-1783487000001-UATA01</code></td></tr>
+  <tr><td><code>batchNumber</code> (batch รูปแบบเก่า LOT-)</td><td><code>LOT-2569-CFBC-001</code></td></tr>
+  <tr><td><code>batchQrUuid</code></td><td><code>56ad107f-8008-4d23-96c7-d42df8aa4a38</code></td></tr>
+</table>
+<div class="ok">ชุดข้อมูลตัวอย่างข้างต้นผ่านการทดสอบจริงบน staging ครบทุกรูปแบบแล้ว (8 ก.ค. 2569): จำแนกถูกชนิด, provenance ครบ, 401/404 ตอบตามสัญญา, access log บันทึกทุกคำขอ</div>
+
+<h2>6. ขั้นตอนขอรับ API key (production)</h2>
+<ol>
+  <li>หน่วยงานแจ้งความประสงค์ต่อผู้ดูแลแพลตฟอร์ม (owner) พร้อมระบุ partner id ที่ต้องการ (แนะนำ <code>dtam-next</code>)</li>
+  <li>ผู้ดูแลออก secret (สุ่ม 64 hex) และส่งมอบผ่านช่องทางปลอดภัย — secret จะไม่แสดงซ้ำ</li>
+  <li>ทดสอบ: <code>curl -H "x-api-key: &lt;secret&gt;" https://gacpth.com/api/interoperability/v1/trust/registry</code> → ต้องได้ <code>200</code></li>
+  <li>การหมุน key: แจ้งผู้ดูแลเพื่อออก secret ใหม่และยกเลิกตัวเดิม</li>
+</ol>
+
+<h2>7. ข้อจำกัดของเวอร์ชันปัจจุบัน (v1)</h2>
+<ul>
+  <li>ยังไม่มี endpoint sync แบบ incremental (cursor/since ครบทุก feed) — ใช้ registry แบบแบ่งหน้า + revocations <code>?since=</code></li>
+  <li>trace events สังเคราะห์จากข้อมูล ณ เวลาเรียก — ไม่มีลายเซ็นราย event (ใบรับรองอิเล็กทรอนิกส์มีลายเซ็นเต็มรูปแบบ)</li>
+  <li>ข้อมูลการปลูก/QR ต้นพืชบน production จะทยอยเพิ่มตามการใช้งานจริงของเกษตรกร — staging มีชุดทดสอบครบทุกชนิดแล้ว</li>
+</ul>
+
+<div class="footer">
+  เอกสารอ้างอิงฉบับเต็ม (ปรับปรุงต่อเนื่อง): <code>docs/integration/partner-interoperability-api.md</code> ในคลังโค้ดแพลตฟอร์ม ·
+  ติดต่อ: ผู้ดูแลแพลตฟอร์ม GACP (Predictive AI Solution Co., Ltd.) · เอกสารนี้จัดทำเพื่อการเชื่อมต่อระหว่างหน่วยงานเท่านั้น
+</div>
+
+</body>
+</html>

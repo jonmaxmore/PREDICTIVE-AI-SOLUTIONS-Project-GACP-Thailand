@@ -1,0 +1,16 @@
+Agent F13 — Error Pages & States Results
+Date: 2026-03-13T13:20:04.456Z
+Pass: 11 | Fail: 1 | Skip: 0 | Rate: 91.7%
+
+FAIL | 404 page test | HTTP 404
+PASS | Invalid app ID | HTTP 200
+PASS | Invalid doc ID | HTTP 200
+PASS | Invalid track ID | HTTP 200
+PASS | Provider invalid | HTTP 200
+PASS | Provider app invalid | HTTP 200
+PASS | API 404 route | status: 404
+PASS | Invalid auth | status: 401
+PASS | Malformed JWT | status: 401
+PASS | Home still works | HTTP 200
+PASS | Login still works | HTTP 200
+PASS | Health still works | status: 200

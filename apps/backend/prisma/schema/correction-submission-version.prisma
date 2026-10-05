@@ -1,0 +1,63 @@
+// Domain: Correction loop — append-only submitted-formData history (R2 M7, D-6,
+// operator 2026-08-03; evidence/R2-special-reopen/decisions-final.md:23,67).
+//
+// D-6 verbatim: "append-only ครอบ applications.js + review-revision merge →
+// version/supersede เฉพาะ correction flow". Before M7 a farmer's resubmit
+// OVERWROTE Application.formData (services/application-service/
+// application-review-revision-methods.js submitRevision + routes/api/
+// applications/applications.js POST /submit resubmit branch), destroying the
+// previously-submitted version each round. M7 preserves every round's submitted
+// formData as an immutable row here.
+//
+// EXPAND (Law 3.10): this history sits BESIDE the existing formData column —
+// Application.formData STILL holds the latest working copy (the overwrite is
+// unchanged); M7 only ADDS a durable, immutable snapshot per round. No existing
+// column or behaviour is altered or removed.
+//
+// Append-only invariant (D-6): exactly ONE immutable row per
+// (applicationId, stage, roundNo). A re-write of the same round is a DB-level
+// UNIQUE conflict (P2002), NOT an overwrite — you cannot mutate a round's
+// submission. The snapshot is written in the SAME transaction as the formData
+// write (services/correction-submission-version-service.js), keyed off the
+// per-stage CorrectionRound ledger (M3) so roundNo stays consistent.
+
+model CorrectionSubmissionVersion {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Reference — RESTRICT: a submitted-version row is immutable history and must
+  // never be cascaded away from under its application.
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // 'DOC_REVIEW' | 'FIELD_AUDIT' — mirrors CorrectionRound.stage (String + CHECK
+  // idiom; SSOT vocabulary shared/correction-round-stage.js; constraint in
+  // migration 20260805100000_add_correction_submission_versions).
+  stage String
+
+  // The correction round this submission belongs to (1, 2, 3, … — no cap;
+  // D-2 revoked the 3-strike rule). Consistent with CorrectionRound.roundNo for
+  // (applicationId, stage): the resubmit snapshots the current (max) round.
+  roundNo Int
+
+  // Immutable snapshot of the formData submitted for this round — the exact
+  // working copy written to Application.formData at submit.
+  formDataSnapshot Json
+
+  // Immutable snapshot of attachments / document refs at submit, when available
+  // (nullable — legacy submits may carry no discrete document refs).
+  attachmentsSnapshot Json?
+
+  submittedAt DateTime @default(now())
+
+  // Tenancy (ADR-014) — stamped explicitly from the CorrectionRound's tenant
+  // (transaction clients bypass the tenant extension; M1/M3 letter idiom).
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Append-only: exactly ONE immutable row per (app, stage, round) — a re-write
+  // of the same round is a DB-level conflict, not an overwrite.
+  @@unique([applicationId, stage, roundNo])
+  @@index([applicationId, stage])
+  @@map("correction_submission_versions")
+}

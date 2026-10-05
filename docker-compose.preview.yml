@@ -1,0 +1,211 @@
+# ============================================================
+# GACP Platform — PREVIEW stack (preview.gacpth.com)
+# ============================================================
+# A hidden environment on the SAME box as production/staging. Its whole
+# purpose is that the operator (and only the operator's devices) can look at
+# what `main` actually renders, against the SAME Supabase dev database the
+# laptop already tests on — so what is seen here is what was seen locally,
+# not a second dataset that drifts.
+#
+# What this file deliberately does NOT contain:
+#   - no postgres  → DATABASE_URL points at Supabase (pooler, over the public
+#                    internet from this box; reachable, tested 2026-08-22)
+#   - no redis     → it joins the EXISTING `gacp-network` and uses the
+#                    already-running `gacp-redis` container on db index 2
+#                    (prod = 0, staging = 1, preview = 2)
+#   - no minio     → STORAGE_PROVIDER=local + a named volume
+#   - no nginx     → the HOST nginx vhost (deploy/nginx/preview.gacpth.com.conf)
+#                    proxies straight to the two loopback ports below
+#
+# Ports: 127.0.0.1:8002 (backend) and 127.0.0.1:3002 (frontend). Chosen so
+# NOTHING collides with the stale gacp-*-staging pair on 8001/3001 while both
+# exist. Retiring that pair is a separate, later step (see the runbook).
+#
+# Usage (always through the deploy script, which sets PREVIEW_IMAGE_TAG):
+#
+#   docker compose --env-file .env.preview -f docker-compose.preview.yml up -d
+#
+# `--env-file` is what makes `${PREVIEW_IMAGE_TAG}` below resolve. The
+# `env_file:` key on the backend service is a DIFFERENT mechanism (it injects
+# the file into the container's environment). Both read the same file on
+# purpose; neither one implies the other.
+#
+# ⚠️ This file must never contain the staging deploy-slot marker. That marker
+# is what enables the mock IdP, and
+# apps/backend/__tests__/unit/staging-slot-compose-pin.test.js asserts it
+# appears in docker-compose.staging.yml and in NO other docker-compose*.yml —
+# discovered by directory scan, so this file is already in its net. Preview
+# therefore runs with the REAL auth providers, same as production.
+
+# Explicit project name. Without it compose derives the project from the
+# directory, which on the box is /opt/gacp-platform — the SAME project label
+# the production stack carries. Sharing a project name with production is how a
+# stray `docker compose down` or a `--remove-orphans` reaches containers it was
+# never aimed at. `-p gacp-preview` is also passed by the deploy script.
+name: gacp-preview
+
+networks:
+  # Frontend ↔ backend traffic for preview only.
+  gacp-preview-network:
+    name: gacp-preview-network
+  # The pre-existing network created by docker-compose.production.yml. Declared
+  # `external` because this file must never create, own, or tear it down — the
+  # production stack lives on it. Joining it is the ONLY reason preview can say
+  # `redis:6379`.
+  gacp-network:
+    external: true
+    name: gacp-network
+
+# Preview gets its OWN volumes; it does NOT reuse gacp_staging_uploads /
+# gacp_staging_signing_keys. Reasons, in order of weight:
+#   1. Different database. Those volumes hold files whose rows live in the
+#      local `gacp_staging` Postgres DB. Preview reads the Supabase dev DB, so
+#      reusing them would surface files that no preview row references and hide
+#      the absence of files that preview rows DO reference — a misleading green.
+#   2. Retiring the old stack is meant to be safe. If preview wrote into the
+#      staging volumes, `docker volume rm gacp_staging_*` during cleanup would
+#      silently delete preview's uploads and signing keys.
+#   3. Two stacks must not share one RSA keyDir. signature-service generates a
+#      keypair into it when absent; two writers is a race with a security
+#      outcome.
+# The cost is stated plainly in the runbook: certificates minted from the
+# laptop against this same Supabase DB were signed by the LAPTOP's keypair, and
+# only a keyId (not the public key) is stored per certificate — so preview
+# cannot RSA-verify them until the operator copies that keypair in. The runbook
+# has that as an optional one-time step.
+volumes:
+  gacp_preview_uploads:
+    name: gacp-preview-uploads
+  gacp_preview_storage:
+    name: gacp-preview-storage
+  gacp_preview_signing_keys:
+    name: gacp-preview-signing-keys
+
+services:
+  # ------------------------------------------------------------
+  # Backend — Preview
+  # ------------------------------------------------------------
+  backend-preview:
+    image: ${PREVIEW_BACKEND_IMAGE:-ghcr.io/jonmaxmore/gacp-backend}:${PREVIEW_IMAGE_TAG:?PREVIEW_IMAGE_TAG_required}
+    container_name: gacp-backend-preview
+    restart: unless-stopped
+    deploy:
+      resources:
+        # Third stack on a shared box. Same cap as staging, not prod's.
+        limits: { cpus: '0.50', memory: 512M }
+        reservations: { cpus: '0.10', memory: 128M }
+    ports:
+      # Loopback only. The host nginx vhost is the sole way in, so the
+      # prelaunch gate cannot be walked around by hitting the port.
+      - "127.0.0.1:8002:8000"
+    # Every SECRET arrives through this file and appears nowhere in git.
+    # .env.preview is gitignored; .env.preview.example documents the keys.
+    env_file:
+      - .env.preview
+    environment:
+      # NODE_ENV=staging, matching the current staging containers. Checked
+      # against the code rather than assumed:
+      #   - apps/backend/config/env-validator.js — 'staging' is neither
+      #     `isProduction` nor `isDevelopment`, so NOTHING is validated and
+      #     nothing is required at boot. Preview must therefore be given a
+      #     complete .env.preview by hand; there is no boot-time net.
+      #   - apps/backend/server.js:87 — `exposesDebugSurfaces` is true only for
+      #     development/test, so stack traces stay off and helmet's CSP stays
+      #     ON here, exactly as in production.
+      #   - apps/backend/server.js:141+ — with isProduction false the CORS
+      #     allowlist starts from the DEVELOPER-port defaults and then adds
+      #     CORS_ORIGIN / FRONTEND_URL / APP_PUBLIC_URL. That is why the three
+      #     lines below are what actually admit the preview origin.
+      - NODE_ENV=staging
+      - PORT=8000
+      # --- public identity of this environment ---
+      - CORS_ORIGIN=${PREVIEW_PUBLIC_URL:-https://preview.gacpth.com}
+      - FRONTEND_URL=${PREVIEW_PUBLIC_URL:-https://preview.gacpth.com}
+      - APP_URL=${PREVIEW_PUBLIC_URL:-https://preview.gacpth.com}
+      - APP_PUBLIC_URL=${PREVIEW_PUBLIC_URL:-https://preview.gacpth.com}
+      - PUBLIC_APP_URL=${PREVIEW_PUBLIC_URL:-https://preview.gacpth.com}
+      - TRACE_BASE_URL=${PREVIEW_PUBLIC_URL:-https://preview.gacpth.com}
+      - PUBLIC_TRACE_URL=${PREVIEW_PUBLIC_URL:-https://preview.gacpth.com}/trace
+      - COOKIE_DOMAIN=${PREVIEW_COOKIE_DOMAIN:-preview.gacpth.com}
+      # Cloudflare terminates TLS and the host vhost is HTTPS-only, so the
+      # session cookie is always delivered over TLS.
+      - COOKIE_SECURE=true
+      # --- storage ---
+      # local, never minio: the shared prod bucket must not be written by a
+      # preview stack pointed at a different database.
+      - STORAGE_PROVIDER=local
+      # --- behaviour flags, deliberately matching the staging containers ---
+      - TRUST_PRIVATE_PROXY_RANGES=true
+      - REQUIRE_MFA_FOR_PRIVILEGED=false
+      - TENANT_READ_ORG_SCOPE=true
+      # Preview is a demo surface with no real payments behind it. This mirrors
+      # docker-compose.staging.yml. It is listed here rather than hidden in the
+      # env file so that a reviewer sees it: this flag changes what the fee
+      # pages show, and preview shares its database with laptop testing.
+    volumes:
+      - gacp_preview_uploads:/app/apps/backend/public/uploads
+      - gacp_preview_storage:/app/storage
+      - gacp_preview_signing_keys:/app/apps/backend/keys
+    networks:
+      - gacp-preview-network
+      - gacp-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      # Cold start on this box is slow (the PDF path warms lazily); 30s matches
+      # what staging needed in practice.
+      start_period: 30s
+
+  # ------------------------------------------------------------
+  # Frontend — Preview
+  # ------------------------------------------------------------
+  frontend-preview:
+    image: ${PREVIEW_FRONTEND_IMAGE:-ghcr.io/jonmaxmore/gacp-frontend}:${PREVIEW_IMAGE_TAG:?PREVIEW_IMAGE_TAG_required}
+    container_name: gacp-frontend-preview
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: '0.50', memory: 512M }
+        reservations: { cpus: '0.10', memory: 128M }
+    ports:
+      - "127.0.0.1:3002:3000"
+    # NO env_file here, on purpose. .env.preview carries backend secrets
+    # (ENCRYPTION_KEY, the DB URL, JWT secrets); injecting all of them into the
+    # frontend container would widen their blast radius for zero benefit —
+    # every value the frontend actually needs is non-secret and is listed
+    # explicitly below.
+    environment:
+      - NODE_ENV=staging
+      - PORT=3000
+      # Server-side calls from Next.js (the /api proxy in
+      # app/api/[...path]/route.ts and the SSR verify page) resolve the backend
+      # through apps/web-app/src/config/server.config.ts, whose fallback chain
+      # starts at `http://backend:8000`. On this box `backend` is a REAL
+      # container name — PRODUCTION's backend, on the shared gacp-network. So
+      # leaving this unset does not fail loudly; it silently proxies preview
+      # traffic into production. It is set explicitly for that reason.
+      - INTERNAL_API_URL=http://backend-preview:8000
+      # x-forwarded-host guard, apps/web-app/src/lib/verify/public-verify-url.ts.
+      # A plain server-only var by design (a NEXT_PUBLIC_* one would be inlined
+      # at build time and empty at runtime — the file says so). Setting it
+      # REPLACES the built-in default list, so every host that must keep
+      # working is named here, preview included.
+      - PUBLIC_VERIFY_HOST_ALLOWLIST=${PREVIEW_VERIFY_HOST_ALLOWLIST:-gacpth.com,staging.gacpth.com,preview.gacpth.com}
+      # NOT set here, and that is not an omission: NEXT_PUBLIC_* values are
+      # inlined by `next build` (runbook trap #3), so setting them on a running
+      # container does nothing at all. NEXT_PUBLIC_API_URL=https://preview.gacpth.com
+      # is passed as a --build-arg in scripts/deploy/deploy-preview.sh, which is
+      # the only place it can take effect.
+    networks:
+      - gacp-preview-network
+      - gacp-network
+    depends_on:
+      - backend-preview
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s

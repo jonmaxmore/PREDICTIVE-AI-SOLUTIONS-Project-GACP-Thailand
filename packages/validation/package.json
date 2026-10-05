@@ -1,0 +1,50 @@
+{
+    "name": "@gacp/validation",
+    "version": "1.0.0",
+    "description": "Shared validation utilities for GACP platform",
+    "main": "src/index.ts",
+    "types": "src/index.ts",
+    "scripts": {
+        "build": "tsc",
+        "test": "jest"
+    },
+    "exports": {
+        ".": {
+            "import": "./src/index.ts",
+            "require": "./src/index.ts",
+            "types": "./src/index.ts",
+            "default": "./src/index.ts"
+        },
+        "./thai-id": {
+            "import": "./src/thai-id.ts",
+            "require": "./src/thai-id.ts",
+            "types": "./src/thai-id.ts",
+            "default": "./src/thai-id.ts"
+        },
+        "./thai-id-checksum": {
+            "import": "./src/thai-id-checksum.js",
+            "require": "./src/thai-id-checksum.js",
+            "default": "./src/thai-id-checksum.js"
+        },
+        "./upload-rules": {
+            "import": "./src/upload-rules.js",
+            "require": "./src/upload-rules.js",
+            "default": "./src/upload-rules.js"
+        },
+        "./satisfaction-families": {
+            "import": "./src/satisfaction-families.js",
+            "require": "./src/satisfaction-families.js",
+            "default": "./src/satisfaction-families.js"
+        },
+        "./precheck-copy": {
+            "import": "./src/precheck-copy.js",
+            "require": "./src/precheck-copy.js",
+            "default": "./src/precheck-copy.js"
+        }
+    },
+    "files": [
+        "src",
+        "dist"
+    ],
+    "license": "UNLICENSED"
+}

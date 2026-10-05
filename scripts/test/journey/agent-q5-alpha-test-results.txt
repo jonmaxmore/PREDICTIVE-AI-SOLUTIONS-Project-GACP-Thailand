@@ -1,0 +1,14 @@
+Agent Q5 — Alpha Test Results
+Date: 2026-03-16T11:21:27.675Z
+Pass: 10 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | API Health | OK
+PASS | Login | Cookie auth received
+PASS | Invalid password rejection | 401 Unauthorized ✅
+PASS | Empty login rejection | status: 400
+PASS | Auth guard (no token) | 401 ✅
+PASS | My applications (authed) | status: 200
+PASS | Get profile | status: 404
+PASS | SQL injection blocked | status: 400 ✅
+PASS | XSS in query param | status: 200 (no execution)
+PASS | Large payload handled | status: 400

@@ -1,0 +1,51 @@
+Deep Validation — Business Logic & Workflow Results
+Date: 2026-03-13T14:04:28.272Z
+Pass: 47 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Master data: plants | 0 records
+PASS | Master data: locations | 77 records
+PASS | Master data: standards | 0 records
+PASS | Master data: gacpCategories | 14 records
+PASS | Master data: cultivationMethods | 3 records
+PASS | Master data: soilTypes | 7 records
+PASS | Master data: documentSlots | 39 records
+PASS | Master data: fees | 1 records
+PASS | Master data completeness | All 8 master data sets complete
+PASS | Health schema | Required fields present
+PASS | Pricing: Outdoor 100 plants | Fee calculated: 30000 THB
+PASS | Pricing: Indoor 50 plants | Fee calculated: 30000 THB
+PASS | Pricing: Greenhouse 200 plants | Fee calculated: 30000 THB
+PASS | Form mapping: INDIVIDUAL | Valid
+PASS | Pre-submit: INDIVIDUAL | HTTP 200
+PASS | Form mapping: ENTERPRISE | Valid
+PASS | Pre-submit: ENTERPRISE | HTTP 200
+PASS | Form mapping: JURISTIC | Valid
+PASS | Pre-submit: JURISTIC | HTTP 200
+PASS | Workflow: Total steps | 10 steps defined
+PASS | Workflow: Step 1 | SUBMITTED (Submit)
+PASS | Workflow: Step 2 | PAYMENT_PHASE1 (Pay Phase 1)
+PASS | Workflow: Step 3 | SCHEDULER_ASSIGN_REVIEWER (Scheduler → Reviewer)
+PASS | Workflow: Step 5-6 | REVIEW_APPROVED → PAYMENT_PHASE2 (Approve → Pay Phase 2)
+PASS | Workflow: Step 7-8 | SCHEDULER_ASSIGN_AUDITOR → SITE_INSPECTION (Scheduler → Auditor)
+PASS | SLA: Reviewer (ผู้ตรวจเอกสาร) | Target: 3 day(s)
+PASS | SLA: Auditor (ผู้ตรวจประเมิน) | Target: 14 day(s)
+PASS | SLA: Scheduler (ผู้จัดตาราง) | Target: 3 day(s)
+PASS | SLA: Accountant (เจ้าหน้าที่บัญชี) | Target: 1 day(s)
+PASS | SLA: Admin (ผู้ดูแลระบบ) | No time target (Admin)
+PASS | Auth guard: /dashboard | HTTP 401 (correct)
+PASS | Auth guard: /applications/my | HTTP 401 (correct)
+PASS | Auth guard: /notifications | HTTP 401 (correct)
+PASS | Error format: bad login | HTTP 400
+PASS | Page: Home | Page structure OK
+PASS | Page: Login | Page structure OK
+PASS | Page: Register | Page structure OK
+PASS | Page: Provider Login | Page structure OK
+PASS | Page: Trace | Page structure OK
+PASS | Step 4 requirements | HTTP 200
+PASS | Step 5 requirements | HTTP 200
+PASS | Step 6 requirements | HTTP 200
+PASS | Step 7 requirements | HTTP 200
+PASS | Step 8 requirements | HTTP 200
+PASS | Full config: methods | Present
+PASS | Full config: purposes | Present
+PASS | Full config: journeys/layouts | Present

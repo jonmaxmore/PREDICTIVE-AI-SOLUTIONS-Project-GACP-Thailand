@@ -1,0 +1,52 @@
+# full-gate-checks.txt — the ONE list of what a "full gate" means (SSOT, Law L4).
+#
+# Read by BOTH:
+#   scripts/ci/full-gate.sh            — runs the checks, writes evidence/gate/<sha>.json
+#   scripts/probes/gate-attestation.sh — verifies an attestation covers HEAD
+# so the runner and the verifier can never drift apart. Re-typing this list in the
+# verifier is exactly the duplication Law L4 forbids.
+#
+# FORMAT (4 fields, '|' separated):  <kind> | <value> | <flag> | <note>
+#
+# kind=path   value = ERE matched against a changed file path
+#             flag  = gated
+#             A commit that changes NO gated path does not need an attestation
+#             (docs/scripts-only work is Tier A by the project rules §5 and has no
+#             Postgres behaviour to prove). LIMIT, written down on purpose: the
+#             gated set is apps/ ONLY. A change under scripts/, infra/ or
+#             prisma/ outside apps/ is NOT covered by this mechanism.
+#
+# kind=check  value = check id (also the log file name)
+#             flag  = required  → must be PASS or the gate exits non-zero
+#                     advisory  → recorded and printed on every run, never
+#                                 affects the exit code. Reserved for checks whose
+#                                 verdict is unobtainable on the gate machine BY
+#                                 CONSTRUCTION (see below) or whose threshold no
+#                                 operator has signed yet.
+#
+# WHY advisory EXISTS AND WHY IT IS NOT A WAIVER
+# money-equation / drain-complete sample REAL money rows. A scratch DB that was
+# created and migrated seconds earlier holds zero of them, so letting those probes
+# run there would print "0 rows violate the money equation" — which means
+# "0 rows examined", not "no problem" (reports/accounting-reconciler/2026-08-06.md
+# §1a). Pointing them at gacp_db/gacp_staging instead is forbidden by Law L3. Both
+# roads lead to a lie, so they are NOT-RUN with the reason printed every single
+# run. That is the same contract probe-gate already states for its manual set.
+
+path  | ^apps/                | gated    | application code — the only paths this gate claims to cover
+
+check | workspace-clean       | required | source checkout has no uncommitted changes; the SHA under test must be what is on disk
+check | install               | required | pnpm install --frozen-lockfile in the temp checkout
+check | prisma-generate       | required | npx prisma generate — the single reason settle-webhook-only/webhook-idempotent are parked out of CI (probe-registry.txt:35-36)
+check | migrate-deploy        | required | prisma migrate deploy against the per-run scratch DB
+check | suite-green           | required | probe suite-green — full backend jest with DATABASE_URL set, count >= baseline
+check | integration-pg        | required | jest __tests__/integration on real Postgres — exit 0 and numPassedTests > 0 (these files self-skip without DATABASE_URL)
+check | secret-scan-deep      | required | gitleaks over the full history; scanner absent = NOT-RUN, never PASS (same contract as no-secret.sh)
+check | probe-ci              | required | node scripts/ci/probe-gate.js — the whole CI probe set
+check | probe-prisma-deps     | required | probes settle-webhook-only + webhook-idempotent, which need prisma generate
+check | deploy-drift          | required | probe deploy-drift — compares the commit each deployed service reports (GET /api/health, /api/webapp-version) against the ref it should match. Was advisory while the remediation path was unproven; the on-box build+deploy+probe cycle was proven end-to-end on 2026-08-14 (evidence/runtime-deploy-drift/task5/INDEX.md) and the operator ordered the flip to required the same day, in the same change that moved probe-registry.txt to ci. A red here after merging to main means staging has not been redeployed yet — the ~2-minute warm rebuild in docs/operations/runbooks/build-images-on-the-box.md is the remediation, and that red is the truth this check exists to tell.
+check | integration-no-skip   | advisory | numPendingTests from integration-pg. Printed every run, not gating: no operator-signed baseline for the pending count exists yet, and a required check with an unjudged baseline would go red for a reason nobody decided. Promote to `required` here when the operator signs the number.
+check | money-equation-real   | advisory | needs REAL money rows; scratch DB has none (0 rows examined != 0 violations) and prod is forbidden by Law L3
+check | drain-complete-real   | advisory | counts non-terminal legacy slip transactions, which exist only in the production database
+check | stripe-keys-ready     | advisory | needs a live STRIPE_SECRET_KEY; Law L3 forbids setting one before GOALS.md G1 is green
+check | flow-proof-full       | advisory | needs staging app credentials in the environment; skipped with the missing variable named when absent

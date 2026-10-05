@@ -1,0 +1,532 @@
+/* Shared shell: full-height column on the page background.
+   `.gov-doc-page` is the same shell for pages that are NOT auth screens
+   (terms/, privacy/) — they want the background and the column, never the
+   split. */
+.gov-auth-page,
+.gov-doc-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--background));
+}
+
+/* Desktop split-screen: the branded hero panel sits beside the form. This
+   belongs to the auth screens alone. terms/ and privacy/ used to carry
+   `.gov-auth-page` for the base rules above and inherited this too — with no
+   hero to pair with, their header/main/footer became three side-by-side
+   columns and the page collapsed to the tallest child. Measured at 1440px
+   before the fix (visual-QA sweep, 2026-07-26):
+     header 213x900 @x=0 | main 666x900 @x=213 | footer 560x852 @x=880
+   Scoped by src/app/__tests__/auth-shell-split-scope.test.ts, which requires
+   every page using this selector to render a hero panel. */
+@media (min-width: 1024px) {
+  .gov-auth-page {
+    flex-direction: row;
+  }
+}
+
+/* ── Mobile green header strip (shows above form on < lg) ── */
+.gov-auth-mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  background: linear-gradient(135deg, hsl(153 100% 20%), hsl(153 60% 28%));
+  color: #fff;
+}
+
+@media (min-width: 1024px) {
+  .gov-auth-mobile-header {
+    display: none;
+  }
+}
+
+.gov-auth-mobile-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gov-auth-mobile-header-brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 0.5rem;
+}
+
+.gov-auth-mobile-header-title {
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: normal;
+}
+
+.gov-auth-mobile-header-subtitle {
+  font-size: 0.625rem;
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+/* ── Hero panel (Left side, desktop only) ── */
+.gov-auth-hero {
+  display: none;
+  width: 50%;
+  background: linear-gradient(160deg, #002d1a 0%, #00532c 46%, #013f24 100%);
+  padding: 3.5rem 3rem;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .gov-auth-hero {
+    display: flex;
+  }
+}
+
+.gov-auth-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.5) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Soft premium depth: a diffuse light bloom in the upper corner. Purely
+   decorative, sits under the content (z-index 10). Uniform across all auth heroes. */
+.gov-auth-hero::after {
+  content: '';
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  right: -140px;
+  top: -120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(80, 220, 150, 0.20), transparent 62%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Lift every hero child above the decorative ::before grid and ::after bloom
+   so the glow never tints the brand / feature / footer text. */
+.gov-auth-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.gov-auth-hero-content {
+  position: relative;
+  z-index: 10;
+}
+
+.gov-auth-hero-title {
+  /* Sukhumvit Set tops out at 700/Bold (800 maps to Bold too); 900 forced the
+     browser to synthesize a heavier weight, distorting Thai glyphs. 800 renders
+     the real Bold face crisply. */
+  font-size: 2.85rem;
+  /* 700 for the same reason as .gov-auth-form-title: 800 exists only as an alias
+     in the brand face, never in the fallbacks. */
+  font-weight: 700;
+  /* Thai stacks a vowel above and a tone mark above that, and a descender below.
+     Measured on the live site at 2.85rem: each line's INK is 72px tall while
+     line-height 1.12 gives a 51.07px box, so two lines overlapped by 21px and
+     line 2's mai-ek sat under line 1's descenders — the mark read as belonging
+     to the wrong line (evidence/apple-qa-audit-2026-09-07). 1.42 clears the ink
+     with room to spare. The arithmetic is the point: 72 / 45.6 = 1.579 is the
+     floor at THIS size, so 1.42 (64.75px) would still have overlapped by 7px.
+     1.6 gives 72.96px — one pixel of daylight. Never go below 1.35 on any Thai
+     heading, and check the arithmetic when the size changes. */
+  line-height: 1.6;
+  /* Negative tracking pulls วรรณยุกต์ toward the neighbouring glyph. The rule is
+     written at the top of globals.css and was being broken here. */
+  letter-spacing: normal;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+
+.gov-auth-hero-subtitle {
+  margin-top: 1.5rem;
+  font-size: 1.125rem;
+  font-weight: 500;
+  opacity: 0.8;
+  max-width: 400px;
+  line-height: 1.6;
+}
+
+/* Focal group — wraps title+subtitle+features into ONE space-between child so
+   the hero reads brand (top) · focal (vertically centred) · dept (bottom) with
+   no mid-panel void. Purely additive: pages that don't use this class keep the
+   original .gov-auth-hero flex layout unchanged. */
+.gov-auth-hero-focal {
+  max-width: 460px;
+}
+
+.gov-auth-hero-features {
+  margin-top: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.gov-auth-hero-feature {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* Feature icon dot — wraps the chevron in a soft circular chip so the bullets
+   read as deliberate list markers rather than loose glyphs. */
+.gov-auth-feat-dot {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  flex: none;
+}
+
+/* ── Form panel (Right side) ── */
+.gov-auth-form-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--background));
+  position: relative;
+}
+
+/* Scrollable container for the form */
+.gov-auth-form-scroll {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+.gov-auth-form-inner {
+  width: 100%;
+  max-width: 400px;
+  animation: fade-in-up 0.5s ease-out;
+}
+
+.gov-auth-form-title {
+  font-size: 1.875rem;
+  /* 700, not 800. globals.css aliases Sukhumvit Set 800 to the same Bold.ttf, so
+     this renders identically today — but the FALLBACK family has no such alias
+     (@fontsource loads Sarabun 400 and 700 only). If the brand face fails to
+     load, an 800 request makes the browser synthesize a heavier Sarabun and
+     distort the Thai exactly the way the old 900 did. Ask for a weight that
+     exists in every family in the stack. */
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  line-height: 1.4;
+  letter-spacing: normal;
+}
+
+.gov-auth-form-subtitle {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.5rem;
+  margin-bottom: 2rem;
+  font-weight: 500;
+}
+
+/* Language row — hidden on mobile because green header already has it */
+.gov-auth-lang-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 1023px) {
+  .gov-auth-lang-row {
+    display: none;
+  }
+}
+
+.gov-auth-lang-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+  border-radius: 99px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: all 200ms ease;
+  cursor: pointer;
+}
+
+.gov-auth-lang-button:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+/* Form controls */
+.gov-auth-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.5rem;
+  letter-spacing: normal;
+}
+
+.gov-auth-input-wrapper {
+  position: relative;
+}
+
+/* The colour followed the theme and the ground did not: `background: #fff
+   !important` with `color: hsl(var(--foreground)) !important` rendered the typed
+   national ID at rgb(242,242,242) on rgb(255,255,255) = 1.12:1 in dark mode —
+   measured on the live demo by typing into it (evidence/apple-qa-audit-2026-09-07).
+   This is the same defect .field-emphasis carried, in a second file; both now paint
+   from the one field token pair. Guarded by scripts/probes/themed-surface-tokens.sh,
+   which scans every stylesheet under src/styles/ for exactly this shape. */
+.gov-auth-input {
+  width: 100% !important;
+  height: 3.25rem !important;
+  border-radius: 0.75rem !important;
+  border: 1.5px solid var(--field-emphasis-border) !important;
+  background: var(--field-emphasis-bg) !important;
+  color: var(--field-emphasis-fg) !important;
+  padding: 0 1rem 0 3rem !important;
+  font-size: 0.9375rem !important;
+  font-weight: 500 !important;
+  outline: none !important;
+  transition: all 200ms ease !important;
+}
+
+.gov-auth-input::placeholder {
+  color: hsl(var(--muted-foreground)) !important;
+  font-weight: 400 !important;
+}
+
+.gov-auth-input:focus {
+  border-color: hsl(153 60% 36%) !important;
+  box-shadow: 0 0 0 3px hsla(153 60% 36% / 0.15) !important;
+}
+
+.gov-auth-input-icon {
+  position: absolute;
+  left: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: hsl(0 0% 48%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Buttons */
+.gov-auth-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 3.25rem;
+  border-radius: 0.75rem;
+  border: none;
+  background: linear-gradient(135deg, hsl(153 70% 32%) 0%, hsl(153 60% 26%) 100%);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 250ms ease;
+  box-shadow: 0 4px 14px hsla(153 60% 28% / 0.3);
+  letter-spacing: normal;
+}
+
+.gov-auth-primary-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, hsl(153 70% 28%) 0%, hsl(153 60% 22%) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px hsla(153 60% 28% / 0.35);
+}
+
+.gov-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin: 1.5rem 0;
+  /* `text-transform: uppercase` does nothing to Thai and `letter-spacing` breaks
+     it; this divider's label is "หรือ". Both are Latin idioms. */
+  letter-spacing: normal;
+}
+
+.gov-auth-divider::before,
+.gov-auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: hsl(var(--border));
+  opacity: 0.5;
+}
+
+.gov-auth-outline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  height: 3rem;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+
+.gov-auth-outline-btn:hover {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--muted-foreground));
+}
+
+.gov-auth-link {
+  font-weight: 700;
+  font-size: 0.8125rem;
+  /* W3-B: hsl(153 60% 32%) sat at 4.35:1 on the #f4f6f5 form panel (axe
+     serious, 3 login links). One lightness step down clears AA at 5.4:1. */
+  color: hsl(153 60% 28%);
+  text-decoration: none;
+  transition: color 200ms;
+}
+
+.gov-auth-link:hover {
+  color: hsl(153 70% 26%);
+  text-decoration: underline;
+}
+
+/* The colour above is tuned for the LIGHT form panel (5.43:1 on #f4f6f5). In dark
+   mode the panel is hsl(150 20% 6%) and the same dark green measured 3.21:1 —
+   the auth links across /login, /auth/health/login and /register
+   (evidence/apple-qa-audit-2026-09-07). This file carried no .dark rule at all,
+   which is the same shape as the surface tokens and .gov-auth-input before it. */
+.dark .gov-auth-link {
+  color: hsl(153 65% 62%);   /* 11.15:1 on the dark panel */
+}
+
+.dark .gov-auth-link:hover {
+  color: hsl(153 75% 74%);   /* 13.62:1 */
+}
+
+.gov-auth-secure-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  margin-top: 2.5rem;
+}
+
+/* ── Alerts ── */
+.gov-auth-alert {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.gov-auth-alert-danger {
+  background: hsl(0 80% 97%);
+  color: hsl(0 72% 45%);
+  border: 1px solid hsl(0 72% 90%);
+}
+
+.gov-auth-alert-success {
+  background: hsl(142 72% 96%);
+  color: hsl(142 72% 29%);
+  border: 1px solid hsl(142 72% 85%);
+}
+
+/* ── Footer row ── */
+.gov-auth-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  margin-top: 1.5rem;
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── Disabled button ── */
+.gov-auth-primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Animations ── */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  10%,
+  50%,
+  90% {
+    transform: translateX(-4px);
+  }
+
+  30%,
+  70% {
+    transform: translateX(4px);
+  }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* ── Progress bar for registration success ── */
+.gov-auth-progress-bar {
+  height: 100%;
+  background: hsl(153 60% 40%);
+  border-radius: 9999px;
+  animation: progress-fill 3s linear forwards;
+}
+
+@keyframes progress-fill {
+  from {
+    width: 0%;
+  }
+
+  to {
+    width: 100%;
+  }
+}

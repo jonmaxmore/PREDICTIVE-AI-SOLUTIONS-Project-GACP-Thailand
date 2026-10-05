@@ -1,0 +1,14 @@
+Agent J9 — Notifications & Tickets Results
+Date: 2026-03-16T12:48:08.489Z
+Pass: 10 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Login as health user | Token acquired
+PASS | Get notifications | 0 notifications
+PASS | Get unread count | count: 0
+PASS | Get master data | status: 200
+PASS | Get location provinces | status: 200
+PASS | Get QR pricing | status: 200
+PASS | Get fee schedule | status: 200
+PASS | Get cultivation methods | status: 200
+PASS | System config (public) | status: 200
+PASS | API health endpoint | status: 200

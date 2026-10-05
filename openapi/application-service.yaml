@@ -1,0 +1,973 @@
+openapi: 3.0.3
+info:
+  title: GACP Application Service API
+  description: |
+    GACP certification application management service with 20-state workflow.
+
+    **Features:**
+    - Application CRUD operations
+    - 20-state finite state machine (16 happy-path + 4 terminal/error)
+    - Document upload and validation
+    - DTAM review workflow
+    - State transition management (gated by canonical
+      `services/application-status-writer.writeApplicationStatus()`)
+    - Timeline estimation
+    - REJECTED_LAB retryable transition (legalised v3.4.0)
+
+    **Application States** (canonical 2026-04-29; source of truth =
+    `apps/backend/services/workflow-transition-service.js` WORKFLOW_STATES
+    + `apps/backend/routes/api/system/system.js` status-machine):
+
+    Happy path (16):
+    1. DRAFT - Initial draft
+    2. REGISTERED - Registered, pre-submission
+    3. SUBMITTED - Applicant submitted
+    4. PENDING_DOC_FEE - Awaiting Phase 1 fee payment
+    5. DOC_FEE_PAID - Phase 1 paid, awaiting reviewer assignment
+    6. ASSIGNED_FOR_REVIEW - Reviewer assigned
+    7. REVISION_REQUESTED - Reviewer requested revisions
+    8. DOC_APPROVED - Document review approved
+    9. PENDING_AUDIT_FEE - Awaiting Phase 2 fee payment
+    10. AUDIT_FEE_PAID - Phase 2 paid, awaiting audit scheduling
+    11. AUDIT_CONFIRMED - Audit date confirmed
+    12. CAR_PENDING - Corrective Action Request issued, applicant must respond
+    13. CAR_REVIEWING - CAR response under review
+    14. AUDIT_PASSED - Audit passed (pre-certification)
+    15. APPROVED - Application approved
+    16. CERTIFIED - Certificate issued
+
+    Terminal / error (4):
+    17. REJECTED - Rejected by reviewer / auditor
+    18. REJECTED_LAB - Rejected at lab stage (retryable → SUBMITTED via HEALTH; or → CANCEL_EXPIRED via SYSTEM cron)
+    19. EXPIRED - Payment / response window expired
+    20. CANCEL_EXPIRED - Cancelled after expiry window closed
+
+    **Research Base:**
+    - Thai FDA certification workflow
+    - WHO GMP certification standards
+    - Finite State Machine patterns (GoF Design Patterns)
+    - Workflow-legality enforcement: all status writes flow through
+      `application-status-writer.writeApplicationStatus()` (PR-WF-1+)
+  version: 1.0.0
+  contact:
+    name: GACP Platform API Support
+    email: api-support@gacp.platform
+
+servers:
+  - url: https://api.gacp.platform/v1/applications
+    description: Production server
+  - url: https://staging-api.gacp.platform/v1/applications
+    description: Staging server
+  - url: http://localhost:3002/v1/applications
+    description: Development server
+
+tags:
+  - name: Applications
+    description: Application management operations
+  - name: Documents
+    description: Document upload and management
+  - name: Review
+    description: DTAM review operations (DTAM only)
+  - name: State
+    description: State transition operations
+
+paths:
+  /applications:
+    get:
+      tags:
+        - Applications
+      summary: List applications
+      description: |
+        Get list of applications with filtering and pagination.
+
+        **Authorization:**
+        - Applicant: Can only see their own applications
+        - DTAM/ADMIN: Can see all applications
+
+        **Filters:**
+        - state: Filter by application state
+        - userId: Filter by user (DTAM/ADMIN only)
+        - province: Filter by farm province
+        - startDate/endDate: Filter by submission date
+      operationId: listApplications
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Items per page
+        - name: state
+          in: query
+          schema:
+            type: string
+            # Canonical workflow states (PR-WF-1 reconciliation 2026-04-29).
+            # Source of truth: apps/backend/services/workflow-transition-service.js
+            # WORKFLOW_STATES + apps/backend/routes/api/system/system.js status-machine.
+            # The previous yaml documented 14 legacy states (INSPECTION_SCHEDULED,
+            # PAYMENT_PENDING etc) that no longer exist in runtime.
+            enum:
+              # Happy path
+              - DRAFT
+              - REGISTERED
+              - SUBMITTED
+              - PENDING_DOC_FEE
+              - DOC_FEE_PAID
+              - ASSIGNED_FOR_REVIEW
+              - REVISION_REQUESTED
+              - DOC_APPROVED
+              - PENDING_AUDIT_FEE
+              - AUDIT_FEE_PAID
+              - AUDIT_CONFIRMED
+              - CAR_PENDING
+              - CAR_REVIEWING
+              - AUDIT_PASSED
+              - APPROVED
+              - CERTIFIED
+              # Terminal / error
+              - REJECTED
+              - REJECTED_LAB
+              - EXPIRED
+              - CANCEL_EXPIRED
+          description: Filter by application state. See system.js status-machine for human-readable Thai labels + workflow phase grouping.
+        - name: province
+          in: query
+          schema:
+            type: string
+          description: Filter by farm province
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter by submission date (from)
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter by submission date (to)
+      responses:
+        '200':
+          description: Applications retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags:
+        - Applications
+      summary: Create new application
+      description: |
+        Create new GACP certification application in DRAFT state.
+
+        **Requirements:**
+        - User must have Applicant role
+        - User can only have 1 active application at a time
+        - At least 3 documents required (ID Card, House Registration, Land Ownership)
+
+        **Validation:**
+        - Farm name: 3-100 characters
+        - Farm size: 0.1-1000 (rai/sqm/hectare)
+        - GPS coordinates: Valid latitude/longitude
+        - Documents: Minimum 3 files, max 10MB each
+      operationId: createApplication
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApplicationRequest'
+      responses:
+        '201':
+          description: Application created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          description: Active application already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                activeApplicationExists:
+                  value:
+                    success: false
+                    error:
+                      code: ACTIVE_APPLICATION_EXISTS
+                      message: You already have an active application. Please complete or cancel it first.
+
+  /applications/{applicationId}:
+    get:
+      tags:
+        - Applications
+      summary: Get application by ID
+      description: |
+        Get detailed application information.
+
+        **Authorization:**
+        - Application owner can access their own application
+        - DTAM/ADMIN can access any application
+      operationId: getApplication
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Application ID
+      responses:
+        '200':
+          description: Application retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationDetailResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    patch:
+      tags:
+        - Applications
+      summary: Update application (DRAFT only)
+      description: |
+        Update application details. Only allowed in DRAFT state.
+
+        **Authorization:** Application owner only
+      operationId: updateApplication
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApplicationRequest'
+      responses:
+        '200':
+          description: Application updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationResponse'
+        '400':
+          description: Cannot update non-DRAFT application
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /applications/{applicationId}/submit:
+    post:
+      tags:
+        - State
+      summary: Submit application
+      description: |
+        Submit application for DTAM review.
+
+        **State Transition:** DRAFT → SUBMITTED → UNDER_REVIEW (auto)
+
+        **Requirements:**
+        - Application must be in DRAFT state
+        - All required fields must be filled
+        - Minimum 3 documents uploaded
+
+        **Authorization:** Application owner only
+      operationId: submitApplication
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - confirmedAccuracy
+                - agreedToTerms
+              properties:
+                confirmedAccuracy:
+                  type: boolean
+                  description: Applicant confirms all information is accurate
+                agreedToTerms:
+                  type: boolean
+                  description: Applicant agrees to terms and conditions
+      responses:
+        '200':
+          description: Application submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitApplicationResponse'
+        '400':
+          description: Validation error or invalid state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /applications/{applicationId}/review:
+    post:
+      tags:
+        - Review
+      summary: Review application (DTAM only)
+      description: |
+        DTAM Provider reviews application and decides action.
+
+        **State Transitions:**
+        - APPROVE_PHASE1: UNDER_REVIEW → PAYMENT_PENDING
+        - REJECT: UNDER_REVIEW → REJECTED (7-day lockout)
+        - REQUEST_REVISION: UNDER_REVIEW → REVISION_REQUIRED
+
+        **Authorization:** DTAM role only
+
+        **Actions:**
+        - APPROVE_PHASE1: Approve and request Phase 1 payment (฿5,000)
+        - REJECT: Reject application with reason
+        - REQUEST_REVISION: Request Applicant to revise and resubmit
+      operationId: reviewApplication
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewApplicationRequest'
+      responses:
+        '200':
+          description: Application reviewed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationResponse'
+        '400':
+          description: Invalid action or state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Insufficient permissions (DTAM only)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /applications/{applicationId}/documents:
+    post:
+      tags:
+        - Documents
+      summary: Upload document
+      description: |
+        Upload document to application.
+
+        **File Requirements:**
+        - Formats: PDF, JPG, PNG
+        - Max size: 10MB per file
+        - Required types: ID_CARD, HOUSE_REGISTRATION, LAND_OWNERSHIP
+
+        **Authorization:** Application owner only
+      operationId: uploadDocument
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - documentType
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Document file (PDF, JPG, PNG)
+                documentType:
+                  type: string
+                  enum:
+                    - ID_CARD
+                    - HOUSE_REGISTRATION
+                    - LAND_OWNERSHIP
+                    - OTHER
+                  description: Document type
+      responses:
+        '201':
+          description: Document uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentUploadResponse'
+        '400':
+          description: Invalid file or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '413':
+          description: File too large (max 10MB)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /applications/{applicationId}/timeline:
+    get:
+      tags:
+        - Applications
+      summary: Get application timeline
+      description: |
+        Get chronological timeline of all state transitions and events.
+
+        **Authorization:** Application owner or DTAM/ADMIN
+      operationId: getApplicationTimeline
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Timeline retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelineResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateApplicationRequest:
+      type: object
+      required:
+        - farmName
+        - farmAddress
+        - farmSize
+        - cultivationType
+        - cannabisVariety
+        - documents
+      properties:
+        farmName:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: ฟาร์มกัญชาใจดี
+        farmAddress:
+          $ref: '#/components/schemas/FarmAddress'
+        farmSize:
+          type: number
+          minimum: 0.1
+          maximum: 1000
+          example: 5.5
+        farmSizeUnit:
+          type: string
+          enum: [rai, sqm, hectare]
+          default: rai
+        cultivationType:
+          type: string
+          enum: [INDOOR, OUTDOOR, GREENHOUSE]
+          example: INDOOR
+        cannabisVariety:
+          type: string
+          enum: [CBD, THC, MIXED]
+          example: CBD
+        documents:
+          type: array
+          minItems: 3
+          items:
+            $ref: '#/components/schemas/DocumentMetadata'
+
+    FarmAddress:
+      type: object
+      required:
+        - houseNo
+        - tambon
+        - amphoe
+        - province
+        - postalCode
+        - gpsCoordinates
+      properties:
+        houseNo:
+          type: string
+          example: '456'
+        moo:
+          type: string
+          example: '3'
+        tambon:
+          type: string
+          example: บางเขน
+        amphoe:
+          type: string
+          example: เมือง
+        province:
+          type: string
+          example: นนทบุรี
+        postalCode:
+          type: string
+          pattern: '^\d{5}$'
+          example: '11000'
+        gpsCoordinates:
+          type: object
+          required:
+            - latitude
+            - longitude
+          properties:
+            latitude:
+              type: number
+              minimum: -90
+              maximum: 90
+              example: 13.8467
+            longitude:
+              type: number
+              minimum: -180
+              maximum: 180
+              example: 100.5742
+
+    DocumentMetadata:
+      type: object
+      required:
+        - type
+        - fileName
+        - fileSize
+        - uploadedAt
+      properties:
+        type:
+          type: string
+          enum: [ID_CARD, HOUSE_REGISTRATION, LAND_OWNERSHIP, OTHER]
+        fileName:
+          type: string
+          example: id_card.pdf
+        fileSize:
+          type: integer
+          maximum: 10485760
+          description: File size in bytes (max 10MB)
+          example: 1024000
+        uploadedAt:
+          type: string
+          format: date-time
+          example: '2025-10-16T10:00:00.000Z'
+
+    UpdateApplicationRequest:
+      type: object
+      properties:
+        farmName:
+          type: string
+        farmAddress:
+          $ref: '#/components/schemas/FarmAddress'
+        farmSize:
+          type: number
+        farmSizeUnit:
+          type: string
+          enum: [rai, sqm, hectare]
+        cultivationType:
+          type: string
+          enum: [INDOOR, OUTDOOR, GREENHOUSE]
+        cannabisVariety:
+          type: string
+          enum: [CBD, THC, MIXED]
+
+    ReviewApplicationRequest:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum: [APPROVE_PHASE1, REJECT, REQUEST_REVISION]
+          description: Review action
+        reviewNotes:
+          type: string
+          description: Review notes (required for all actions)
+        rejectionReason:
+          type: string
+          description: Rejection reason (required if action is REJECT)
+        revisionNotes:
+          type: string
+          description: Revision notes (required if action is REQUEST_REVISION)
+        inspectorRecommendation:
+          type: string
+          description: Recommended inspector ID (optional)
+
+    Application:
+      type: object
+      properties:
+        applicationId:
+          type: string
+          example: 6523f9876543210fedcba987
+        applicationNumber:
+          type: string
+          example: GACP-2025-A3B4C
+        state:
+          type: string
+          enum:
+            - DRAFT
+            - SUBMITTED
+            - UNDER_REVIEW
+            - PAYMENT_PENDING
+            - PAYMENT_VERIFIED
+            - INSPECTION_SCHEDULED
+            - INSPECTION_COMPLETED
+            - PHASE2_PAYMENT_PENDING
+            - PHASE2_PAYMENT_VERIFIED
+            - APPROVED
+            - CERTIFICATE_ISSUED
+            - REJECTED
+            - REVISION_REQUIRED
+            - EXPIRED
+          example: DRAFT
+        userId:
+          type: string
+          example: 6523f9876543210fedcba001
+        farmName:
+          type: string
+          example: ฟาร์มกัญชาใจดี
+        farmAddress:
+          $ref: '#/components/schemas/FarmAddress'
+        farmSize:
+          type: number
+          example: 5.5
+        farmSizeUnit:
+          type: string
+          example: rai
+        cultivationType:
+          type: string
+          example: INDOOR
+        cannabisVariety:
+          type: string
+          example: CBD
+        documentsCount:
+          type: integer
+          example: 3
+        applicationFee:
+          type: number
+          example: 5000
+        createdAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: string
+          format: date-time
+        timeline:
+          type: object
+          properties:
+            estimatedReviewDays:
+              type: integer
+              example: 14
+            estimatedInspectionDays:
+              type: integer
+              example: 7
+            estimatedTotalDays:
+              type: integer
+              example: 30
+
+    ApplicationListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            applications:
+              type: array
+              items:
+                $ref: '#/components/schemas/Application'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+
+    ApplicationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/Application'
+
+    ApplicationDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          allOf:
+            - $ref: '#/components/schemas/Application'
+            - type: object
+              properties:
+                documents:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      documentId:
+                        type: string
+                      type:
+                        type: string
+                      fileName:
+                        type: string
+                      fileSize:
+                        type: integer
+                      uploadedAt:
+                        type: string
+                        format: date-time
+                      url:
+                        type: string
+                        format: uri
+                stateHistory:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      state:
+                        type: string
+                      enteredAt:
+                        type: string
+                        format: date-time
+                      exitedAt:
+                        type: string
+                        format: date-time
+                      duration:
+                        type: integer
+                        description: Duration in milliseconds
+
+    SubmitApplicationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Application submitted successfully
+        data:
+          type: object
+          properties:
+            applicationId:
+              type: string
+            applicationNumber:
+              type: string
+            state:
+              type: string
+              example: SUBMITTED
+            submittedAt:
+              type: string
+              format: date-time
+            estimatedReviewDate:
+              type: string
+              format: date-time
+            nextSteps:
+              type: array
+              items:
+                type: string
+              example:
+                - DTAM will review your application within 14 days
+                - You will receive email notification when review is complete
+                - If approved, you will need to pay ฿5,000 application fee
+
+    DocumentUploadResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Document uploaded successfully
+        data:
+          type: object
+          properties:
+            documentId:
+              type: string
+            type:
+              type: string
+            fileName:
+              type: string
+            fileSize:
+              type: integer
+            uploadedAt:
+              type: string
+              format: date-time
+            url:
+              type: string
+              format: uri
+
+    TimelineResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            applicationId:
+              type: string
+            applicationNumber:
+              type: string
+            currentState:
+              type: string
+            events:
+              type: array
+              items:
+                type: object
+                properties:
+                  eventType:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+                  description:
+                    type: string
+                  actor:
+                    type: object
+                    properties:
+                      userId:
+                        type: string
+                      userEmail:
+                        type: string
+                      userRole:
+                        type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 100
+        pages:
+          type: integer
+          example: 5
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            field:
+              type: string
+            details:
+              type: object
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

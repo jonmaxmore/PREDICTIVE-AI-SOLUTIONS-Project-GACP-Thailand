@@ -1,0 +1,722 @@
+﻿openapi: 3.0.3
+info:
+  title: GACP Certificate Service API
+  description: |
+    GACP digital certificate generation and management service.
+
+    **Features:**
+    - Auto-generate on APPROVED state
+    - PDF/A-1b format (ISO 19005-1)
+    - Digital signature (RSA-2048 + SHA-256)
+    - QR code verification
+    - 3-year validity period
+    - Revocation system
+    - Renewal workflow
+
+    **Certificate Lifecycle:**
+    1. APPROVED → Auto-generate certificate
+    2. ACTIVE → Certificate valid and usable
+    3. EXPIRING_SOON → 30 days before expiry (email sent)
+    4. EXPIRED → Past validity date
+    5. REVOKED → Manually revoked by DTAM
+
+    **Research Base:**
+    - ISO 19005-1 (PDF/A-1b) for long-term preservation
+    - ISO 18004 (QR Code) for verification
+    - RSA-2048 + SHA-256 (NIST recommended)
+    - X.509 digital certificate standard
+  version: 1.0.0
+  contact:
+    name: GACP Platform API Support
+    email: api-support@gacp.platform
+
+servers:
+  - url: https://api.gacp.platform/v1/certificates
+    description: Production server
+  - url: https://staging-api.gacp.platform/v1/certificates
+    description: Staging server
+  - url: http://localhost:3004/v1/certificates
+    description: Development server
+
+tags:
+  - name: Certificates
+    description: Certificate management
+  - name: Verification
+    description: Certificate verification
+  - name: Revocation
+    description: Certificate revocation (DTAM only)
+
+paths:
+  /certificates:
+    get:
+      tags:
+        - Certificates
+      summary: List certificates
+      description: |
+        Get list of certificates with filtering.
+
+        **Authorization:**
+        - Applicant: Can only see their own certificates
+        - DTAM/ADMIN: Can see all certificates
+
+        **Filters:**
+        - status: Filter by certificate status
+        - expiringWithin: Filter expiring certificates (days)
+      operationId: listCertificates
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, EXPIRING_SOON, EXPIRED, REVOKED]
+          description: Filter by status
+        - name: expiringWithin
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+          description: Filter certificates expiring within N days
+      responses:
+        '200':
+          description: Certificates retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags:
+        - Certificates
+      summary: Generate certificate (Auto)
+      description: |
+        Manually trigger certificate generation.
+
+        **Note:** Normally auto-triggered when application reaches APPROVED state.
+
+        **Requirements:**
+        - Application must be in APPROVED state
+        - All payments completed
+        - Inspection passed
+
+        **Authorization:** DTAM/ADMIN only
+      operationId: generateCertificate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateCertificateRequest'
+      responses:
+        '201':
+          description: Certificate generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateResponse'
+        '400':
+          description: Application not in APPROVED state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /certificates/{certificateId}:
+    get:
+      tags:
+        - Certificates
+      summary: Get certificate details
+      description: |
+        Get detailed certificate information.
+
+        **Authorization:** Certificate owner or DTAM/ADMIN
+      operationId: getCertificate
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: certificateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Certificate retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateDetailResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /certificates/{certificateId}/download:
+    get:
+      tags:
+        - Certificates
+      summary: Download certificate PDF
+      description: |
+        Download official GACP certificate in PDF/A-1b format.
+
+        **PDF Features:**
+        - Format: PDF/A-1b (ISO 19005-1)
+        - Size: A4 (210mm × 297mm)
+        - Language: Thai + English
+        - Digital signature: RSA-2048 + SHA-256
+        - QR code: Verification link
+        - Watermark: "VALID" or "REVOKED"
+        - Security: View-only, no editing
+
+        **Authorization:** Certificate owner or DTAM/ADMIN
+
+        **Public Access:** Anyone with valid certificate number can download
+      operationId: downloadCertificate
+      parameters:
+        - name: certificateId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: certificateNumber
+          in: query
+          schema:
+            type: string
+          description: Certificate number (alternative to auth)
+      responses:
+        '200':
+          description: Certificate PDF returned
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename="GACP-CERT-2025-001234.pdf"
+            Content-Type:
+              schema:
+                type: string
+                example: application/pdf
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /public/verify/{certificateNumber}:
+    servers:
+      - url: https://api.gacp.platform/v1
+        description: Public verify door lives at /api/v1/public/verify/{n}
+    get:
+      tags:
+        - Verification
+      summary: Verify certificate (Public)
+      description: |
+        Verify certificate authenticity and validity.
+
+        **Verification Checks:**
+        1. Certificate exists in database
+        2. Digital signature valid
+        3. Not expired
+        4. Not revoked
+        5. Issuer is DTAM
+
+        **Public Access:** No authentication required
+
+        **Use Cases:**
+        - Scan QR code on certificate
+        - Manual verification by certificate number
+        - Third-party verification (buyers, regulators)
+      operationId: verifyCertificate
+      parameters:
+        - name: certificateNumber
+          in: path
+          required: true
+          schema:
+            type: string
+            example: GACP-CERT-2025-001234
+      responses:
+        '200':
+          description: Certificate verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResponse'
+        '404':
+          description: Certificate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResponse'
+              examples:
+                notFound:
+                  value:
+                    success: false
+                    valid: false
+                    message: Certificate not found
+                    certificateNumber: GACP-CERT-2025-001234
+
+  /certificates/{certificateId}/qr:
+    get:
+      tags:
+        - Verification
+      summary: Get verification QR code
+      description: |
+        Get QR code for certificate verification.
+
+        **QR Code Specs:**
+        - Format: ISO 18004 (QR Code)
+        - Error Correction: Level H (30%)
+        - Content: Verification URL
+        - Size: 300x300 pixels
+        - Format: PNG with transparent background
+
+        **Authorization:** Certificate owner or DTAM/ADMIN
+      operationId: getVerificationQR
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: certificateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: QR code returned
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /certificates/{certificateId}/revoke:
+    post:
+      tags:
+        - Revocation
+      summary: Revoke certificate (DTAM only)
+      description: |
+        Revoke certificate and mark as invalid.
+
+        **Revocation Reasons:**
+        - FRAUD: Fraudulent application
+        - VIOLATION: GACP standards violation
+        - INSPECTION_FAILURE: Failed re-inspection
+        - REQUEST: User requested
+        - DUPLICATE: Duplicate certificate
+        - OTHER: Other reason
+
+        **Effects:**
+        - Certificate status → REVOKED
+        - Verification fails
+        - Watermark added to PDF
+        - Email sent to Applicant
+        - Revocation logged in audit
+
+        **Authorization:** DTAM/ADMIN only
+      operationId: revokeCertificate
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: certificateId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeCertificateRequest'
+      responses:
+        '200':
+          description: Certificate revoked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateResponse'
+        '400':
+          description: Certificate already revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /certificates/{certificateId}/renew:
+    post:
+      tags:
+        - Certificates
+      summary: Renew certificate
+      description: |
+        Start renewal process for expiring certificate.
+
+        **Renewal Window:**
+        - Opens: 90 days before expiry
+        - Closes: Certificate expiry date
+
+        **Process:**
+        1. User clicks "Renew" on expiring certificate
+        2. New application created (pre-filled)
+        3. User updates farm information
+        4. Submits renewal application
+        5. DTAM reviews (faster track)
+        6. New certificate issued
+
+        **Authorization:** Certificate owner only
+      operationId: renewCertificate
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: certificateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Renewal application created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Renewal application created successfully
+                  data:
+                    type: object
+                    properties:
+                      renewalApplicationId:
+                        type: string
+                      applicationNumber:
+                        type: string
+                      originalCertificateId:
+                        type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: Renewal not allowed (too early or expired)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    GenerateCertificateRequest:
+      type: object
+      required:
+        - applicationId
+      properties:
+        applicationId:
+          type: string
+          example: 6523f9876543210fedcba987
+
+    Certificate:
+      type: object
+      properties:
+        certificateId:
+          type: string
+          example: 6523f9876543210fedcba001
+        certificateNumber:
+          type: string
+          example: GACP-CERT-2025-001234
+        applicationId:
+          type: string
+          example: 6523f9876543210fedcba987
+        applicationNumber:
+          type: string
+          example: GACP-2025-A3B4C
+        userId:
+          type: string
+          example: 6523f9876543210fedcba000
+        ApplicantName:
+          type: string
+          example: สมชาย ใจดี
+        farmName:
+          type: string
+          example: ฟาร์มกัญชาใจดี
+        status:
+          type: string
+          enum: [ACTIVE, EXPIRING_SOON, EXPIRED, REVOKED]
+          example: ACTIVE
+        issuedAt:
+          type: string
+          format: date-time
+          example: '2025-10-16T10:00:00.000Z'
+        expiresAt:
+          type: string
+          format: date-time
+          example: '2028-10-16T10:00:00.000Z'
+        validityPeriod:
+          type: integer
+          description: Validity in years
+          example: 3
+        daysUntilExpiry:
+          type: integer
+          example: 1095
+        isValid:
+          type: boolean
+          example: true
+        verificationUrl:
+          type: string
+          format: uri
+          example: https://gacp.platform/verify/GACP-CERT-2025-001234
+        downloadUrl:
+          type: string
+          format: uri
+          example: https://api.gacp.platform/v1/certificates/6523f9876543210fedcba001/download
+
+    CertificateListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            certificates:
+              type: array
+              items:
+                $ref: '#/components/schemas/Certificate'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+
+    CertificateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/Certificate'
+
+    CertificateDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          allOf:
+            - $ref: '#/components/schemas/Certificate'
+            - type: object
+              properties:
+                application:
+                  type: object
+                  properties:
+                    farmAddress:
+                      type: string
+                    farmSize:
+                      type: number
+                    cultivationType:
+                      type: string
+                    cannabisVariety:
+                      type: string
+                digitalSignature:
+                  type: object
+                  properties:
+                    algorithm:
+                      type: string
+                      example: RSA-SHA256
+                    keySize:
+                      type: integer
+                      example: 2048
+                    signedAt:
+                      type: string
+                      format: date-time
+                    signedBy:
+                      type: string
+                      example: DTAM (Department of Thai Autonomous Medicine)
+                revocation:
+                  type: object
+                  nullable: true
+                  properties:
+                    revokedAt:
+                      type: string
+                      format: date-time
+                    revokedBy:
+                      type: string
+                    reason:
+                      type: string
+                    reasonText:
+                      type: string
+
+    VerificationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        valid:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Certificate is valid and authentic
+        data:
+          type: object
+          properties:
+            certificateNumber:
+              type: string
+              example: GACP-CERT-2025-001234
+            ApplicantName:
+              type: string
+              example: สมชาย ใจดี
+            farmName:
+              type: string
+              example: ฟาร์มกัญชาใจดี
+            issuedAt:
+              type: string
+              format: date-time
+            expiresAt:
+              type: string
+              format: date-time
+            status:
+              type: string
+              enum: [ACTIVE, EXPIRING_SOON, EXPIRED, REVOKED]
+            isValid:
+              type: boolean
+            checks:
+              type: object
+              properties:
+                exists:
+                  type: boolean
+                  example: true
+                signatureValid:
+                  type: boolean
+                  example: true
+                notExpired:
+                  type: boolean
+                  example: true
+                notRevoked:
+                  type: boolean
+                  example: true
+                issuerValid:
+                  type: boolean
+                  example: true
+
+    RevokeCertificateRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          enum:
+            - FRAUD
+            - VIOLATION
+            - INSPECTION_FAILURE
+            - REQUEST
+            - DUPLICATE
+            - OTHER
+          example: VIOLATION
+        reasonText:
+          type: string
+          description: Detailed reason (required if reason is OTHER)
+          example: Failed re-inspection due to pesticide residue
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 50
+        pages:
+          type: integer
+          example: 3
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            field:
+              type: string
+            details:
+              type: object
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

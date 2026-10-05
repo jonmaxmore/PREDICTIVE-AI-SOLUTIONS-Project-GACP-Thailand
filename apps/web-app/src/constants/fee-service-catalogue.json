@@ -1,0 +1,20 @@
+{
+  "PHASE_1": {
+    "name": "งวดที่ 1 ค่าบริการตรวจสอบเอกสาร",
+    "nameEn": "Instalment 1: document review service fee",
+    "coverage": "ครอบคลุม: รับและตรวจความครบถ้วน ความถูกต้องของเอกสารคำขอตามหลักเกณฑ์ GACP · ตรวจเบื้องต้นด้วยระบบ · แจ้งผลและรับเอกสารแก้ไข · จัดเก็บเอกสารอิเล็กทรอนิกส์ · ใช้งานระบบยื่นคำขอและติดตามสถานะออนไลน์",
+    "coverageEn": "Covers: receiving the application documents and checking them for completeness and correctness against the GACP criteria · automated preliminary check · notifying the result and receiving corrected documents · electronic document storage · use of the online application and status-tracking system"
+  },
+  "PHASE_2": {
+    "name": "งวดที่ 2 ค่าบริการตรวจประเมินแปลงและออกใบรับรอง",
+    "nameEn": "Instalment 2: site assessment and certificate issuance service fee",
+    "coverage": "ครอบคลุม: นัดหมายและตรวจประเมินแปลงปลูก ณ สถานที่จริง · บันทึกหลักฐานการตรวจ · ออกใบรับรองอิเล็กทรอนิกส์พร้อมลายมือชื่อดิจิทัลและ QR ตรวจสอบย้อนกลับ · ใช้งานระบบยื่นคำขอและติดตามสถานะออนไลน์",
+    "coverageEn": "Covers: scheduling and carrying out the on-site assessment of the cultivation site · recording the assessment evidence · issuing the electronic certificate with a digital signature and a traceability QR code · use of the online application and status-tracking system"
+  },
+  "RENEWAL": {
+    "name": "ค่าบริการต่ออายุใบรับรอง",
+    "nameEn": "Certificate renewal service fee",
+    "coverage": "ครอบคลุม: ตรวจประเมินเพื่อต่ออายุ · ออกใบรับรองฉบับใหม่พร้อมลายมือชื่อดิจิทัลและ QR · ใช้งานระบบยื่นคำขอและติดตามสถานะออนไลน์",
+    "coverageEn": "Covers: the renewal assessment · issuing the new certificate with a digital signature and QR code · use of the online application and status-tracking system"
+  }
+}

@@ -1,0 +1,207 @@
+# GACP Platform - Monitoring Stack
+# Production-grade monitoring with Prometheus, Grafana, and AlertManager
+
+services:
+  # ==========================================
+  # Prometheus - Metrics Collection
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: gacp-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=50GB'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - monitoring
+      - gacp-network
+
+  # ==========================================
+  # Grafana - Visualization
+  # ==========================================
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: gacp-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://monitoring.gacp-platform.th
+      # OPS ALERTING ONLY (see monitoring/alertmanager/alertmanager.yml): the
+      # platform itself sends no email or SMS. Provide SMTP_* in the environment
+      # that starts this monitoring stack.
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=${SMTP_HOST}
+      - GF_SMTP_USER=${SMTP_USER}
+      - GF_SMTP_PASSWORD=${SMTP_PASSWORD}
+      - GF_SMTP_FROM_ADDRESS=alerts@gacp-platform.th
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3200:3000"
+    networks:
+      - monitoring
+      - gacp-network
+    depends_on:
+      - prometheus
+
+  # ==========================================
+  # AlertManager - Alert Routing
+  # ==========================================
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: gacp-alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=https://alerts.gacp-platform.th'
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - monitoring
+
+  # ==========================================
+  # Node Exporter - Host Metrics
+  # ==========================================
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: gacp-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    ports:
+      - "127.0.0.1:9100:9100"
+    networks:
+      - monitoring
+
+  # ==========================================
+  # PostgreSQL Exporter
+  # ==========================================
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: gacp-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: ${DATABASE_URL}
+    ports:
+      - "127.0.0.1:9187:9187"
+    networks:
+      - monitoring
+      - gacp-network
+
+  # ==========================================
+  # Redis Exporter
+  # ==========================================
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: gacp-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    ports:
+      - "127.0.0.1:9121:9121"
+    networks:
+      - monitoring
+      - gacp-network
+
+  # ==========================================
+  # Nginx Exporter
+  # ==========================================
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.0
+    container_name: gacp-nginx-exporter
+    restart: unless-stopped
+    command:
+      - '-nginx.scrape-uri=http://nginx:80/stub_status'
+    ports:
+      - "127.0.0.1:9113:9113"
+    networks:
+      - monitoring
+      - gacp-network
+
+  # ==========================================
+  # Loki - Log Aggregation
+  # ==========================================
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: gacp-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - monitoring
+
+  # ==========================================
+  # Promtail - Log Shipper
+  # ==========================================
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: gacp-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - monitoring
+
+  # ==========================================
+  # Jaeger - Distributed Tracing
+  # ==========================================
+  jaeger:
+    image: jaegertracing/all-in-one:1.50
+    container_name: gacp-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:16686:16686"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+  gacp-network:
+    external: true
+    name: gacp-network
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  alertmanager-data:
+  loki-data:

@@ -1,0 +1,104 @@
+name: mobile_app
+description: A new Flutter project for GACP Unified Frontend.
+publish_to: 'none'
+version: 3.8.0+1
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # lib/main.dart imports url_strategy from here. It ships with the SDK, so
+  # the import resolved without being declared — which the analyzer flags,
+  # because an undeclared dependency is one the pub solver never checks.
+  flutter_web_plugins:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+  
+  # Navigation
+  go_router: ^13.1.0
+  
+  # Network
+  dio: ^5.4.0
+  dartz: ^0.10.1
+  flutter_secure_storage: ^9.0.0
+  connectivity_plus: ^5.0.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  
+  # Offline Storage
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  
+  # UI Components
+  # google_fonts removed 2026-07-25 (PDPA data sovereignty): the package
+  # downloaded Sarabun from fonts.gstatic.com on first use, which fired a
+  # request carrying the device IP + UA to a US host from the login and
+  # registration screens. Sarabun is now bundled — see the `fonts:` block at
+  # the bottom of this file and assets/fonts/README.md.
+  fl_chart: ^0.69.0
+  
+  # Media & Location
+  image_picker: ^1.0.7
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+  geolocator: ^11.0.0
+  mobile_scanner: ^5.1.1
+  
+  # Utilities
+  json_annotation: ^4.9.0
+  freezed_annotation: ^2.4.4
+  equatable: ^2.0.5
+  fpdart: ^1.2.0
+  url_launcher: ^6.2.4
+  file_picker: ^8.1.1
+  pdf: ^3.10.4
+  printing: ^5.11.0
+  intl: ^0.18.1
+  widgetbook: ^3.20.2
+  widgetbook_annotation: ^3.9.0
+
+  cross_file: any
+  shared_preferences: ^2.5.4
+  lucide_icons_flutter: ^3.1.15
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.5.4
+  riverpod_generator: ^2.3.3
+  json_serializable: ^6.9.5
+  freezed: ^2.5.8
+  widgetbook_generator: ^3.14.0
+  integration_test:
+    sdk: flutter
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
+
+  # Sarabun is bundled, never downloaded. Files under assets/fonts/ are listed
+  # here only — a `fonts:` entry already bundles the file, so they must NOT also
+  # be repeated under `assets:` or they ship twice.
+  # See assets/fonts/README.md for provenance and licence (SIL OFL-1.1).
+  fonts:
+    - family: Sarabun
+      fonts:
+        - asset: assets/fonts/Sarabun-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Sarabun-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Sarabun-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Sarabun-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Sarabun-ExtraBold.ttf
+          weight: 800
+
+  # Assets (for future use with images)
+  # assets:
+  #   - assets/images/

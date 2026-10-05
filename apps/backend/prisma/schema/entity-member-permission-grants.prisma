@@ -1,0 +1,50 @@
+// Domain: per-member farm-operation permission GRANT / REVOKE overrides
+// (Farm-worker Wave B — "เจ้าของปรับ permission รายคน-รายการกระทำ"). ENGINE model.
+//
+// Mirrors the Wave-2 provider-side UserPermissionGrant
+// (user-permission-grants.prisma) but keyed by EntityMembership: the subject
+// of a grant is "this member of this workspace", not a platform user. The
+// single source of a member's authority is their EntityMembership role's
+// baseline (DEFAULT_PERMISSIONS_BY_ROLE in services/entity-service.js) plus
+// the legacy EntityMembership.permissions[] array; this table is the
+// ADDITIVE override layer on top:
+//
+//   effective(member) = DEFAULT_PERMISSIONS_BY_ROLE[role]
+//                       ∪ legacy membership.permissions[]
+//                       ∪ {GRANT rows} − {REVOKE rows}   (REVOKE wins)
+//
+// Rows are read LIVE per request by
+// services/entity-effective-permissions-service.js (NOT baked into any
+// token), so an OWNER's grant/revoke takes effect on the member's very next
+// request.
+//
+// One row per (membership, permission): the effect column decides whether
+// that permission is added or removed. Same template as UserPermissionGrant:
+// composite PK, an organizationId mirrored from the membership for RLS
+// observe-only + tenant scoping, FK to entity_memberships ON DELETE CASCADE
+// (grants die with the membership row) and FK to organizations ON DELETE
+// RESTRICT.
+
+model EntityMemberPermissionGrant {
+  membershipId String
+  membership   EntityMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  permission   String // one of the farm-operation CAPABILITIES values (e.g. 'HARVEST_RECORD')
+  effect       String // 'GRANT' | 'REVOKE'
+  reason       String?
+  // User.id UUID of the OWNER who wrote the grant — NEVER a national ID
+  // (scalar-audit rule: stamp req.user.id at the source).
+  grantedBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Mirrored from EntityMembership.organizationId (RLS observe-only + tenant
+  // scoping), like UserPermissionGrant.organizationId. Application code keeps
+  // it in sync; the membership row is the source of truth.
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([membershipId, permission])
+  @@index([membershipId])
+  @@index([organizationId])
+  @@map("entity_member_permission_grants")
+}

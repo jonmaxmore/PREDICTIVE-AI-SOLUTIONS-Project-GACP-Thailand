@@ -1,0 +1,36 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "@backend/*": [
+                "backend/core-api/src/*"
+            ],
+            "@ui/*": [
+                "packages/ui-assets/*"
+            ],
+            "@config/*": [
+                "packages/config/*"
+            ],
+            "@shared/*": [
+                "packages/shared/*"
+            ]
+        },
+        "target": "ES2022",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "strict": true,
+        "resolveJsonModule": true,
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "outDir": "dist"
+    },
+    "exclude": [
+        "node_modules",
+        "dist",
+        "_legacy_backup",
+        "**/*.test.ts"
+    ]
+}

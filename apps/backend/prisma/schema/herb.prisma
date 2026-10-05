@@ -1,0 +1,66 @@
+// HERB KNOWLEDGE DB — สัญญา C05F680149 ต้นแบบที่ 5
+// "ฐานข้อมูลสมุนไพรไทย 6 ฐานข้อมูล" (กัญชา หลัก + ขมิ้นชัน/ขิง/กระชายดำ/ไพล/กระท่อม)
+// KPI: แต่ละฐาน ≥ 300 รายการ + API.
+//
+// Global REFERENCE master data (เหมือน PlantSpecies / CertificationStandard):
+// ไม่มี organizationId, ไม่อยู่ใน TENANT_SCOPED_MODELS — องค์ความรู้สมุนไพรใช้
+// ร่วมกันทุก tenant, เสิร์ฟผ่าน public read API. เขียนได้เฉพาะ ADMIN.
+//
+//   HerbSpecies        = 6 แถวหลัก (หนึ่งฐานต่อสมุนไพรหนึ่งชนิด)
+//   HerbKnowledgeEntry  = รายการองค์ความรู้ (≥300/ฐาน countable ต่อ herbCode)
+
+model HerbSpecies {
+  id        String   @id @default(uuid())
+  uuid      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Identity — code ล็อกตามสัญญา
+  code           String  @unique // CANNABIS | TURMERIC | GINGER | BLACK_GALINGALE | PLAI | KRATOM
+  nameTH         String
+  nameEN         String?
+  scientificName String?
+  familyName     String?
+
+  // Classification
+  isPrimary    Boolean @default(false) // กัญชา = สมุนไพรหลัก
+  isControlled Boolean @default(false) // มีกรอบกฎหมายควบคุม (กัญชา, กระท่อม)
+  description  String? @db.Text
+  imageUrl     String?
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  entries HerbKnowledgeEntry[]
+
+  @@index([isActive])
+  @@map("herb_species")
+}
+
+model HerbKnowledgeEntry {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // FK to HerbSpecies.code (unique) — scalar FK write path (no nested connect)
+  herbCode String
+  species  HerbSpecies @relation(fields: [herbCode], references: [code], onDelete: Cascade, onUpdate: Cascade)
+
+  // Knowledge category (หนึ่งรายการ = หนึ่ง record ที่นับเข้า KPI ≥300)
+  category String // VARIETY | ACTIVE_COMPOUND | CULTIVATION | HARVEST | PROCESSING | DISEASE | LEGAL | GENERAL
+  title    String
+  content  String @db.Text
+
+  // Optional quantitative datum (เช่น ปริมาณ CBD/THC/Curcumin)
+  valueNumber Float?
+  unit        String?
+  source      String? // แหล่งอ้างอิง/งานวิจัย
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  @@index([herbCode])
+  @@index([category])
+  @@index([herbCode, category])
+  @@map("herb_knowledge_entries")
+}

@@ -1,0 +1,513 @@
+{
+    "info": {
+        "name": "GACP Platform API",
+        "description": "GACP Certification Platform API Collection - All endpoints testable",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3000"
+        }
+    ],
+    "item": [
+        {
+            "name": "Health",
+            "item": [
+                {
+                    "name": "V2 Health Check",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/health"
+                    }
+                },
+                {
+                    "name": "V2 Version",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/version"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Config - Document Slots",
+            "item": [
+                {
+                    "name": "Get All Document Slots",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/config/document-slots"
+                    }
+                },
+                {
+                    "name": "Get Required Documents (Cannabis, Individual)",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v2/config/document-slots/required?plantType=cannabis&applicantType=INDIVIDUAL",
+                            "query": [
+                                {
+                                    "key": "plantType",
+                                    "value": "cannabis"
+                                },
+                                {
+                                    "key": "applicantType",
+                                    "value": "INDIVIDUAL"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Required Documents (Cannabis, Juristic, Processing)",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v2/config/document-slots/required?plantType=cannabis&applicantType=JURISTIC&objectives=PROCESSING",
+                            "query": [
+                                {
+                                    "key": "plantType",
+                                    "value": "cannabis"
+                                },
+                                {
+                                    "key": "applicantType",
+                                    "value": "JURISTIC"
+                                },
+                                {
+                                    "key": "objectives",
+                                    "value": "PROCESSING"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Objective Warnings",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v2/config/document-slots/warnings?objectives=PROCESSING,EXPORT",
+                            "query": [
+                                {
+                                    "key": "objectives",
+                                    "value": "PROCESSING,EXPORT"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Validate Document Completion",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v2/config/document-slots/validate",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"objectives\": [\"PROCESSING\"],\n  \"uploadedSlots\": [\"license_bt11\", \"land_deed\"]\n}"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Config - Form Templates",
+            "item": [
+                {
+                    "name": "Get All Templates (Metadata)",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/config/templates"
+                    }
+                },
+                {
+                    "name": "Get Pre-Cultivation Template",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/config/templates/pre_cultivation_assessment"
+                    }
+                },
+                {
+                    "name": "Get Cultivation Practices Template",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/config/templates/cultivation_practices"
+                    }
+                },
+                {
+                    "name": "Get Pre-Cultivation Questions Only",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/config/templates/pre_cultivation_assessment/questions"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Config - Standards",
+            "item": [
+                {
+                    "name": "Get All Standards",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/config/standards"
+                    }
+                },
+                {
+                    "name": "Get Thai GACP Standard",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/config/standards/thai"
+                    }
+                },
+                {
+                    "name": "Get WHO GAP Standard",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/config/standards/who"
+                    }
+                },
+                {
+                    "name": "Get EU Organic Standard",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/config/standards/eu"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Config - Pricing",
+            "item": [
+                {
+                    "name": "Get Pricing Info",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/config/pricing"
+                    }
+                },
+                {
+                    "name": "Calculate Cost (1 Area Type)",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v2/config/pricing/calculate?areaTypes=OUTDOOR",
+                            "query": [
+                                {
+                                    "key": "areaTypes",
+                                    "value": "OUTDOOR"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Calculate Cost (2 Area Types + Processing)",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v2/config/pricing/calculate?areaTypes=OUTDOOR,INDOOR&hasProcessing=true",
+                            "query": [
+                                {
+                                    "key": "areaTypes",
+                                    "value": "OUTDOOR,INDOOR"
+                                },
+                                {
+                                    "key": "hasProcessing",
+                                    "value": "true"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Calculate Cost (Full - Processing + Export)",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v2/config/pricing/calculate?areaTypes=OUTDOOR,INDOOR,GREENHOUSE&hasProcessing=true&hasExport=true",
+                            "query": [
+                                {
+                                    "key": "areaTypes",
+                                    "value": "OUTDOOR,INDOOR,GREENHOUSE"
+                                },
+                                {
+                                    "key": "hasProcessing",
+                                    "value": "true"
+                                },
+                                {
+                                    "key": "hasExport",
+                                    "value": "true"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Plants",
+            "item": [
+                {
+                    "name": "Get All Plants",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/plants"
+                    }
+                },
+                {
+                    "name": "Get Plants by Category",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v2/plants?category=MEDICINAL",
+                            "query": [
+                                {
+                                    "key": "category",
+                                    "value": "MEDICINAL"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Plant by ID",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/plants/:id"
+                    }
+                },
+                {
+                    "name": "Create Plant",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v2/plants",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"thaiName\": \"ขมิ้นชัน\",\n  \"scientificName\": \"Curcuma longa L.\",\n  \"englishName\": \"Turmeric\",\n  \"gacpCategory\": \"MEDICINAL\",\n  \"cultivationType\": \"SELF_GROWN\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Update Plant",
+                    "request": {
+                        "method": "PUT",
+                        "url": "{{base_url}}/api/v2/plants/:id",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"description\": \"Updated description\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Plant",
+                    "request": {
+                        "method": "DELETE",
+                        "url": "{{base_url}}/api/v2/plants/:id"
+                    }
+                },
+                {
+                    "name": "Get Plant Categories",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/plants/categories/list"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Harvest Batches (Lots)",
+            "item": [
+                {
+                    "name": "Get All Batches",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/harvest-batches"
+                    }
+                },
+                {
+                    "name": "Get Batches by Farm",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v2/harvest-batches?farmId=xxx",
+                            "query": [
+                                {
+                                    "key": "farmId",
+                                    "value": "xxx"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Batch by ID",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/harvest-batches/:id"
+                    }
+                },
+                {
+                    "name": "Get Batch by Lot Number (Traceability)",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/harvest-batches/lot/LOT-XXXXXXXX-2025-001"
+                    }
+                },
+                {
+                    "name": "Create Batch",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v2/harvest-batches",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"farmId\": \"farm-uuid-here\",\n  \"speciesId\": \"species-uuid-here\",\n  \"plantingDate\": \"2025-01-15\",\n  \"cultivationType\": \"SELF_GROWN\",\n  \"plotName\": \"แปลง A1\",\n  \"plotArea\": 2.5,\n  \"areaUnit\": \"rai\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Update Batch",
+                    "request": {
+                        "method": "PUT",
+                        "url": "{{base_url}}/api/v2/harvest-batches/:id",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"notes\": \"Updated notes\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Record Harvest",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v2/harvest-batches/:id/harvest",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"harvestDate\": \"2025-04-20\",\n  \"actualYield\": 150.5,\n  \"yieldUnit\": \"kg\",\n  \"qualityGrade\": \"A\"\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Farm Statistics",
+                    "request": {
+                        "method": "GET",
+                        "url": "{{base_url}}/api/v2/harvest-batches/stats/:farmId"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Validation (Pre-submission)",
+            "item": [
+                {
+                    "name": "Get Checklist Template",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v2/validation/checklist?plantType=cannabis&applicantType=INDIVIDUAL",
+                            "query": [
+                                {
+                                    "key": "plantType",
+                                    "value": "cannabis"
+                                },
+                                {
+                                    "key": "applicantType",
+                                    "value": "INDIVIDUAL"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Checklist (Juristic Person)",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{base_url}}/api/v2/validation/checklist?plantType=cannabis&applicantType=JURISTIC",
+                            "query": [
+                                {
+                                    "key": "plantType",
+                                    "value": "cannabis"
+                                },
+                                {
+                                    "key": "applicantType",
+                                    "value": "JURISTIC"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Validate Pre-submission (Full Check)",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v2/validation/pre-submission",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"plantType\": \"cannabis\",\n  \"applicantType\": \"INDIVIDUAL\",\n  \"objectives\": [\"PROCESSING\"],\n  \"landOwnership\": \"owned\",\n  \"applicationType\": \"NEW\",\n  \"uploadedDocuments\": [\n    \"id_card\",\n    \"house_reg\",\n    \"criminal_bg\",\n    \"land_deed\",\n    \"license_bt11\",\n    \"photos_exterior\",\n    \"photos_signage\"\n  ]\n}"
+                        }
+                    }
+                },
+                {
+                    "name": "Validate Pre-submission (Empty)",
+                    "request": {
+                        "method": "POST",
+                        "url": "{{base_url}}/api/v2/validation/pre-submission",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"plantType\": \"cannabis\",\n  \"applicantType\": \"INDIVIDUAL\",\n  \"objectives\": [],\n  \"landOwnership\": \"owned\",\n  \"applicationType\": \"NEW\",\n  \"uploadedDocuments\": []\n}"
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

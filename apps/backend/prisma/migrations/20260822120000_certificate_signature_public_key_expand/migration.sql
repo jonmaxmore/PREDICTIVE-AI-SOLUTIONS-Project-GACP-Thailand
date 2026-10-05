@@ -1,0 +1,32 @@
+-- RULING 2 (2026-08-22) — pin the verifying public key onto the certificate row.
+--
+-- EXPAND ONLY (the project rules guidance §4). One nullable column is added. Nothing is
+-- renamed, dropped, re-typed, or rewritten; no existing row is modified by this
+-- file. `IF NOT EXISTS` makes it safe to run twice, and safe on a database where
+-- the column was created out of band.
+--
+-- WHY
+-- ---
+-- `certificates` already carried signature / signatureAlgorithm / signatureKeyId
+-- but not the key that verifies them, so verification used whichever key the
+-- machine happened to hold at verify time. Rotate the key, rebuild the
+-- container, or move to the ministry's hardware and every certificate issued
+-- before the move reads as forged. With the key on the row, a certificate
+-- carries its own proof.
+--
+-- BACKFILL
+-- --------
+-- Deliberately NOT done here. SQL cannot read the PEM off the key mount, and a
+-- blind `UPDATE ... SET signaturePublicKey = <current key>` would assert
+-- something this migration cannot check: that the current key is the one that
+-- actually signed each old row. The backfill lives in
+-- `apps/backend/scripts/backfill-certificate-signature-public-key.js`, which
+-- verifies each signature against the candidate key BEFORE pinning it and
+-- reports any row it cannot prove instead of writing to it.
+--
+-- On the demo database at the time of writing this backfill is a no-op: a
+-- read-only query on 2026-08-22 returned 3 certificates, `signature IS NULL` on
+-- all three, and no `signatureKeyId` set on any of them. There is no row whose
+-- signature could be invalidated by getting this wrong.
+
+ALTER TABLE "certificates" ADD COLUMN IF NOT EXISTS "signaturePublicKey" TEXT;

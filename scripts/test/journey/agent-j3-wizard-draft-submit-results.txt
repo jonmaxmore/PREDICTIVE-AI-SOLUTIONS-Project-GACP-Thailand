@@ -1,0 +1,14 @@
+Agent J3 — Wizard Draft & Submit Results
+Date: 2026-03-16T12:47:38.994Z
+Pass: 10 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Login as health user | Token acquired
+PASS | Get document slot config | status: 200
+PASS | Get GACP standards | status: 200
+PASS | Get applications config | status: 200
+PASS | Save wizard draft | id: 25618a53-e8c4-4536-b525-617318f3c16b
+PASS | Update wizard draft | step 2 saved
+PASS | List my applications | status: 200
+PASS | Pre-submission validation | status: 200
+PASS | Get pricing fees | status: 200
+PASS | Calculate application fees | status: 200

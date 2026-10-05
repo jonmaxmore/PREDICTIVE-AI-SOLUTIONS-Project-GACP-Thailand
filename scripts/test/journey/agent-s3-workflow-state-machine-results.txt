@@ -1,0 +1,16 @@
+Agent S3 — Workflow State Machine Results
+Date: 2026-03-16T12:48:56.053Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Login for workflow test | Token acquired
+PASS | Create wizard draft | id: 25618a53-e8c4-4536-b525-617318f3c16b
+PASS | Update draft to step 2 | status: 200
+PASS | My applications accessible | status: 200
+PASS | Pre-submission validation | status: 200
+PASS | Document slots config | status: 200
+PASS | Pricing idempotent | Same input = same output
+PASS | Standards consistent | Two calls match
+PASS | Step 5 requirements | status: 200
+PASS | GACP categories | status: 200
+PASS | Full cultivation config | status: 200
+PASS | Dashboard stats | status: 200

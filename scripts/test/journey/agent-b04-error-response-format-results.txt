@@ -1,0 +1,16 @@
+Agent B04 — Error Response Format Results
+Date: 2026-03-13T13:17:14.662Z
+Pass: 11 | Fail: 1 | Skip: 0 | Rate: 91.7%
+
+PASS | 400 empty login | status: 400
+FAIL | 400 empty register | status: 503
+PASS | 401 no token | status: 401
+PASS | 401 bad token | status: 401
+PASS | 404 unknown | status: 404
+PASS | Pre-submit valid | status: 200
+PASS | Health OK | status: 200
+PASS | Version OK | status: 200
+PASS | Standards OK | status: 200
+PASS | Plants OK | status: 200
+PASS | Pricing OK | status: 200
+PASS | Master data OK | status: 200

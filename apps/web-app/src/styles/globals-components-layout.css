@@ -1,0 +1,365 @@
+.surface-card {
+  @apply rounded-3xl bg-card text-card-foreground;
+  box-shadow: var(--shadow-md);
+}
+
+.surface-panel {
+  @apply rounded-2xl bg-card text-card-foreground;
+  box-shadow: var(--shadow-sm);
+}
+
+.hero-panel {
+  background: linear-gradient(135deg, hsl(var(--hero-start)), hsl(var(--hero-end)));
+  /* --hero-shadow is a space-separated RGB triple; rgba(<triple>, a) mixes
+     space and comma grammar and is invalid (the shadow silently drops).
+     Modern slash syntax accepts the triple directly. */
+  box-shadow: 0 18px 34px -24px rgb(var(--hero-shadow) / 0.5);
+  @apply rounded-3xl text-primary-foreground;
+}
+
+.status-chip {
+  @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset;
+}
+
+.text-subtle {
+  @apply text-sm text-muted-foreground;
+}
+
+.cluster-block {
+  @apply rounded-3xl bg-card p-5 shadow-md sm:p-6;
+}
+
+.cluster-list {
+  @apply space-y-2.5;
+}
+
+.group-item {
+  @apply rounded-2xl bg-muted/50 px-4 py-3;
+}
+
+.group-item-hover {
+  @apply transition hover:bg-muted/55;
+}
+
+.contrast-panel {
+  @apply rounded-2xl bg-[hsl(var(--field-muted-surface))] px-4 py-3 text-foreground shadow-sm;
+}
+
+.metric-cell {
+  @apply rounded-2xl bg-card px-4 py-4 shadow-sm sm:px-5;
+}
+
+.action-tile {
+  @apply rounded-2xl bg-card px-4 py-3 shadow-sm transition hover:-translate-y-[1px] hover:shadow-md;
+}
+
+.activity-row {
+  @apply rounded-2xl bg-muted/50 px-4 py-3;
+}
+
+.field-block {
+  @apply space-y-1.5;
+}
+
+.field-label {
+  @apply flex items-center gap-2 text-sm font-semibold text-foreground;
+}
+
+.field-required {
+  @apply inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700;
+}
+
+.field-optional {
+  @apply inline-flex rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground;
+}
+
+.field-help {
+  @apply text-xs leading-relaxed text-muted-foreground;
+}
+
+.field-error {
+  @apply text-xs font-semibold leading-relaxed text-destructive;
+}
+
+.field-disabled {
+  @apply opacity-60;
+}
+
+.field-surface {
+  @apply rounded-2xl bg-[hsl(var(--field-surface))] border border-input shadow-sm;
+}
+
+.field-surface-strong {
+  @apply rounded-2xl bg-[hsl(var(--field-surface))] border-2 border-input shadow-md;
+}
+
+.form-panel {
+  @apply rounded-3xl bg-card p-5 shadow-md sm:p-6;
+}
+
+.form-block {
+  @apply rounded-3xl bg-[hsl(var(--field-muted-surface))] p-4 border border-input shadow-sm sm:p-5;
+}
+
+.shell-surface {
+  @apply rounded-3xl bg-card text-card-foreground shadow-sm;
+}
+
+.shell-nav-item {
+  @apply flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold text-muted-foreground no-underline transition hover:bg-muted/60 hover:text-foreground;
+}
+
+.shell-nav-item-active {
+  @apply bg-accent text-accent-foreground;
+}
+
+/* Sits on every input, select and textarea via the ui/primitives.
+   Two defects lived here until 2026-09-07:
+   1. `background: #fff !important` did not flip with the theme, so the typed
+      national ID rendered rgb(242,242,242) on rgb(255,255,255) = 1.12:1 — a
+      farmer typed thirteen digits blind (evidence/apple-qa-audit-2026-09-07).
+   2. `padding` here outranked nothing, but the `!important` neighbours taught
+      callers that this rule wins: filter-bar.tsx asks for `pl-10` (40px) and
+      the browser used the 1rem below, so the search icon overlapped the
+      placeholder. Padding is now a plain declaration a utility can beat. */
+.field-emphasis {
+  border-radius: 0.75rem !important;
+  background: var(--field-emphasis-bg) !important;
+  /* Padding deliberately NOT set here. This stylesheet is imported after
+     @tailwind utilities, so a padding declared here beats every utility even
+     without !important — which is why filter-bar.tsx asked for pl-10 (40px) and
+     the browser used 16px, putting the search icon on top of the placeholder.
+     The default padding now lives on the primitives as `px-4 py-2.5`, where
+     tailwind-merge can arbitrate it against a caller's pl-10. */
+  font-size: 0.875rem;
+  color: var(--field-emphasis-fg);
+  border: 1px solid var(--field-emphasis-border) !important;
+  transition: all 200ms ease;
+}
+
+.field-emphasis::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.field-emphasis:focus,
+.field-emphasis:focus-within {
+  background: var(--field-emphasis-bg) !important;
+  border-color: hsl(153 60% 40%) !important;
+  box-shadow: 0 0 0 3px hsla(153, 60%, 40%, 0.12) !important;
+}
+
+
+
+.flow-stack-sm {
+  @apply space-y-2;
+}
+
+.flow-stack-md {
+  @apply space-y-3;
+}
+
+.flow-stack-lg {
+  @apply space-y-5;
+}
+
+.ds-page {
+  @apply space-y-5;
+}
+
+/* Full-width (2026-06-10): owner directive — in-shell pages fill the screen on PC.
+   Dropped the max-w-6xl (1152px) cap + mx-auto centering; keeps its own px so it is
+   safe standalone, and DashboardLayout's <main> adds the outer gutter. */
+.ds-container {
+  @apply w-full px-4 sm:px-6;
+}
+
+.ds-breadcrumb {
+  @apply flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground;
+}
+
+.ds-page-header {
+  @apply shell-surface flex flex-wrap items-start justify-between gap-4 px-5 py-4 sm:px-6;
+}
+
+.ds-page-header-title {
+  @apply text-xl font-semibold tracking-tight text-foreground sm:text-2xl;
+}
+
+.ds-page-header-subtitle {
+  @apply mt-1 text-sm text-muted-foreground;
+}
+
+.ds-action-bar {
+  @apply shell-surface flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5;
+}
+
+.ds-section {
+  @apply form-panel space-y-4;
+}
+
+.ds-section-header {
+  @apply flex flex-wrap items-start justify-between gap-3;
+}
+
+.ds-section-title {
+  @apply text-base font-semibold text-foreground;
+}
+
+.ds-section-description {
+  @apply mt-1 text-sm text-muted-foreground;
+}
+
+.ds-grid-2 {
+  @apply grid gap-4 md:grid-cols-2;
+}
+
+.ds-grid-3 {
+  @apply grid gap-4 lg:grid-cols-3;
+}
+
+.prose-gov {
+  @apply max-w-none text-sm leading-7 text-foreground;
+}
+
+.prose-gov h1,
+.prose-gov h2,
+.prose-gov h3 {
+  font-family: var(--font-display);
+  @apply text-foreground;
+}
+
+.prose-gov h1 {
+  @apply mb-4 text-2xl font-semibold tracking-tight;
+}
+
+.prose-gov h2 {
+  @apply mb-3 mt-8 text-xl font-semibold tracking-tight;
+}
+
+.prose-gov h3 {
+  @apply mb-2 mt-6 text-lg font-semibold;
+}
+
+.prose-gov p {
+  @apply my-2 text-sm leading-7 text-foreground;
+}
+
+.prose-gov ul,
+.prose-gov ol {
+  @apply my-3 space-y-1.5 pl-5;
+}
+
+.prose-gov li {
+  @apply leading-7 text-foreground;
+}
+
+.prose-gov table {
+  @apply my-4 w-full border-collapse overflow-hidden rounded-2xl text-sm;
+}
+
+.prose-gov thead {
+  @apply bg-muted/65 text-left text-foreground;
+}
+
+.prose-gov th,
+.prose-gov td {
+  @apply border-b border-border px-3 py-2 align-top;
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOP NAVBAR — Green header bar matching reference design
+   ═══════════════════════════════════════════════════════ */
+.gov-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 3.5rem;
+  background: linear-gradient(135deg, hsl(153 100% 20%) 0%, hsl(153 60% 28%) 100%);
+  box-shadow: 0 2px 12px -2px rgba(0, 80, 40, 0.25);
+}
+
+@media (min-width: 1024px) {
+  .gov-topbar {
+    height: 3.5rem;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE BOTTOM TAB BAR — Fixed bottom, thumb-reachable  
+   ═══════════════════════════════════════════════════════ */
+.gov-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  height: 4rem;
+  border-top: 1px solid hsl(140 15% 88%);
+  background: white;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.dark .gov-bottom-nav {
+  background: hsl(220 13% 12%);
+  border-top-color: hsl(220 13% 20%);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Hide on desktop */
+@media (min-width: 1024px) {
+  .gov-bottom-nav {
+    display: none;
+  }
+}
+
+.gov-bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  /* 45% measured 4.37:1 on white — just under AA, on all 31 logged-in routes
+     (evidence/apple-qa-audit-2026-09-07). 42% is 4.88:1 and still clearly
+     subordinate to the active item's 7.1:1. */
+  color: hsl(150 10% 42%);
+  text-decoration: none;
+  transition: color 0.2s, background-color 0.2s;
+  padding: 0.5rem 0;
+  min-height: 44px;
+}
+
+.dark .gov-bottom-nav-item {
+  color: hsl(150 10% 60%);
+}
+
+.gov-bottom-nav-item:hover {
+  color: hsl(153 100% 20%);
+}
+
+.dark .gov-bottom-nav-item:hover {
+  color: hsl(153 70% 55%);
+}
+
+.gov-bottom-nav-item--active {
+  color: hsl(153 100% 20%);
+  font-weight: 600;
+}
+
+.dark .gov-bottom-nav-item--active {
+  color: hsl(153 70% 55%);
+}
+
+.gov-bottom-nav-item--active svg {
+  color: hsl(153 100% 20%);
+}
+
+.dark .gov-bottom-nav-item--active svg {
+  color: hsl(153 70% 55%);
+}

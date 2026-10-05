@@ -1,0 +1,598 @@
+# ============================================================
+# GACP Platform - Production Docker Compose
+# ============================================================
+# Usage:
+#   docker compose --env-file .env.production -f docker-compose.production.yml up -d
+#
+# Prerequisites:
+#   - Copy .env.production.example to .env.production
+#   - Generate SSL certificates in nginx/ssl/
+#   - Use --env-file .env.production (Compose does not auto-load .env.production)
+# ============================================================
+
+# ------------------------------------------------------------
+# Default container log policy (P0-4 in 2026-04-28 audit).
+# Without these caps the default json-file driver is unbounded —
+# on a 4GB droplet with Promtail tailing every container, /var/lib/docker
+# would fill over weeks. 20MB × 5 rolled files × ~12 services ≈ 1.2GB
+# worst case, with compression bringing the realistic ceiling well below
+# that. The companion daemon.json change (default driver across the
+# host) is documented in docs/operations/runbooks/docker-log-caps.md.
+# ------------------------------------------------------------
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
+services:
+  # ------------------------------------------------------------
+  # 1. NGINX GATEWAY (The Fortress)
+  # ------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: gacp-nginx
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+    ports:
+      - "127.0.0.1:8080:80"   # Internal only — Host Nginx handles public :80/:443
+    volumes:
+      - ./nginx/gacp.production.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/50x.html:/etc/nginx/error-pages/50x.html:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - gacp-network
+    healthcheck:
+      test: [ "CMD", "nginx", "-t" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ------------------------------------------------------------
+  # 2. BACKEND API (Node.js)
+  # ------------------------------------------------------------
+  # Image-based deploy: pull a specific tag from GHCR. The build-images
+  # workflow tags `:deploy/production-latest` on every push to that branch,
+  # and `:sha-<sha>` for pinned rollback. The deploy script picks a tag via
+  # the IMAGE_TAG env (defaults to deploy/production-latest).
+  #
+  # Local development still uses `build:` via docker-compose.yml override.
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/jonmaxmore/gacp-backend}:${IMAGE_TAG:-deploy-production-latest}
+    container_name: gacp-backend
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    environment:
+      - NODE_ENV=production
+      - PORT=8000
+      # Supabase is the primary database (operator ruling 2026-08-23). The URL is
+      # supplied whole by the deploy .env — this file no longer assembles a URL
+      # pointing at an in-stack postgres, so the server holds no database of its own.
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL_required}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-gacp_redis_2026}@redis:6379
+      - HEALTH_JWT_SECRET=${HEALTH_JWT_SECRET:?HEALTH_JWT_SECRET_required}
+      - PROVIDER_JWT_SECRET=${PROVIDER_JWT_SECRET:?PROVIDER_JWT_SECRET_required}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY_required}
+      - HMAC_KEY=${HMAC_KEY:-}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:-}
+      - SESSION_SECRET=${SESSION_SECRET:-}
+      # Error tracking (Sentry) — re-added 2026-10-02 by operator decision, with
+      # PII scrubbing (apps/backend/config/sentry.js). OPTIONAL and off while
+      # SENTRY_DSN is empty; never a boot gate. Empty traces rate → 0.05.
+      # docs/operations/sentry-error-tracking.md
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-}
+      # Cutover secrets (config/boot-secret-guard.js refuses production boot when
+      # these are missing/sentinel). Passed through from .env.production so real
+      # values reach the container; ALLOW_PENDING_SECRETS=true downgrades the
+      # boot-refusal to a warning for a controlled pilot until Finance confirms.
+      - ALLOW_PENDING_SECRETS=${ALLOW_PENDING_SECRETS:-}
+      - RSA_PRIVATE_KEY_PASSPHRASE=${RSA_PRIVATE_KEY_PASSPHRASE:-}
+      - PLATFORM_BANK_ACCOUNT_NO=${PLATFORM_BANK_ACCOUNT_NO:-}
+      - PLATFORM_BANK_NAME=${PLATFORM_BANK_NAME:-}
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-12}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN:-}
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+      - REQUIRE_MFA_FOR_PRIVILEGED=${REQUIRE_MFA_FOR_PRIVILEGED:-false}
+      - QR_SIGNATURE_FALLBACK_SECRET=${QR_SIGNATURE_FALLBACK_SECRET:?QR_SIGNATURE_FALLBACK_SECRET_required}
+      - PAYMENT_WEBHOOK_SECRET=${PAYMENT_WEBHOOK_SECRET:?PAYMENT_WEBHOOK_SECRET_required}
+      # ENT-01 org-level read backstop. Toggle via .env.production (default OFF).
+      # Read at call-time by tenant-prisma-extension.js (applyReadScopes). Enabled
+      # on STAGING since 2026-06-06 (2-org isolation verified); set true in
+      # .env.production to enable on prod. Instant rollback = set false + recreate.
+      # Gap-1 GREEN 2026-08: cross-tenant read isolation ON by default (was
+      # :-false = a silent leak). Kill-switch: set TENANT_READ_ORG_SCOPE=false.
+      - TENANT_READ_ORG_SCOPE=${TENANT_READ_ORG_SCOPE:-true}
+      # H-4 PDPA: national-ID login lookup uses a keyed HMAC (computeLookupHmac)
+      # instead of raw unsalted SHA-256 when true. Set true in .env.production
+      # ONLY AFTER scripts/backfill-national-id-hmac.js has populated *Hmac for
+      # every user (else flag-ON login misses un-backfilled rows). The legacy
+      # *Hash columns are always written, so instant rollback = set false +
+      # recreate. See docs/handoffs/H-4-national-id-hmac-migration-rfc.md.
+      - AUTH_LOOKUP_USE_HMAC=${AUTH_LOOKUP_USE_HMAC:-false}
+      # H-4 detokenize STAGE A: User.canonicalId (the FK join key in
+      # Application/Invoice/Bundle.healthId) is the keyed-HMAC token, not the
+      # national ID, when true. Set true in .env.production ONLY AFTER
+      # scripts/rekey-canonicalid.js has re-keyed existing rows (else FK reads
+      # mismatch). Instant rollback = set false + recreate + rekey-canonicalid.js
+      # --rollback. See docs/handoffs/national-id-detokenize-rfc-2026-06-29.md.
+      - APP_FK_USE_TOKEN=${APP_FK_USE_TOKEN:-false}
+      # H-4 detokenize STAGE B3: transparent AES-256-GCM field-encryption of the
+      # plaintext national-ID columns at rest (User.healthId/providerId/idCard/
+      # taxId/communityRegistrationNo/laserCode + Entity.thaiCitizenId). OFF =
+      # the whole prisma-pdpa-extension is bypassed (today's behaviour, exact).
+      # Set true in .env.production ONLY AFTER
+      # scripts/pdpa/backfill-encrypt-national-id-pii.js has encrypted existing
+      # rows ("0 plaintext remaining"). MUST use the SAME ENCRYPTION_KEY at
+      # backfill-time and serve-time (mismatch → silent '[PII_DECRYPT_FAILED]';
+      # the key also keys the live *Hmac lookups — do NOT rotate it here).
+      # Instant rollback = set false + recreate (the enc:v1: prefix keeps both
+      # plaintext + ciphertext rows readable). See
+      # docs/handoffs/national-id-detokenize-rfc-2026-06-29.md.
+      - ENABLE_PDPA_FIELD_ENCRYPTION=${ENABLE_PDPA_FIELD_ENCRYPTION:-false}
+      # Audit hash-chain nightly-verify baseline floor (audit gap #14). Set to the
+      # then-current MAX("sequenceNumber") at each deploy so the daily cron
+      # (jobs/scheduler.js 03:15) verifies only the clean v2-forward chain and does
+      # NOT re-alert on pre-cutover benign breaks (PDPA re-key mutated legacy
+      # currentHash / dropped seqs). Unset/0 = no floor (verifies full recent
+      # window). See services/audit-trail.js BASELINE FLOOR block.
+      - AUDIT_CHAIN_VERIFY_FROM_SEQ=${AUDIT_CHAIN_VERIFY_FROM_SEQ:-0}
+      # Audit hash-chain KEYING (audit gap #14 follow-up). AUDIT_HASH_HMAC=true
+      # makes NEW audit rows sealed with a keyed HMAC (v3) instead of an unkeyed
+      # sha256, so a forged/edited audit_logs row cannot be re-sealed without the
+      # key. Key = AUDIT_HASH_KEY if set, else derived from ENCRYPTION_KEY (no new
+      # secret). Default/unset → v2 (unchanged); verify falls back v3→v2→v1 so
+      # legacy rows stay green. Enable = set true + recreate (like
+      # AUTH_LOOKUP_USE_HMAC); do NOT rotate the key or v3 rows stop verifying.
+      - AUDIT_HASH_HMAC=${AUDIT_HASH_HMAC:-}
+      - AUDIT_HASH_KEY=${AUDIT_HASH_KEY:-}
+      - TRACE_BASE_URL=${TRACE_BASE_URL:-}
+      - APP_PUBLIC_URL=${APP_PUBLIC_URL:-}
+      - PUBLIC_TRACE_URL=${PUBLIC_TRACE_URL:-}
+      - FRONTEND_URL=${FRONTEND_URL:-}
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - PARTNER_TRACE_API_KEY=${PARTNER_TRACE_API_KEY:-}
+      # Per-partner M2M API keys for /api/interoperability/v1/* bulk/PII exports
+      # (middleware/partner-api-key.js). JSON {partnerId: secret}; fail-closed when
+      # empty. NOT in env_file (this service has none) — must be an explicit
+      # passthrough or the value in .env.production never reaches the container
+      - INTEROP_PARTNER_API_KEYS=${INTEROP_PARTNER_API_KEYS:-}
+      - TRUST_PRIVATE_PROXY_RANGES=${TRUST_PRIVATE_PROXY_RANGES:-true}
+      - TRUSTED_PROXY_IPS=${TRUSTED_PROXY_IPS:-}
+      # Object Storage (MinIO)
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-minio}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_REGION=${S3_REGION:-ap-southeast-1}
+      - S3_BUCKET=${S3_BUCKET:-gacp-uploads}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-}
+    volumes:
+      # Persistent fallback for local files (used when STORAGE_PROVIDER=local)
+      # Must match express.static + storage-service BASE_UPLOAD_DIR
+      # (/app/apps/backend/public/uploads). The old /app/public/uploads mount was
+      # never read/written by the app → uploaded docs were unviewable + ephemeral
+      # (blank document preview, 2026-06-25).
+      - gacp_uploads:/app/apps/backend/public/uploads
+      - gacp_storage:/app/storage
+      # RSA signing keys (QR + certificate signatures). Persist across container
+      # rebuilds so previously-issued signatures stay verifiable — signature-service
+      # keyDir is path.join(__dirname,'../../keys') = /app/apps/backend/keys.
+      - gacp_signing_keys:/app/apps/backend/keys
+    depends_on:
+      # No postgres dependency: the database is Supabase, outside this stack.
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    networks:
+      - gacp-network
+    # NOTE: Port 8000 is NOT exposed to public, only accessible via Nginx
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+  # ------------------------------------------------------------
+  # 2b. OBJECT STORAGE (MinIO â€” S3-compatible, self-hosted)
+  # ------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: gacp-minio
+    restart: always
+    logging: *default-logging
+    command: server /data --console-address ":9001"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    environment:
+      - MINIO_ROOT_USER=${S3_ACCESS_KEY:?S3_ACCESS_KEY_required}
+      - MINIO_ROOT_PASSWORD=${S3_SECRET_KEY:?S3_SECRET_KEY_required}
+    volumes:
+      - gacp_minio_data:/data
+    ports:
+      # Bind only to localhost â€” access via backend or SSH tunnel only
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    networks:
+      - gacp-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+  # ------------------------------------------------------------
+  # 3. FRONTEND (Next.js)
+  # ------------------------------------------------------------
+  # Image-based deploy: pull a specific tag from GHCR. See backend service
+  # above for the tag conventions; `BACKEND_IMAGE`/`FRONTEND_IMAGE` and
+  # `IMAGE_TAG` env vars let the deploy script pin to a specific build for
+  # tagged rollback.
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/jonmaxmore/gacp-frontend}:${IMAGE_TAG:-deploy-production-latest}
+    container_name: gacp-frontend
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Subdomain Strategy: API is at api.DOMAIN
+      - NEXT_PUBLIC_API_URL=${PUBLIC_API_URL:?PUBLIC_API_URL_required}
+      - NEXT_PUBLIC_WEB_URL=${PUBLIC_WEB_URL:?PUBLIC_WEB_URL_required}
+      - NEXT_PUBLIC_PWA_ENABLED=${NEXT_PUBLIC_PWA_ENABLED:-false}
+      - INTERNAL_API_URL=http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - gacp-network
+    # NOTE: Port 3000 is NOT exposed to public, only accessible via Nginx
+
+  # ------------------------------------------------------------
+  # 4. DATABASE (PostgreSQL) — RETIRED 2026-09-15
+  # ------------------------------------------------------------
+  # Nothing in this stack reads this container any more. staging.gacpth.com moved to
+  # its own Supabase project on 2026-09-08 (DATABASE_URL in .env.staging),
+  # demo.gacpth.com has been on Supabase from the start, and the operator ruled on
+  # 2026-09-15 that gacpth.com runs NO separate stack: when the bare domain opens it
+  # is the demo stack under a new name, not a third copy of the application. So
+  # there is no database on this box to keep.
+  #
+  # The container and its volume (gacp-postgres-data) were removed on 2026-09-15.
+  # The last copy of its data dir — gacp_db and gacp_staging, both stale pre-cutover
+  # copies — is ~/work/state/pg-backup-20260915-014630.tar.gz.
+  #
+  # Behind `profiles: [legacy-db]` ON PURPOSE. A plain `docker compose up -d` must not
+  # mint an empty postgres and quietly hand it to anything that still says
+  # `@postgres:5432` — the deploy scripts that pre-date the cutover did exactly that
+  # on 2026-09-15 morning, and gacpth.com spent a day serving an empty database. A
+  # missing container fails loudly; an empty one looks like data loss. Before you
+  # bring it back, read ~/work/state/RULING-2026-09-15-prod-is-demo.md.
+  postgres:
+    image: postgres:15-alpine
+    container_name: gacp-postgres
+    profiles: [ legacy-db ]
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 1G
+    # Performance tuning for 1GB container (SSD droplet, 4GB host)
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c random_page_cost=1.1
+      -c max_connections=50
+      -c wal_buffers=8MB
+      -c checkpoint_completion_target=0.9
+      -c log_min_duration_statement=500
+    environment:
+      - POSTGRES_USER=${DB_USER:-gacp}
+      # Not `:?required` any more: compose interpolates every service, profiled or
+      # not, so a hard requirement here would abort deploys that never start this
+      # container. On the existing data volume POSTGRES_PASSWORD is ignored (it only
+      # applies to an empty volume), so the fallback cannot lock anyone out — supply
+      # DB_PASSWORD in .env while the rollback window is open.
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-legacy-retired-db}
+      - POSTGRES_DB=${DB_NAME:-gacp_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - gacp-network
+    # NOTE: Port 5432 is NOT exposed to public
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-gacp} -d ${DB_NAME:-gacp_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # 4b. DATABASE ADMIN (pgAdmin 4)
+  # ------------------------------------------------------------
+  # Web-based PostgreSQL management UI for team members.
+  # Access via: https://gacpth.com/pgadmin/
+  # NOT exposed directly — routed through Nginx reverse proxy.
+  # RETIRED 2026-08-23. Unlike the postgres below it, this one really is retired: the
+  # database that matters is Supabase, which has its own console, and nginx no longer
+  # carries a /pgadmin/ location — so this stack does not put a database admin UI on a
+  # public host. The postgres it used to administer survives only to feed frozen
+  # staging, and nobody administers that through a browser.
+  pgadmin:
+    profiles: [ legacy-db ]
+    image: dpage/pgadmin4:latest
+    container_name: gacp-pgadmin
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        # Audit 2026-04-27 #2.14: bumped 128M -> 256M after pgadmin hit
+        # 98.31% of the 128M cap (OOM-kill territory).
+        # Audit 2026-06-04: live `docker stats` showed 253.5 MiB / 256 MiB
+        # (99.03%) — bumped 256M -> 512M. Reservation kept low so pgadmin
+        # doesn't reserve memory away from backend / postgres.
+        limits:
+          cpus: '0.15'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@gacpth.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:?PGADMIN_PASSWORD_required}
+      - PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION=True
+      - PGADMIN_CONFIG_LOGIN_BANNER="GACP Production Database — Authorized Access Only"
+      - PGADMIN_CONFIG_CONSOLE_LOG_LEVEL=30
+      - SCRIPT_NAME=/pgadmin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gacp-network
+    # NOTE: Port NOT exposed to public — only accessible via Nginx at /pgadmin/
+
+  # ------------------------------------------------------------
+  # 5. CACHE (Redis)
+  # ------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: gacp-redis
+    restart: always
+    logging: *default-logging
+    command: redis-server --appendonly yes --maxmemory 96mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-gacp_redis_2026}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    volumes:
+      - redis_data:/data
+    networks:
+      - gacp-network
+    # NOTE: Port 6379 is NOT exposed to public
+
+  # ------------------------------------------------------------
+  # 6. MONITORING STACK
+  # ------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gacp-prometheus
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        # Audit 2026-06-04: prometheus was OOM-killed at the 128M cap
+        # (dmesg confirmed) and idled at 89%. TSDB memory grows with series,
+        # so bumped 128M -> 256M.
+        limits:
+          cpus: '0.15'
+          memory: 256M
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    ports:
+      - "127.0.0.1:9090:9090"   # Localhost only
+    networks:
+      - gacp-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gacp-grafana
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD_required}
+      - GF_SERVER_ROOT_URL=http://localhost:3200
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "127.0.0.1:3200:3000"   # Localhost only (3100 reserved for Loki)
+    depends_on:
+      - prometheus
+    networks:
+      - gacp-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: gacp-cadvisor
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 128M
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - gacp-network
+    # NOTE: Port 8080 NOT exposed — only Prometheus scrapes it
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: gacp-node-exporter
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - gacp-network
+    # NOTE: Port 9100 NOT exposed — only Prometheus scrapes it
+
+  # ------------------------------------------------------------
+  # 8. LOKI (Log Aggregation) - R5
+  # ------------------------------------------------------------
+  loki:
+    image: grafana/loki:2.9.6
+    container_name: gacp-loki
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+    networks:
+      - gacp-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # NOTE: Port 3100 NOT exposed — only Grafana/Promtail access it
+
+  # ------------------------------------------------------------
+  # 9. PROMTAIL (Log Shipper → Loki) - R5
+  # ------------------------------------------------------------
+  promtail:
+    image: grafana/promtail:2.9.6
+    container_name: gacp-promtail
+    restart: always
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '0.15'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./monitoring/promtail/config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - gacp-network
+
+# ============================================================
+# NETWORKS
+# ============================================================
+networks:
+  gacp-network:
+    driver: bridge
+    name: gacp-network
+
+# ============================================================
+# VOLUMES
+# ============================================================
+volumes:
+  postgres_data:
+    name: gacp-postgres-data
+  redis_data:
+    name: gacp-redis-data
+  # Persistent file storage (fallback local + MinIO data)
+  gacp_uploads:
+    name: gacp-uploads-data
+  gacp_storage:
+    name: gacp-storage-data
+  gacp_signing_keys:
+    name: gacp-signing-keys
+  gacp_minio_data:
+    name: gacp-minio-data
+  # Monitoring data
+  prometheus_data:
+    name: gacp-prometheus-data
+  grafana_data:
+    name: gacp-grafana-data
+  pgadmin_data:
+    name: gacp-pgadmin-data
+  # Log aggregation data
+  loki_data:
+    name: gacp-loki-data
+

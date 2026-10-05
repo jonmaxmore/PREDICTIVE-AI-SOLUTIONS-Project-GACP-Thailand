@@ -1,0 +1,16 @@
+Agent F03 — Admin Pages Results
+Date: 2026-03-13T13:19:25.685Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Provider login | HTTP 200
+PASS | Admin dashboard | HTTP 200
+PASS | Management | HTTP 200
+PASS | Coordinator | HTTP 200
+PASS | Documents | HTTP 200
+PASS | Criteria | HTTP 200
+PASS | Reports | HTTP 200
+PASS | Scheduler reassign | HTTP 200
+PASS | System settings | HTTP 200
+PASS | Planting list | HTTP 200
+PASS | Profile | HTTP 200
+PASS | Provider home | HTTP 200

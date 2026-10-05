@@ -1,0 +1,5 @@
+# W3-B axe-core scan artifact directory
+# Per-page JSON results are written here by accessibility-scan.spec.ts.
+# Per .gitignore, *.json under this directory is NOT committed — the
+# cutover team grep this locally after running:
+#   cd apps/web-app && npx playwright test accessibility-scan --project=chromium

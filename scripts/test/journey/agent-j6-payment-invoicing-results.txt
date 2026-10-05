@@ -1,0 +1,15 @@
+Agent J6 — Payment & Invoicing Results
+Date: 2026-03-16T12:47:54.349Z
+Pass: 11 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Get pricing fee schedule | status: 200
+PASS | Calculate application fees | status: 200
+PASS | Phase 1 invoice pricing | status: 200
+PASS | Phase 2 invoice pricing | status: 200
+PASS | Login as health user | Token acquired
+PASS | My quotes | status: 200
+PASS | Master data fees | status: 200
+PASS | QR pricing | status: 200
+PASS | Master data purposes | status: 200
+PASS | Cultivation methods | status: 200
+PASS | GACP standards | status: 200

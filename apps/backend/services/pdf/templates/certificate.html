@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ใบรับรองมาตรฐาน GACP — {{CERT_NUMBER}}</title>
+  <!--
+    GACP Certificate — ground-up redesign, 2026-09-07 · aligned to the approved
+    design canvas canvas the same day.
+
+    operator: "ผมว่าไปใช้ design canvas ทั้งหมดดีกว่า" then "เปลี่ยนไปใช้ sukhumvit set
+    แล้วเราใช้ design canvas redesign ใหม่แล้วหรือยัง ไม่เอาคุณดีไซด์ ต้อง design canvas
+    เท่านั้น" — the authority on look-and-feel is the approved canvas
+    (โครง Wizard กทล.1, artifact 0a821aff): font stack led by 'Sukhumvit Set',
+    greens #18803f / #00663d, ink #0f1f16, muted #4f5b54, gold #8a6d1f on cream
+    #faf5e6, hairlines #d6ddd8. This template now carries those exact tokens.
+
+    Sukhumvit Set is Apple's proprietary face and cannot be embedded in a PDF;
+    Anuphan (Cadson Demak, OFL) is the same humanist-loopless family and is
+    vendored + embedded. The stack declares Sukhumvit Set first so any Apple
+    device rendering the HTML gets it natively; the PDF renders Anuphan.
+
+    Design decisions (all self-contained CSS; renderer allows only data: URLs):
+      - One visual anchor: the recipient's name, largest thing on the page after
+        the title. Everything else steps back — a certificate is about WHO.
+      - Ceremony comes from structure, not decoration: a solid green band frame
+        with a hairline gold inset, generous margins, one gold rule under the
+        header, and a green footer band that closes the page. No corner
+        ornaments, no filled badges, no watermark shouting across the text
+        (replaced by a faint oversized seal ring, dead-centre, 3% opacity).
+      - Facts read as a formal register: a two-column definition list with
+        hairline rules, ranged-left labels in muted green small text — the way
+        a government record prints, instead of centred prose paragraphs.
+      - Thai display type: Sarabun, line-height ≥1.6 on anything over 16px so
+        stacked vowels/tone marks never clip; zero letter-spacing on Thai
+        (tracking breaks floating vowels); tracking allowed only on Latin caps.
+      - Palette: CI green #006633 (authority), ink #14231B (text), ceremonial
+        gold #8C6D1F (rules), pale leaf #F3F7F4 (register ground). Nothing else.
+
+    Placeholder contract — UNCHANGED from B23, the service is untouched:
+      CERT_NUMBER · CERT_NUMBER_TH · REVISION_LINE · APPLICANT_NAME ·
+      APPLICANT_ID · CULTIVATION_METHODS · FARM_NAME · FARM_LOCATION ·
+      ISSUE_DATE_TH · EXPIRY_DATE_TH · SIGNER_NAME · SIGNER_POSITION ·
+      VERIFY_URL · QR_CODE_DATA_URL · MINISTRY_LOGO_DATA_URL · STANDARD_NAME ·
+      CROP_TYPE (legacy, unused visually) · APPLICANT_ID rendered small.
+  -->
+  <style>
+    /* Sarabun is injected as base64 @font-face by pdf-generator.service.js.
+       No remote @import — the renderer blocks foreign URLs (PDPA, 2026-07-25). */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @page { size: A4 portrait; margin: 0; }
+
+    /* โทเคนตรงจาก canvas ที่อนุมัติ — ห้ามแทนด้วยค่าที่ "ใกล้เคียง" */
+    :root {
+      --green: #18803f;
+      --green-deep: #00663d;
+      --gold: #8a6d1f;
+      --gold-ground: #faf5e6;
+      --ink: #0f1f16;
+      --muted: #4f5b54;
+      --line: #d6ddd8;
+      --ground: #f2f4f2;
+    }
+
+    html, body {
+      width: 210mm;
+      height: 297mm;
+      font-family: 'Sukhumvit Set', 'Anuphan', 'Sarabun', 'Noto Sans Thai', Tahoma, sans-serif;
+      color: var(--ink);
+      background: #FFFFFF;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      width: 210mm;
+      height: 297mm;
+      position: relative;
+      background: #FFFFFF;
+      overflow: hidden;
+    }
+
+    /* ── Frame: solid green band + hairline gold inset ─────────────────── */
+    .band {
+      position: absolute;
+      inset: 8mm;
+      border: 1.8mm solid var(--green);
+      pointer-events: none;
+    }
+    .band-inset {
+      position: absolute;
+      inset: 11mm;
+      border: 0.35mm solid var(--gold);
+      pointer-events: none;
+    }
+
+    /* ── Faint seal ring behind the composition ────────────────────────── */
+    .seal-ghost {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 120mm;
+      height: 120mm;
+      transform: translate(-50%, -50%);
+      border: 7mm double var(--green);
+      border-radius: 50%;
+      opacity: 0.03;
+      pointer-events: none;
+    }
+
+    .content {
+      position: relative;
+      z-index: 2;
+      height: 100%;
+      padding: 18mm 22mm 14mm;
+      display: flex;
+      flex-direction: column;
+      text-align: center;
+    }
+
+    /* ── Header ────────────────────────────────────────────────────────── */
+    .crest { width: 17mm; height: 17mm; margin: 0 auto 3mm; }
+    .dept-th {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--green-deep);
+      line-height: 1.6;
+    }
+    .dept-en {
+      font-size: 9.5px;
+      color: var(--muted);
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+    .dept-sub {
+      font-size: 10.5px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+    .header-rule {
+      width: 58mm;
+      height: 0.4mm;
+      background: var(--gold);
+      margin: 4.5mm auto 0;
+    }
+
+    /* ── Title ─────────────────────────────────────────────────────────── */
+    .title-th {
+      margin-top: 7mm;
+      font-size: 27px;
+      font-weight: 700;
+      color: var(--green-deep);
+      line-height: 1.6;
+      letter-spacing: 0;
+    }
+    .title-en {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+      margin-top: 1.5mm;
+    }
+
+    /* ── Serial ────────────────────────────────────────────────────────── */
+    .serial-caption {
+      margin-top: 6mm;
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+    .serial { margin-top: 1mm; }
+    .serial .cert-num {
+      display: inline-block;
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--green-deep);
+      letter-spacing: 2px;
+    }
+    .serial-th {
+      font-size: 10.5px;
+      color: var(--muted);
+      margin-top: 0.5mm;
+    }
+    .cert-revision { font-size: 10px; color: var(--muted); margin-top: 0.5mm; }
+    .cert-revision:empty { display: none; }
+
+    /* ── Grant formula + name ──────────────────────────────────────────── */
+    .grant {
+      margin-top: 8mm;
+      font-size: 13px;
+      color: var(--ink);
+      line-height: 1.7;
+    }
+    .holder {
+      margin-top: 3mm;
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.6;
+      letter-spacing: 0;
+    }
+    .holder-id {
+      font-size: 10.5px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      margin-top: 0.5mm;
+    }
+    .grant-tail {
+      margin-top: 3.5mm;
+      font-size: 13px;
+      color: var(--ink);
+      line-height: 1.8;
+      padding: 0 10mm;
+    }
+    .grant-tail strong { color: var(--green-deep); font-weight: 700; }
+
+    /* ── Fact register ─────────────────────────────────────────────────── */
+    .register {
+      margin: 7mm auto 0;
+      width: 138mm;
+      background: var(--ground);
+      border: 0.3mm solid var(--line);
+      border-radius: 4mm;             /* การ์ดมุมมนตามภาษา canvas */
+      padding: 4mm 8mm;
+      text-align: left;
+    }
+    .register-row {
+      display: flex;
+      gap: 6mm;
+      padding: 2.2mm 0;
+      border-bottom: 0.2mm solid var(--line);
+      align-items: baseline;
+    }
+    .register-row:last-child { border-bottom: none; }
+    .register-label {
+      width: 34mm;
+      flex-shrink: 0;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--green-deep);
+    }
+    .register-value {
+      flex: 1;
+      font-size: 12.5px;
+      color: var(--ink);
+      line-height: 1.65;
+    }
+    .register-value strong { font-weight: 700; }
+
+    /* ── Signature + QR ────────────────────────────────────────────────── */
+    .closing {
+      margin-top: auto;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 10mm;
+      padding: 0 4mm;
+    }
+    .qr {
+      width: 26mm;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .qr img {
+      width: 24mm;
+      height: 24mm;
+      display: block;
+      margin: 0 auto;
+    }
+    .qr-caption {
+      margin-top: 1.5mm;
+      font-size: 8px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .signature {
+      flex: 1;
+      max-width: 88mm;
+      text-align: center;
+    }
+    .sig-space { height: 13mm; }
+    .sig-rule {
+      width: 62mm;
+      height: 0.25mm;
+      background: var(--ink);
+      margin: 0 auto;
+    }
+    .sig-name {
+      margin-top: 2mm;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.6;
+    }
+    .sig-position { font-size: 10.5px; color: var(--muted); line-height: 1.6; }
+    .sig-date { font-size: 10px; color: var(--muted); margin-top: 1mm; }
+    /* สมดุลซ้าย-ขวาของบล็อกลายเซ็นกลาง */
+    .closing-spacer { width: 26mm; flex-shrink: 0; }
+
+    /* ── Footer band ───────────────────────────────────────────────────── */
+    .foot-band {
+      /* กว้างเท่ากรอบทองด้านใน — ห้ามทะลุกรอบออกไปชนขอบกระดาษ */
+      margin: 6mm -10mm 0;
+      background: var(--green);
+      color: #FFFFFF;
+      padding: 2.6mm 10mm;
+      font-size: 9px;
+      letter-spacing: 0.4px;
+      line-height: 1.6;
+    }
+    .foot-band .verify-url { color: #CFE5D8; }
+
+    @media print {
+      html, body { width: 210mm; height: 297mm; margin: 0; padding: 0; }
+      .page { page-break-after: avoid; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="band"></div>
+  <div class="band-inset"></div>
+  <div class="seal-ghost"></div>
+
+  <div class="content">
+
+    <header>
+      <img src="{{MINISTRY_LOGO_DATA_URL}}" class="crest" alt="ตราสัญลักษณ์กรมการแพทย์แผนไทยและการแพทย์ทางเลือก" />
+      <div class="dept-th">กรมการแพทย์แผนไทยและการแพทย์ทางเลือก</div>
+      <div class="dept-en">Department of Thai Traditional and Alternative Medicine</div>
+      <div class="dept-sub">กระทรวงสาธารณสุข</div>
+      <div class="header-rule"></div>
+    </header>
+
+    <h1 class="title-th">ใบรับรองมาตรฐานการปฏิบัติทางการเกษตรที่ดี</h1>
+    <div class="title-en">Certificate of Good Agricultural and Collection Practices</div>
+
+    <div class="serial-caption">เลขที่ใบรับรอง / Certificate No.</div>
+    <div class="serial"><span class="cert-num">{{CERT_NUMBER}}</span></div>
+    <div class="serial-th">{{CERT_NUMBER_TH}}</div>
+    <div class="cert-revision">{{REVISION_LINE}}</div>
+
+    <!-- operator 2026-09-07: "ในใบรับรอง ต้องรับรองชื่อฟาร์ม หรือชื่อคน ตรงนี้เหมือนผิดอยู่"
+         — วัดแล้ว: GACP ตรวจรับรอง "แหล่งผลิตและการปฏิบัติ" ไม่ใช่ตัวบุคคล ประธานของประโยค
+         รับรองจึงเป็นสถานที่ผลิต · ผู้ถือใบ (Entity — มติ "บริษัทถือใบเอง" 2026-09-07)
+         ยังอยู่บนใบครบในบรรทัดถัดไป และคอลัมน์ holder ในฐานข้อมูลไม่ถูกแตะ -->
+    <div class="grant">กรมการแพทย์แผนไทยและการแพทย์ทางเลือก ขอรับรองว่า สถานที่ผลิต</div>
+    <div class="holder">{{FARM_NAME}}</div>
+    <div class="holder-id">ผู้ถือใบรับรอง: {{APPLICANT_NAME}} · {{APPLICANT_ID}}</div>
+    <div class="grant-tail">
+      ได้ผ่านการตรวจประเมินตามมาตรฐาน <strong>{{STANDARD_NAME}}</strong><br>
+      Good Agricultural and Collection Practices (GACP) สำหรับการปลูกพืชสมุนไพร
+    </div>
+
+    <div class="register">
+      <div class="register-row">
+        <div class="register-label">ชนิดพืชที่รับรอง</div>
+        <div class="register-value"><strong>{{CULTIVATION_METHODS}}</strong></div>
+      </div>
+      <div class="register-row">
+        <div class="register-label">ผู้ถือใบรับรอง</div>
+        <div class="register-value">{{APPLICANT_NAME}}</div>
+      </div>
+      <div class="register-row">
+        <div class="register-label">ที่ตั้ง</div>
+        <div class="register-value">{{FARM_LOCATION}}</div>
+      </div>
+      <div class="register-row">
+        <div class="register-label">มีผลตั้งแต่วันที่</div>
+        <div class="register-value">{{ISSUE_DATE_TH}}</div>
+      </div>
+      <div class="register-row">
+        <div class="register-label">ถึงวันที่</div>
+        <div class="register-value">{{EXPIRY_DATE_TH}}</div>
+      </div>
+    </div>
+
+    <div class="closing">
+      <div class="qr">
+        <img src="{{QR_CODE_DATA_URL}}" alt="QR ตรวจสอบใบรับรอง" />
+        <div class="qr-caption">ตรวจสอบความถูกต้อง<br>Scan to verify</div>
+      </div>
+      <div class="signature">
+        <div class="sig-space"></div>
+        <div class="sig-rule"></div>
+        <div class="sig-name">{{SIGNER_NAME}}</div>
+        <div class="sig-position">{{SIGNER_POSITION}}</div>
+        <div class="sig-date">ให้ไว้ ณ วันที่ {{ISSUE_DATE_TH}}</div>
+      </div>
+      <div class="closing-spacer"></div>
+    </div>
+
+    <div class="foot-band">
+      ออกโดย DTAM · กรมการแพทย์แผนไทยและการแพทย์ทางเลือก · Ministry of Public Health, Kingdom of Thailand
+      &nbsp;—&nbsp; ตรวจสอบใบรับรองได้ที่ <span class="verify-url">{{VERIFY_URL}}</span>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

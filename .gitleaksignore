@@ -1,0 +1,13 @@
+# Test fixtures that match generic secret rules. Each was reviewed: none is a credential.
+# Format: <file>:<rule>:<line>
+apps/backend/__tests__/unit/admin-gates-use-canonical-rbac.test.js:generic-api-key:135
+apps/backend/__tests__/unit/deploy-prod-check-secrets.test.js:generic-api-key:75
+apps/backend/__tests__/unit/pdpa-erasure-service.test.js:generic-api-key:535
+apps/backend/__tests__/unit/secrets-catalog.test.js:generic-api-key:191
+apps/backend/__tests__/unit/secrets-catalog.test.js:generic-api-key:226
+apps/backend/__tests__/unit/server-boot-secret-sentinel.test.js:generic-api-key:63
+apps/backend/__tests__/unit/uploads-signed-url.test.js:generic-api-key:21
+apps/backend/__tests__/unit/user-lookup-service.test.js:generic-api-key:210
+apps/web-app/src/lib/services/__tests__/pdpa-erasure-service.test.ts:generic-api-key:107
+apps/web-app/src/lib/services/__tests__/pdpa-erasure-service.test.ts:generic-api-key:113
+scripts/probes/stripe-keys-ready.sh:curl-auth-user:6

@@ -1,0 +1,433 @@
+{
+  "id": "gacp-thailand-2023",
+  "name": "Good Agricultural and Collection Practices (GACP) Thailand",
+  "version": "2023",
+  "authority": "Department of Thai Traditional and Alternative Medicine (DTAM)",
+  "effectiveDate": "2023-01-01",
+  "country": "Thailand",
+  "language": "th",
+  "description": "มาตรฐาน GACP ของประเทศไทย สำหรับการปลูกและเก็บรวบรวมพืชสมุนไพร",
+  "applicableProducts": ["herbs", "medicinal_plants", "cannabis", "traditional_medicine_materials"],
+  "categories": [
+    {
+      "id": "site-selection",
+      "name": "การเลือกสถานที่",
+      "weight": 10,
+      "description": "การเลือกและประเมินพื้นที่ปลูกที่เหมาะสม",
+      "criteria": [
+        {
+          "id": "site-env-1",
+          "code": "ENV-001",
+          "name": "ประวัติการใช้ที่ดิน",
+          "description": "ตรวจสอบประวัติการใช้ที่ดินย้อนหลัง 3 ปี",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 5,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "เอกสารแสดงการเป็นเจ้าของหรือสิทธิ์ใช้ที่ดิน",
+            "ประวัติการใช้สารเคมีในพื้นที่",
+            "ไม่มีการปนเปื้อนจากโรงงานอุตสาหกรรม",
+            "แหล่งน้ำสะอาดและเพียงพอ"
+          ],
+          "evidence": ["เอกสารสิทธิ์ที่ดิน", "ใบรับรองคุณภาพดิน", "ใบรับรองคุณภาพน้ำ"]
+        },
+        {
+          "id": "site-env-2",
+          "code": "ENV-002",
+          "name": "คุณภาพดินและน้ำ",
+          "description": "วิเคราะห์คุณภาพดินและน้ำก่อนเริ่มปลูก",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 5,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "pH ดินอยู่ในช่วงที่เหมาะสม (5.5-7.5)",
+            "ไม่พบโลหะหนักเกินมาตรฐาน",
+            "น้ำมีคุณภาพตามมาตรฐานเกษตร",
+            "ไม่มีสารปนเปื้อน"
+          ],
+          "evidence": ["ผลวิเคราะห์ดินจากห้องปฏิบัติการ", "ผลวิเคราะห์น้ำจากห้องปฏิบัติการ"]
+        },
+        {
+          "id": "site-env-3",
+          "code": "ENV-003",
+          "name": "สภาพแวดล้อมโดยรอบ",
+          "description": "ประเมินสภาพแวดล้อมและความเสี่ยงจากพื้นที่ข้างเคียง",
+          "requirement": "recommended",
+          "scoring": {
+            "pass": 3,
+            "partial": 1,
+            "fail": 0
+          },
+          "checkpoints": [
+            "ห่างจากแหล่งมลพิษอย่างน้อย 500 เมตร",
+            "มีแนวกันชน (buffer zone)",
+            "ไม่อยู่ในเขตน้ำท่วมซ้ำซาก",
+            "มีการป้องกันสัตว์รบกวน"
+          ],
+          "evidence": ["แผนที่แสดงตำแหน่ง", "ภาพถ่ายพื้นที่", "เอกสารประเมินความเสี่ยง"]
+        }
+      ]
+    },
+    {
+      "id": "seed-material",
+      "name": "เมล็ดพันธุ์และวัสดุขยายพันธุ์",
+      "weight": 15,
+      "description": "คุณภาพและแหล่งที่มาของเมล็ดพันธุ์",
+      "criteria": [
+        {
+          "id": "seed-qual-1",
+          "code": "SEED-001",
+          "name": "แหล่งที่มาของพันธุ์",
+          "description": "พันธุ์มาจากแหล่งที่เชื่อถือได้และมีเอกสารรับรอง",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 10,
+            "partial": 5,
+            "fail": 0
+          },
+          "checkpoints": [
+            "มีใบรับรองแหล่งพันธุ์",
+            "พันธุ์ตรงชนิดตามวัตถุประสงค์",
+            "ไม่ใช้พันธุ์ GMO (หากไม่ได้รับอนุญาต)",
+            "บันทึกข้อมูลพันธุ์ครบถ้วน"
+          ],
+          "evidence": ["ใบรับรองเมล็ดพันธุ์", "เอกสารรับรองการซื้อ", "บันทึกรหัส lot number"]
+        },
+        {
+          "id": "seed-qual-2",
+          "code": "SEED-002",
+          "name": "การเก็บรักษาพันธุ์",
+          "description": "เก็บรักษาเมล็ดพันธุ์ในสภาพที่เหมาะสม",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 5,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "อุณหภูมิและความชื้นเหมาะสม",
+            "ป้องกันศัตรูพืช",
+            "แยกเก็บตามชนิดและรุ่น",
+            "ตรวจสอบอัตราการงอกสม่ำเสมอ"
+          ],
+          "evidence": ["บันทึกการเก็บรักษา", "ผลทดสอบอัตราการงอก"]
+        }
+      ]
+    },
+    {
+      "id": "cultivation",
+      "name": "การปลูกและการดูแลรักษา",
+      "weight": 25,
+      "description": "กระบวนการปลูกและดูแลพืชตามหลัก GACP",
+      "criteria": [
+        {
+          "id": "cult-prac-1",
+          "code": "CULT-001",
+          "name": "การปลูก",
+          "description": "ปฏิบัติตามแผนการปลูกและระยะเวลาที่เหมาะสม",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 8,
+            "partial": 4,
+            "fail": 0
+          },
+          "checkpoints": [
+            "ปลูกตามช่วงฤดูกาลที่เหมาะสม",
+            "ระยะปลูกเหมาะสมกับชนิดพืช",
+            "มีแผนผังแปลงปลูก",
+            "บันทึกวันเวลาปลูก"
+          ],
+          "evidence": ["แผนการปลูก", "บันทึกการปลูก", "แผนผังแปลง"]
+        },
+        {
+          "id": "cult-prac-2",
+          "code": "CULT-002",
+          "name": "การให้น้ำ",
+          "description": "ระบบการให้น้ำที่เหมาะสมและประหยัด",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 5,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "มีแหล่งน้ำสะอาดเพียงพอ",
+            "ระบบให้น้ำเหมาะสม",
+            "บันทึกปริมาณน้ำที่ใช้",
+            "ไม่ใช้น้ำเสีย"
+          ],
+          "evidence": ["บันทึกการให้น้ำ", "แผนภูมิระบบน้ำ"]
+        },
+        {
+          "id": "cult-prac-3",
+          "code": "CULT-003",
+          "name": "การใช้ปุ๋ย",
+          "description": "การใช้ปุ๋ยอย่างเหมาะสมและปลอดภัย",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 7,
+            "partial": 3,
+            "fail": 0
+          },
+          "checkpoints": [
+            "ใช้ปุ๋ยที่ขึ้นทะเบียนถูกต้อง",
+            "ปริมาณเหมาะสมตามคำแนะนำ",
+            "บันทึกการใช้ปุ๋ยครบถ้วน",
+            "เก็บรักษาปุ๋ยอย่างปลอดภัย"
+          ],
+          "evidence": ["บันทึกการใช้ปุ๋ย", "ใบรับรองปุ๋ย", "ใบเสร็จรับเงิน"]
+        },
+        {
+          "id": "cult-prac-4",
+          "code": "CULT-004",
+          "name": "การป้องกันกำจัดศัตรูพืช",
+          "description": "ใช้สารเคมีปลอดภัยและตามหลัก IPM",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 5,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "ใช้สารที่ขึ้นทะเบียนเท่านั้น",
+            "ปฏิบัติตามคำแนะนำฉลาก",
+            "บันทึกการใช้สารเคมี",
+            "เว้นระยะก่อนเก็บเกี่ยว"
+          ],
+          "evidence": ["บันทึกการใช้สารเคมี", "ใบรับรองสารเคมี", "ผลวิเคราะห์สารตกค้าง"]
+        }
+      ]
+    },
+    {
+      "id": "harvest",
+      "name": "การเก็บเกี่ยว",
+      "weight": 15,
+      "description": "การเก็บเกี่ยวในช่วงเวลาที่เหมาะสมและถูกสุขลักษณะ",
+      "criteria": [
+        {
+          "id": "harv-time-1",
+          "code": "HARV-001",
+          "name": "ช่วงเวลาการเก็บเกี่ยว",
+          "description": "เก็บเกี่ยวในช่วงที่ได้สารสำคัญสูงสุด",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 8,
+            "partial": 4,
+            "fail": 0
+          },
+          "checkpoints": [
+            "เก็บตามอายุหรือช่วงที่เหมาะสม",
+            "เว้นระยะหลังใช้สารเคมี",
+            "สภาพอากาศเหมาะสม",
+            "บันทึกวันเวลาเก็บเกี่ยว"
+          ],
+          "evidence": ["บันทึกการเก็บเกี่ยว", "ภาพถ่ายผลผลิต"]
+        },
+        {
+          "id": "harv-hyg-1",
+          "code": "HARV-002",
+          "name": "สุขลักษณะการเก็บเกี่ยว",
+          "description": "ปฏิบัติตามหลักสุขลักษณะที่ดี",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 7,
+            "partial": 3,
+            "fail": 0
+          },
+          "checkpoints": [
+            "ใช้อุปกรณ์สะอาด",
+            "บุคลากรมีสุขภาพดี",
+            "ไม่ปนเปื้อนดิน/สิ่งแปลกปลอม",
+            "บรรจุภาชนะสะอาด"
+          ],
+          "evidence": ["บันทึกการตรวจสุขภาพพนักงาน", "ภาพถ่ายอุปกรณ์", "บันทึกการทำความสะอาด"]
+        }
+      ]
+    },
+    {
+      "id": "post-harvest",
+      "name": "การจัดการหลังเก็บเกี่ยว",
+      "weight": 15,
+      "description": "การตากแห้ง การเก็บรักษา และการแปรรูปเบื้องต้น",
+      "criteria": [
+        {
+          "id": "post-dry-1",
+          "code": "POST-001",
+          "name": "การตากแห้ง/ทำแห้ง",
+          "description": "กระบวนการทำแห้งที่ถูกต้องและเหมาะสม",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 7,
+            "partial": 3,
+            "fail": 0
+          },
+          "checkpoints": [
+            "วิธีการทำแห้งเหมาะสมกับพืช",
+            "อุณหภูมิและเวลาเหมาะสม",
+            "ป้องกันการปนเปื้อน",
+            "บันทึกกระบวนการ"
+          ],
+          "evidence": ["บันทึกการทำแห้ง", "ผลวิเคราะห์ความชื้น"]
+        },
+        {
+          "id": "post-stor-1",
+          "code": "POST-002",
+          "name": "การเก็บรักษา",
+          "description": "เก็บรักษาในสภาพที่เหมาะสมป้องกันการเสื่อม",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 8,
+            "partial": 4,
+            "fail": 0
+          },
+          "checkpoints": [
+            "อุณหภูมิและความชื้นเหมาะสม",
+            "ป้องกันแมลงและสัตว์",
+            "ไม่ปนเปื้อนกัน",
+            "มีระบบ FIFO"
+          ],
+          "evidence": ["บันทึกอุณหภูมิ-ความชื้น", "บันทึก stock card", "ภาพถ่ายคลังสินค้า"]
+        }
+      ]
+    },
+    {
+      "id": "personnel",
+      "name": "บุคลากรและการฝึกอบรม",
+      "weight": 10,
+      "description": "คุณสมบัติและการพัฒนาบุคลากร",
+      "criteria": [
+        {
+          "id": "pers-train-1",
+          "code": "PERS-001",
+          "name": "การฝึกอบรม",
+          "description": "บุคลากรได้รับการฝึกอบรม GACP",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 6,
+            "partial": 3,
+            "fail": 0
+          },
+          "checkpoints": [
+            "มีการอบรมสม่ำเสมอ",
+            "บันทึกการอบรม",
+            "ครอบคลุมหัวข้อสำคัญ",
+            "ทดสอบความรู้"
+          ],
+          "evidence": ["ใบรับรองการอบรม", "บันทึกการอบรม", "แบบทดสอบ"]
+        },
+        {
+          "id": "pers-health-1",
+          "code": "PERS-002",
+          "name": "สุขภาพและความปลอดภัย",
+          "description": "ดูแลสุขภาพและความปลอดภัยของบุคลากร",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 4,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "ตรวจสุขภาพประจำปี",
+            "มีอุปกรณ์ป้องกัน",
+            "ฝึกการปฐมพยาบาล",
+            "มีประกันภัย"
+          ],
+          "evidence": ["ใบรับรองแพทย์", "บันทึกการตรวจสุขภาพ", "ทะเบียนอุปกรณ์"]
+        }
+      ]
+    },
+    {
+      "id": "documentation",
+      "name": "เอกสารและการบันทึก",
+      "weight": 10,
+      "description": "ระบบเอกสารและการบันทึกข้อมูล",
+      "criteria": [
+        {
+          "id": "doc-rec-1",
+          "code": "DOC-001",
+          "name": "การบันทึกข้อมูล",
+          "description": "มีระบบบันทึกข้อมูลครบถ้วนและเป็นปัจจุบัน",
+          "requirement": "mandatory",
+          "scoring": {
+            "pass": 6,
+            "partial": 3,
+            "fail": 0
+          },
+          "checkpoints": [
+            "บันทึกทุกขั้นตอนการผลิต",
+            "ข้อมูลถูกต้องสมบูรณ์",
+            "สามารถตรวจสอบได้",
+            "เก็บรักษาอย่างน้อย 3 ปี"
+          ],
+          "evidence": ["แฟ้มเอกสารทุกแปลง", "ระบบ traceability", "บันทึกอิเล็กทรอนิกส์"]
+        },
+        {
+          "id": "doc-sop-1",
+          "code": "DOC-002",
+          "name": "ขั้นตอนการปฏิบัติงาน (SOP)",
+          "description": "มี SOP สำหรับทุกกิจกรรมสำคัญ",
+          "requirement": "recommended",
+          "scoring": {
+            "pass": 4,
+            "partial": 2,
+            "fail": 0
+          },
+          "checkpoints": [
+            "SOP ครอบคลุมทุกกระบวนการ",
+            "ทบทวนและปรับปรุงสม่ำเสมอ",
+            "พนักงานเข้าใจและปฏิบัติตาม",
+            "มีเอกสารอ้างอิง"
+          ],
+          "evidence": ["คู่มือ SOP", "บันทึกการทบทวน", "ลายเซ็นรับทราบ"]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "maxScore": 100,
+    "passingScore": 70,
+    "levels": [
+      {
+        "level": "excellent",
+        "minScore": 90,
+        "maxScore": 100,
+        "certification": "GACP Certified - Excellence",
+        "color": "#4CAF50"
+      },
+      {
+        "level": "good",
+        "minScore": 80,
+        "maxScore": 89,
+        "certification": "GACP Certified - Good",
+        "color": "#8BC34A"
+      },
+      {
+        "level": "pass",
+        "minScore": 70,
+        "maxScore": 79,
+        "certification": "GACP Certified",
+        "color": "#FFC107"
+      },
+      {
+        "level": "fail",
+        "minScore": 0,
+        "maxScore": 69,
+        "certification": "Not Certified - Improvement Needed",
+        "color": "#F44336"
+      }
+    ]
+  },
+  "compliance": {
+    "mandatoryRequirements": "All mandatory criteria must pass",
+    "recommendedRequirements": "At least 70% of recommended criteria should pass",
+    "documentationRequired": true,
+    "inspectionRequired": true,
+    "annualRenewal": true
+  }
+}

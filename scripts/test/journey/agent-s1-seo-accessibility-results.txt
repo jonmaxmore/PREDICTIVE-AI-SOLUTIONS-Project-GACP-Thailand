@@ -1,0 +1,16 @@
+Agent S1 — SEO & Accessibility Results
+Date: 2026-03-16T12:48:46.091Z
+Pass: 12 | Fail: 0 | Skip: 0 | Rate: 100.0%
+
+PASS | Homepage <title> tag | GACP - ระบบรับรองมาตรฐานสมุนไพรไทย
+PASS | Meta description | Present
+PASS | Viewport meta tag | Present (mobile-friendly)
+PASS | Charset declaration | Present
+PASS | sitemap.xml | status: 200
+PASS | robots.txt | Valid robots.txt
+PASS | Favicon | status: 200
+PASS | HTML lang attribute | lang="th"
+PASS | Login page — semantic form | Present
+PASS | Content-Type: text/html | text/html; charset=utf-8
+PASS | Server header hidden | nginx
+PASS | HTTPS enforced | TLS connection established

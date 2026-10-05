@@ -1,0 +1,142 @@
+# OPS ALERTING ONLY. These SMTP_* values are the operator's alert mailbox for
+# Alertmanager/Grafana — they are NOT the platform's mail: the application sends
+# no email or SMS to citizens and has no forgot-password flow (operator
+# 2026-09-16), which is why no app env template documents these names. Set them
+# in the environment that runs monitoring/docker-compose.monitoring.yml.
+global:
+  smtp_smarthost: '${SMTP_HOST}'
+  smtp_from: 'alerts@gacp-platform.th'
+  smtp_auth_username: '${SMTP_USER}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  smtp_require_tls: true
+  
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+  
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: 'default'
+  
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      repeat_interval: 5m
+      continue: true
+    
+    # Database alerts
+    - match:
+        team: database
+      receiver: 'database-team'
+      group_wait: 1m
+      
+    # Backend alerts
+    - match:
+        team: backend
+      receiver: 'backend-team'
+      group_wait: 1m
+      
+    # Infrastructure alerts
+    - match:
+        team: infrastructure
+      receiver: 'infrastructure-team'
+      group_wait: 1m
+    
+    # Warning alerts - less urgent
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 5m
+      repeat_interval: 24h
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: 'ops@gacp-platform.th'
+        headers:
+          Subject: 'GACP Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          {{ range .Alerts }}
+          <h2>{{ .Annotations.summary }}</h2>
+          <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+          <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+          <p><strong>Time:</strong> {{ .StartsAt }}</p>
+          {{ if .Annotations.runbook_url }}
+          <p><a href="{{ .Annotations.runbook_url }}">Runbook</a></p>
+          {{ end }}
+          {{ end }}
+
+  - name: 'critical-alerts'
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        description: '{{ .GroupLabels.alertname }}'
+        severity: critical
+    slack_configs:
+      - channel: '#critical-alerts'
+        title: '🔥 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+    email_configs:
+      - to: 'oncall@gacp-platform.th'
+        headers:
+          Subject: '[CRITICAL] GACP Alert: {{ .GroupLabels.alertname }}'
+          Priority: 'urgent'
+
+  - name: 'warning-alerts'
+    slack_configs:
+      - channel: '#alerts'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+    email_configs:
+      - to: 'ops@gacp-platform.th'
+        headers:
+          Subject: '[WARNING] GACP Alert: {{ .GroupLabels.alertname }}'
+
+  - name: 'database-team'
+    slack_configs:
+      - channel: '#database-alerts'
+        title: 'Database Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+    email_configs:
+      - to: 'dba@gacp-platform.th'
+
+  - name: 'backend-team'
+    slack_configs:
+      - channel: '#backend-alerts'
+        title: 'Backend Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+    email_configs:
+      - to: 'backend-team@gacp-platform.th'
+
+  - name: 'infrastructure-team'
+    slack_configs:
+      - channel: '#infra-alerts'
+        title: 'Infrastructure Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+    email_configs:
+      - to: 'infra@gacp-platform.th'
