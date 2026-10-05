@@ -988,13 +988,37 @@ async function listOwnerFarmIdsForTrace(ownerId, { holderScope = null } = {}) {
   if (!ownerId) {
     return [];
   }
+  // A health door passes its holder scope: the farms of the caller's holders
+  // (the farm-access fragment, spec 2026-09-30 §3.1). Without one the owner where stays.
+  const scoped = require('./holder-access').holderReadWhereIfScoped(holderScope, 'Farm');
   const farms = await prisma.farm.findMany({
     where: {
-      ownerId,
+      ...(Object.keys(scoped).length > 0 ? scoped : { ownerId }),
       isDeleted: false,
-      // R1-legacy-pin: removed in Task 12 — the pre-R1 owner where decides.
-      ...require('./holder-access').r1HolderOrLegacyWhenScoped(holderScope, 'Farm', { ownerId }),
     },
+    select: { id: true },
+  });
+  return farms.map(f => f.id);
+}
+
+
+/**
+ * The farms whose lots the caller may WRITE (create, update, print, labels): the
+ * farms the caller OWNS (Farm.ownerId), the pre-R2 gate of every lot door
+ * (cc87292a). T&T is frozen, so R2 Task 12 does not widen lot writes to the other
+ * members of a farm's holder; only lot READS follow membership
+ * (listOwnerFarmIdsForTrace). A health door passes its holder scope: the read
+ * then also carries the farm-access fragment (registered for the read witness),
+ * so an owner whose membership on the farm's holder is no longer ACTIVE is not
+ * given back a write.
+ */
+async function listWritableFarmIdsForTrace(ownerId, { holderScope = null } = {}) {
+  if (!ownerId) {
+    return [];
+  }
+  const scoped = require('./holder-access').holderReadWhereIfScoped(holderScope, 'Farm');
+  const farms = await prisma.farm.findMany({
+    where: { ...scoped, AND: [{ ownerId }], isDeleted: false },
     select: { id: true },
   });
   return farms.map(f => f.id);
@@ -1169,6 +1193,7 @@ module.exports = {
   findBatchWithFarmForTrace,
   updateBatchTraceQr,
   listOwnerFarmIdsForTrace,
+  listWritableFarmIdsForTrace,
   // Batch 16 — service-layer wrappers for helpers/lots-{label,utility}-routes
   findLotForLabel,
   findLotsForBatchLabels,

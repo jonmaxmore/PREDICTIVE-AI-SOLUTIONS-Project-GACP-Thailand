@@ -54,12 +54,7 @@ Managed centrally in `canonical-rbac.js`.
 **Reason**: Database may contain old status values from historical data.
 Managed centrally in `workflow-transition-service.js`.
 
-### 11. MongoDB ObjectId Validation in validation.js
-**Classification**: 🔴 Dead code
-**Finding**: System uses PostgreSQL UUIDs, not MongoDB ObjectIds
-**Resolution**: Can remove `isValidObjectId` — no consumers
-
-### 12. 4 Docker Compose Files
+### 11. 4 Docker Compose Files
 **Classification**: ⚠️ Accidental complexity
 **Finding**: `docker-compose.yml`, `production`, `local-prod`, `qa`
 **Resolution**: Keep dev + production only. QA and local-prod rarely used.
@@ -71,5 +66,4 @@ Managed centrally in `workflow-transition-service.js`.
 | ✅ Fixed | 3 | Done |
 | 🟢 Necessary | 2 | Document, don't change |
 | ⚠️ Accidental | 5 | Simplify in batches |
-| 🔴 Dead code | 1 | Remove |
-| **Total** | **11** | |
+| **Total** | **10** | |

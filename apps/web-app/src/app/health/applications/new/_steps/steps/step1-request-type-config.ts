@@ -15,7 +15,7 @@
  * an applicant ever sees these concepts named.
  */
 
-import type { ApplicantHolderType, CertScope, RequestType, WizardState } from '../hooks/use-application-flow-store.state-types';
+import type { CertScope, RequestType, WizardState } from '../hooks/use-application-flow-store.state-types';
 
 export interface Step1Option<T extends string> {
     /** The register's word. Never rendered. */
@@ -41,24 +41,6 @@ export const REQUEST_TYPE_OPTIONS: ReadonlyArray<Step1Option<RequestType>> = Obj
         value: 'REPLACEMENT',
         labelTH: 'ใบแทน',
         helpTH: 'ใบรับรองเดิมสูญหายหรือชำรุด และต้องการใบใหม่แทนฉบับเดิม',
-    },
-]);
-
-export const APPLICANT_TYPE_OPTIONS: ReadonlyArray<Step1Option<ApplicantHolderType>> = Object.freeze([
-    {
-        value: 'COMMUNITY_ENTERPRISE',
-        labelTH: 'วิสาหกิจชุมชน',
-        helpTH: 'จดทะเบียนวิสาหกิจชุมชนและยื่นในนามกลุ่ม',
-    },
-    {
-        value: 'INDIVIDUAL',
-        labelTH: 'บุคคลธรรมดา',
-        helpTH: 'ยื่นในนามตนเอง ใช้เลขประจำตัวประชาชน',
-    },
-    {
-        value: 'JURISTIC',
-        labelTH: 'นิติบุคคล',
-        helpTH: 'บริษัทหรือห้างหุ้นส่วนที่จดทะเบียนแล้ว',
     },
 ]);
 

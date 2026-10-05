@@ -161,12 +161,12 @@ describe('M1.5 H1 — an existing org workspace cannot be claimed by its registr
         expect(client.entityMembership.create).not.toHaveBeenCalled();
     });
 
-    it('ACTIVE non-OWNER → 409 telling them to switch workspace, and NO silent upgrade to OWNER', async () => {
+    it('ACTIVE non-OWNER → 409 telling them they are already a member, and NO silent upgrade to OWNER', async () => {
         client.entity.findFirst.mockResolvedValue({ id: 'ent-1', type: 'JURISTIC' });
         client.entityMembership.findUnique.mockResolvedValue({ role: 'MANAGER', status: 'ACTIVE' });
 
         await expect(ensureJuristicEntity({ user: member, applicantData: VALID_JURISTIC, tx: client }))
-            .rejects.toMatchObject({ status: 409, message: expect.stringContaining('สลับ workspace') });
+            .rejects.toMatchObject({ status: 409, message: expect.stringContaining('ไม่ต้องลงทะเบียนใหม่') });
         expect(client.entityMembership.upsert).not.toHaveBeenCalled();
         expect(client.entityMembership.create).not.toHaveBeenCalled();
         expect(auditLogger.log).toHaveBeenCalledWith(expect.objectContaining({

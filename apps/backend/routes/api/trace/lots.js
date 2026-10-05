@@ -28,8 +28,8 @@ const { registerLotUtilityRoutes } = require('../helpers/lots-utility-routes');
 const { maskThaiId } = require('../../../utils/field-encryption');
 
 async function getUserFarmIds(userId, req) {
-    // Spec 2026-09-30 §3.1 (R1): a health request passes its holder scope so the
-    // owner read carries the holder fragment; the owner where still decides.
+    // Spec 2026-09-30 §3.1: a health request passes its holder scope, so the farm
+    // ids are the farms of the caller's holders (the farm-access fragment).
     const { holderScope } = require('../../../services/holder-access');
     return traceabilityService.listOwnerFarmIdsForTrace(userId, {
         holderScope: req ? await holderScope(req) : null,
@@ -37,14 +37,26 @@ async function getUserFarmIds(userId, req) {
 }
 
 /**
- * Helper: Verify batch ownership via farm
+ * The farms whose lots the caller may WRITE: the farms it owns (the pre-R2 gate;
+ * T&T is frozen, so R2 Task 12 widens lot reads only). Every lot write door asks
+ * this, never getUserFarmIds.
+ */
+async function getUserWritableFarmIds(userId, req) {
+    const { holderScope } = require('../../../services/holder-access');
+    return traceabilityService.listWritableFarmIdsForTrace(userId, {
+        holderScope: req ? await holderScope(req) : null,
+    });
+}
+
+/**
+ * Helper: Verify batch ownership via farm (lot create: a write)
  */
 async function verifyBatchOwnership(batchId, userId, req) {
     const batch = await traceabilityService.findHarvestBatchFarmId(batchId);
     if (!batch) {
         return false;
     }
-    const farmIds = await getUserFarmIds(userId, req);
+    const farmIds = await getUserWritableFarmIds(userId, req);
     return farmIds.includes(batch.farmId);
 }
 
@@ -359,7 +371,7 @@ router.put('/:id', authenticateHealth, async (req, res) => {
         }
 
         // 404 (not 403) on cross-tenant access — see GET /:id.
-        const farmIds = await getUserFarmIds(userId, req);
+        const farmIds = await getUserWritableFarmIds(userId, req);
         if (!farmIds.includes(existing.batch?.farmId)) {
             return res.status(404).json({
                 success: false,
@@ -440,6 +452,7 @@ registerLotUtilityRoutes({
     qrcodeService,
     authenticateHealth,
     getUserFarmIds,
+    getUserWritableFarmIds,
     logger,
 });
 
@@ -452,6 +465,7 @@ registerLotLabelRoutes({
     prisma,
     authenticateHealth,
     getUserFarmIds,
+    getUserWritableFarmIds,
     logger,
 });
 

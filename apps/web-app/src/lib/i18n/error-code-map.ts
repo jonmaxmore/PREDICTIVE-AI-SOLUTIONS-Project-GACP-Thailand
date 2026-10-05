@@ -89,3 +89,17 @@ export function hasMappedErrorCode(
 ): code is string {
     return typeof code === 'string' && code.length > 0 && Object.prototype.hasOwnProperty.call(errorMap, code);
 }
+
+/**
+ * R2 (spec 2026-09-30-remove-workspace-mode §3.6): the server refused to create an
+ * application because no holder was named. The only wording for this code; every
+ * screen that can meet it uses this constant.
+ */
+export const APPLICATION_HOLDER_REQUIRED_CODE = 'APPLICATION_HOLDER_REQUIRED';
+export const APPLICATION_HOLDER_REQUIRED_TH =
+    'ยังไม่ได้เลือกว่าจะยื่นในนามใคร กรุณาเลือกที่ขั้นตอนที่ 1 หากเปิดหน้านี้ค้างไว้ ให้โหลดหน้าใหม่ก่อน';
+
+/** Code to Thai for the codes this module owns the wording of. */
+export const HOLDER_ERROR_MAP: Readonly<Record<string, string>> = Object.freeze({
+    [APPLICATION_HOLDER_REQUIRED_CODE]: APPLICATION_HOLDER_REQUIRED_TH,
+});

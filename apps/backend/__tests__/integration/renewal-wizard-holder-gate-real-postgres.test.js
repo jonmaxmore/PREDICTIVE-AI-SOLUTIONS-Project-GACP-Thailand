@@ -12,8 +12,8 @@
  * again at submit (POST /api/applications/submit), before any state change, fee,
  * quotation or invoice. Membership can change between the two.
  *
- * Real Postgres, the real prisma-database client, the real tenant-context and
- * active-entity middlewares, the real consent gate (consents are seeded). Only
+ * Real Postgres, the real prisma-database client, the real tenant-context
+ * middleware, the real consent gate (consents are seeded). Only
  * authentication is attached by hand. The read witness runs in throw mode.
  *
  * Fixture: user X filed company C's CERTIFIED certificate. P is X's personal entity
@@ -30,12 +30,10 @@ const mockActor = { current: null };
 jest.mock('../../middleware/auth-middleware', () => {
     const actual = jest.requireActual('../../middleware/auth-middleware');
     const { tenantContextMiddleware } = jest.requireActual('../../middleware/tenant-context-middleware');
-    const { activeEntityMiddleware } = jest.requireActual('../../middleware/active-entity-middleware');
     const bindTenant = tenantContextMiddleware();
-    const bindEntity = activeEntityMiddleware();
     const attach = (req, res, next) => {
         req.user = { ...mockActor.current };
-        return bindTenant(req, res, () => bindEntity(req, res, next));
+        return bindTenant(req, res, next);
     };
     return { ...actual, authenticateAny: attach, authenticateHealth: attach, authenticateProvider: attach, authenticateToken: attach };
 });
@@ -125,8 +123,8 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
         renewalOfCertificateNumber: fx.certNumber,
         renewalOfExpiryDate: fx.certExpiry.toISOString(),
     });
-    const claim = (kind, draftId, entityId) => request(app).post('/api/applications/draft')
-        .set({ 'x-active-entity-id': entityId })
+    // R2 Task 12: no workspace header; the draft's own holder decides.
+    const claim = (kind, draftId) => request(app).post('/api/applications/draft')
         .send({ applicationId: draftId, formData: { requestType: kind, previousCertificateNumber: fx.certNumber } });
     // The papers each judged filing asks for here: the company registration, and for a
     // REPLACEMENT one of police report / damaged certificate, and the licence of the claimed purpose EXPORT (ภ.ท.10).
@@ -137,8 +135,7 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
             });
         }
     };
-    const submit = (draftId, entityId) => request(app).post('/api/applications/submit')
-        .set({ 'x-active-entity-id': entityId })
+    const submit = (draftId) => request(app).post('/api/applications/submit')
         .send({ applicationId: draftId, declarationsAccepted: true });
     const lawOf = async (draftId) => {
         const row = await raw.application.findUnique({ where: { id: draftId } });
@@ -153,14 +150,12 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
         invoices: await raw.invoice.count({ where: { applicationId: draftId } }),
     });
     // Round 2: the bundle door and /prepare (which re-points a draft's holder).
-    const prepareUnder = (draftId, entityId) => request(app).post('/api/applications/prepare')
-        .set({ 'x-active-entity-id': entityId }).send({ applicationId: draftId });
-    const bundleAndSubmit = async (draftId, entityId) => {
+    const bundleAndSubmit = async (draftId) => {
         const made = await request(app).post('/api/applications/bundles')
-            .set({ 'x-active-entity-id': entityId }).send({ applications: [draftId] });
+            .send({ applications: [draftId] });
         const bundleId = made.body?.data?.id;
         expect({ status: made.status, bundleId: Boolean(bundleId) }).toEqual({ status: 200, bundleId: true });
-        return request(app).post(`/api/applications/bundles/${bundleId}/submit`).set({ 'x-active-entity-id': entityId }).send({});
+        return request(app).post(`/api/applications/bundles/${bundleId}/submit`).send({});
     };
     const filedAs = async (draftId) => {
         const row = await raw.application.findUnique({ where: { id: draftId } });
@@ -232,6 +227,7 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
         app = express();
         app.use(express.json());
         app.use('/api/applications/bundles', require('../../routes/api/applications/application-bundles'));
+        app.use('/api/applications/renewals', require('../../routes/api/applications/renewals'));
         app.use('/api/applications', require('../../routes/api/applications/applications'));
     });
 
@@ -279,14 +275,16 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
         ['RENEWAL', 'PENDING_AUDIT_FEE'],
         ['REPLACEMENT', 'PENDING_DOC_FEE'],
     ])('%s claim', (kind, entryState) => {
+        // R2 Task 12: a revoked X can no longer read C's certificate at all, so the
+        // draft door answers NOT_FOUND for it (a member of C still hears OTHER_HOLDER).
         describe.each([
-            ['a VIEWER of C', 'VIEWER', 'ACTIVE'],
-            ['revoked from C', 'MANAGER', 'REVOKED'],
-        ])('X is %s and files under personal entity P', (_label, role, status) => {
+            ['a VIEWER of C', 'VIEWER', 'ACTIVE', 'PREVIOUS_CERTIFICATE_OTHER_HOLDER'],
+            ['revoked from C', 'MANAGER', 'REVOKED', 'PREVIOUS_CERTIFICATE_NOT_FOUND'],
+        ])('X is %s and files under personal entity P', (_label, role, status, pNotice) => {
             test(`the draft door does not judge the P draft a ${kind} of C's certificate`, async () => {
                 await setRoleInC(role, status);
                 const draft = await mkDraft(`DP-${kind}-${role}-${status}`, fx.P);
-                const res = await claim(kind, draft, fx.P);
+                const res = await claim(kind, draft);
                 expect({
                     status: res.status,
                     requestType: res.body?.data?.requestType,
@@ -295,7 +293,7 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
                 }).toEqual({
                     status: 200,
                     requestType: 'NEW',
-                    notice: 'PREVIOUS_CERTIFICATE_OTHER_HOLDER',
+                    notice: pNotice,
                     stored: { status: 'DRAFT', requestType: 'NEW', linked: null },
                 });
                 expect(witnessLogs()).toEqual([]);
@@ -305,7 +303,7 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
                 await setRoleInC(role, status);
                 const draft = await mkDraft(`SP-${kind}-${role}-${status}`, fx.P, classifiedAs(kind));
                 await attachPapers(draft);
-                const res = await submit(draft, fx.P);
+                const res = await submit(draft);
                 expect({
                     status: res.status,
                     code: res.body?.code || res.body?.error || null,
@@ -326,7 +324,7 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
         test(`X is a MANAGER of C without the grant: the C draft is not judged a ${kind}`, async () => {
             await setRoleInC('MANAGER');
             const draft = await mkDraft(`DC-MGR-${kind}`, fx.C);
-            const res = await claim(kind, draft, fx.C);
+            const res = await claim(kind, draft);
             expect({
                 status: res.status,
                 requestType: res.body?.data?.requestType,
@@ -345,7 +343,7 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
             await setRoleInC('MANAGER');
             await grantSubmitInC();
             const draft = await mkDraft(`DC-GRT-${kind}`, fx.C);
-            const res = await claim(kind, draft, fx.C);
+            const res = await claim(kind, draft);
             expect({ status: res.status, requestType: res.body?.data?.requestType, notice: res.body?.data?.lawNotice ?? null })
                 .toEqual({ status: 200, requestType: kind, notice: null });
             expect(await lawOf(draft)).toEqual({ status: 'DRAFT', requestType: kind, linked: fx.certC });
@@ -354,12 +352,21 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
 
         test(`X is OWNER of C, draft under C: ${kind} accepted, and submit takes its path`, async () => {
             await setRoleInC('OWNER');
+            // One succession of a certificate in flight at a time (RENEWAL_ALREADY_IN_PROGRESS):
+            // the other kind's filing from the previous case is retired first.
+            for (const path of [['renewalOf'], ['replacementOf']]) {
+                // eslint-disable-next-line gacp/no-direct-application-status-write -- fixture: retire the previous case's filing
+                await raw.application.updateMany({
+                    where: { organizationId: fx.org, status: { notIn: ['DRAFT', 'CERTIFIED'] }, formData: { path, equals: fx.certC } },
+                    data: { status: 'CANCEL_EXPIRED' },
+                });
+            }
             const draft = await mkDraft(`DC-OWN-${kind}`, fx.C);
             await attachPapers(draft);
-            const accepted = await claim(kind, draft, fx.C);
+            const accepted = await claim(kind, draft);
             expect({ status: accepted.status, requestType: accepted.body?.data?.requestType, notice: accepted.body?.data?.lawNotice ?? null })
                 .toEqual({ status: 200, requestType: kind, notice: null });
-            const res = await submit(draft, fx.C);
+            const res = await submit(draft);
             expect({ status: res.status, code: res.body?.code || res.body?.error || null, body: res.status === 200 ? null : res.body })
                 .toEqual({ status: 200, code: null, body: null });
             expect((await lawOf(draft)).status).toBe(entryState);
@@ -371,30 +378,26 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
     // Round 2 (review IMPORTANT): a claim judged under C must not survive /prepare moving
     // the draft to P, and the bundle door must apply the same holder check as /submit.
     describe.each([['RENEWAL'], ['REPLACEMENT']])('%s claim across a holder change', (kind) => {
-        test(`/prepare cannot carry a ${kind} of C's certificate to P: the draft stays under C (R1) and a holder change is re-judged`, async () => {
+        test(`/prepare never moves a ${kind} of C's certificate to P (B11): the draft and its claim stay under C`, async () => {
             await setRoleInC('OWNER');
             const draft = await mkDraft(`PREP-${kind}`, fx.C);
-            const accepted = await claim(kind, draft, fx.C);
+            const accepted = await claim(kind, draft);
             expect(accepted.body?.data?.requestType).toBe(kind);
 
-            // Under R1 the entity dimension only finds a draft under its own holder, so
-            // /prepare with the P header does not reach the C draft at all.
-            const prepared = await prepareUnder(draft, fx.P);
-            expect({ status: prepared.status, stored: await filedAs(draft) }).toEqual({
-                status: 404,
+            // R2 (spec 2026-09-30 §3.2, B11): /prepare never re-homes a draft; a body
+            // entityId is dropped. The claim was judged for C and stays with C, so it
+            // can never be carried to another holder through this door.
+            // A body naming P: 200, nothing moves (R2 Task 12: no header, so there is no
+            // "acting on P" any more; asking twice changes nothing either).
+            const prepared = await request(app).post('/api/applications/prepare')
+                .send({ applicationId: draft, entityId: fx.P });
+            const again = await request(app).post('/api/applications/prepare')
+                .send({ applicationId: draft, entityId: fx.P });
+            expect({ status: prepared.status, again: again.status, stored: await filedAs(draft) }).toEqual({
+                status: 200,
+                again: 200,
                 stored: { status: 'DRAFT', entityId: 'C', requestType: kind, linked: fx.certC, stampedSlots: null },
             });
-
-            // The re-judge /prepare runs when the holder does change (Task 12 removes the
-            // R1 intersection): on the real client, against the real certificate.
-            const { prisma } = require('../../services/prisma-database');
-            const { rejudgeClaimForHolder } = require('../../services/application-law-dimensions');
-            const storedForm = (await raw.application.findUnique({ where: { id: draft } })).formData;
-            const toP = await rejudgeClaimForHolder({ prisma, actorUserId: fx.X.id, formData: storedForm, toEntityId: fx.P });
-            expect({ requestType: toP.dimensions.requestType, renewalOf: toP.dimensions.renewalOf, replacementOf: toP.dimensions.replacementOf, notice: toP.notice?.code })
-                .toEqual({ requestType: 'NEW', renewalOf: null, replacementOf: null, notice: 'PREVIOUS_CERTIFICATE_OTHER_HOLDER' });
-            const toC = await rejudgeClaimForHolder({ prisma, actorUserId: fx.X.id, formData: storedForm, toEntityId: fx.C });
-            expect({ requestType: toC.dimensions.requestType, notice: toC.notice }).toEqual({ requestType: kind, notice: null });
             expect(witnessLogs()).toEqual([]);
         });
 
@@ -402,7 +405,7 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
             await setRoleInC('OWNER');
             const draft = await mkDraft(`BND-${kind}`, fx.P, classifiedAs(kind));
             await attachPapers(draft);
-            const res = await bundleAndSubmit(draft, fx.P);
+            const res = await bundleAndSubmit(draft);
             expect({
                 status: res.status,
                 code: res.body?.code || res.body?.error || null,
@@ -421,6 +424,103 @@ d('wizard renewal door: same holder + SUBMIT_APPLICATION on it (real Postgres)',
             const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
             expect(meta.permission).toBe('CERTIFICATE_HOLDER_MATCH');
             expect(witnessLogs()).toEqual([]);
+        });
+    });
+    // Operator ruling 2026-10-03: same holder + SUBMIT_APPLICATION is enough; who filed
+    // the previous certificate does not matter (no filer match at the draft door).
+    test('X, OWNER of C, judges a RENEWAL of C\'s certificate that another member filed', async () => {
+        await setRoleInC('OWNER');
+        const otherId = crypto.randomUUID();
+        await raw.user.create({
+            data: {
+                id: otherId, canonicalId: `rw-o-${sfx}`, healthId: `rw-o-${sfx}`, password: 'x', role: 'health', authType: 'EMAIL_LEGACY',
+                email: `rw-o-${sfx}@example.test`, firstName: 'ทดสอบ', lastName: 'ผู้ยื่นเดิม', organizationId: fx.org,
+            },
+        });
+        await raw.certificate.update({ where: { id: fx.certC }, data: { userId: otherId, submittedByUserId: otherId } });
+        try {
+            const draft = await mkDraft('DC-NONFILER', fx.C);
+            const res = await claim('RENEWAL', draft);
+            expect({ status: res.status, requestType: res.body?.data?.requestType, notice: res.body?.data?.lawNotice?.code ?? null })
+                .toEqual({ status: 200, requestType: 'RENEWAL', notice: null });
+            expect(await lawOf(draft)).toEqual({ status: 'DRAFT', requestType: 'RENEWAL', linked: fx.certC });
+            expect(witnessLogs()).toEqual([]);
+        } finally {
+            await raw.certificate.update({ where: { id: fx.certC }, data: { userId: fx.X.id, submittedByUserId: fx.X.id } });
+            await raw.user.delete({ where: { id: otherId } }).catch(() => {});
+        }
+    });
+    // Re-review of the renewal ruling: one in-flight succession per certificate, also at submit.
+    test('a draft claiming a RENEWAL of C\'s certificate while another renewal of it is in flight is refused at submit: 409, nothing changed', async () => {
+        await setRoleInC('OWNER');
+        const inFlight = await raw.application.create({
+            data: {
+                applicationNumber: `APP-RW-INFLIGHT-${sfx}`, healthId: fx.X.canonicalId, areaType: 'OUTDOOR',
+                organizationId: fx.org, entityId: fx.C, submitterId: fx.X.id, status: 'PENDING_AUDIT_FEE',
+                formData: { ...completeCanonicalFormData(), requestType: 'RENEWAL', renewalOf: fx.certC },
+            },
+        });
+        fx.appIds.push(inFlight.id);
+        try {
+            const draft = await mkDraft('DC-DUP', fx.C, classifiedAs('RENEWAL'));
+            await attachPapers(draft);
+            const res = await submit(draft);
+            expect({ status: res.status, code: res.body?.code || res.body?.error || null, stored: (await lawOf(draft)).status, written: await writtenFor(draft) })
+                .toEqual({ status: 409, code: 'RENEWAL_ALREADY_IN_PROGRESS', stored: 'DRAFT', written: { quotations: 0, invoices: 0 } });
+            expect(witnessLogs()).toEqual([]);
+        } finally {
+            // eslint-disable-next-line gacp/no-direct-application-status-write -- fixture cleanup
+            await raw.application.update({ where: { id: inFlight.id }, data: { status: 'CANCEL_EXPIRED' } });
+        }
+    });
+    // Decision 2 of the re-review: the in-flight check and the status transition of a
+    // succession claim run under the same per-certificate advisory lock as the renewal
+    // door, inside the submit transaction.
+    describe('concurrent successions of one certificate', () => {
+        const retireSuccessions = async () => {
+            for (const path of [['renewalOf'], ['replacementOf']]) {
+                // eslint-disable-next-line gacp/no-direct-application-status-write -- fixture: retire earlier filings
+                await raw.application.updateMany({
+                    where: { organizationId: fx.org, status: { notIn: ['DRAFT', 'CERTIFIED'] }, formData: { path, equals: fx.certC } },
+                    data: { status: 'CANCEL_EXPIRED' },
+                });
+            }
+        };
+        const leftDraft = async (ids) => (await raw.application.findMany({ where: { id: { in: ids } }, select: { status: true } }))
+            .filter((r) => r.status !== 'DRAFT').length;
+
+        test('two drafts claiming a RENEWAL of the same certificate, submitted at the same moment: one leaves DRAFT, the other 409', async () => {
+            await setRoleInC('OWNER');
+            await retireSuccessions();
+            const d1 = await mkDraft('RACE-1', fx.C, classifiedAs('RENEWAL'));
+            const d2 = await mkDraft('RACE-2', fx.C, classifiedAs('RENEWAL'));
+            await attachPapers(d1);
+            await attachPapers(d2);
+            const [r1, r2] = await Promise.all([submit(d1), submit(d2)]);
+            // Exactly one submitted and exactly one refused (a race has no fixed order).
+            expect([r1, r2].filter((r) => r.status === 200)).toHaveLength(1);
+            expect([r1, r2].filter((r) => r.status === 409)).toHaveLength(1);
+            expect([r1, r2].find((r) => r.status === 409).body?.code).toBe('RENEWAL_ALREADY_IN_PROGRESS');
+            expect(await leftDraft([d1, d2])).toBe(1);
+            expect(witnessLogs()).toEqual([]);
+        });
+
+        test('a draft submit racing the renewal door on the same certificate: exactly one succeeds', async () => {
+            await setRoleInC('OWNER');
+            await retireSuccessions();
+            const d = await mkDraft('RACE-DOOR', fx.C, classifiedAs('RENEWAL'));
+            await attachPapers(d);
+            const [sub, door] = await Promise.all([
+                submit(d),
+                request(app).post('/api/applications/renewals').send({ originalCertificateId: fx.certC }),
+            ]);
+            const succeeded = [sub.status === 200, door.status === 201].filter(Boolean).length;
+            expect({ succeeded, refused: [sub.status, door.status].includes(409) }).toEqual({ succeeded: 1, refused: true });
+            const inFlight = await raw.application.count({
+                where: { organizationId: fx.org, status: { notIn: ['DRAFT', 'CERTIFIED', 'CANCEL_EXPIRED'] }, formData: { path: ['renewalOf'], equals: fx.certC } },
+            });
+            expect(inFlight).toBe(1);
+            if (door.status === 201) { fx.appIds.push(door.body.data.applicationId); }
         });
     });
 });

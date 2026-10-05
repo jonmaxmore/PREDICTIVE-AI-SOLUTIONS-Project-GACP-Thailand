@@ -3,14 +3,13 @@
  *
  * The backend `/applications/my` endpoint maps every health application through
  * `mapHealthApplication` (apps/backend/routes/api/helpers/applications-helpers.js)
- * which emits the identifier as `id`. It used to emit `_id`, a MongoDB name carried
- * which (in the billing page) meant loadStatement never fired (permanent spinner)
- * and every picker button rendered `key={undefined}` (colliding React keys).
+ * which emits the identifier as `id`. It used to emit `_id`, a name the PostgreSQL
+ * schema never had, so reading `.id` yielded undefined: loadStatement never fired
+ * (permanent spinner) and every picker button rendered `key={undefined}`
+ * (colliding React keys).
  *
- * These helpers are the single source of truth for deriving the billing target
- * into a Postgres codebase; reading `.id` yielded undefined and the picker broke.
- * These helpers centralise the read, and are unit-tested so it can't
- * silently regress to `.id` again.
+ * These helpers are the single source of truth for deriving the billing target,
+ * and are unit-tested so the read can't silently drift again.
  */
 
 export type MyApplication = {

@@ -13,10 +13,11 @@
  * The gate now fails closed (middleware/uploads-access.js), and this suite pins
  * the other half: the delete unlinks the file, so there is nothing left to serve.
  *
- * Confinement mirrors the wizard delete (controllers/wizard-controller.js:203-215):
- * the path is derived from the stored fileUrl and proved to live under the
- * uploads root before unlink, so a poisoned record can never become an arbitrary
- * file delete.
+ * Confinement: the path is derived from the stored fileUrl and proved to live
+ * under the uploads root before unlink (storage-service.resolveWithinUploads),
+ * so a poisoned record can never become an arbitrary file delete. The cases
+ * marked "moved" came from wizard-draft-document-path-confinement.test.js when
+ * the /api/wizard door was deleted (R2 Task 10); this is the one delete door.
  */
 
 'use strict';
@@ -48,7 +49,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -57,6 +57,11 @@ jest.mock('../../services/application-service', () => ({
     findUserOrganizationId: jest.fn(),
     getApplicantReadinessSnapshot: jest.fn(),
     getLatestOpenDraftForApplicant: jest.fn(),
+}));
+// R2 Task 8: every draft write names its draft, and the caller edits for its holder.
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] })),
 }));
 
 jest.mock('../../services/entity-service', () => ({
@@ -162,8 +167,7 @@ const FILE_URL = '/uploads/application-drafts/1716000000000-abc.png';
 
 function seedDraft(docs) {
     applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-    applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
-    applicationService.findLatestOpenDraftForHealth.mockResolvedValue({
+    applicationService.findApplicationByIdForHealth.mockResolvedValue({
         id: 'app-1',
         applicationNumber: 'APP-2026-000001',
         status: 'DRAFT',
@@ -182,7 +186,7 @@ beforeEach(() => {
 describe('B3 — DELETE /draft-documents/:id removes the bytes', () => {
     test('unlinks the stored file inside the uploads root', async () => {
         seedDraft([{ documentId: DOC_ID, fileUrl: FILE_URL, fileName: 'probe.png' }]);
-        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}`);
+        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}?applicationId=app-1`);
         expect(res.status).toBe(200);
         expect(res.body?.data?.deleted).toBe(true);
         expect(mockUnlink).toHaveBeenCalledTimes(1);
@@ -192,20 +196,48 @@ describe('B3 — DELETE /draft-documents/:id removes the bytes', () => {
 
     test('still removes the mirrored application_documents row', async () => {
         seedDraft([{ documentId: DOC_ID, fileUrl: FILE_URL }]);
-        await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}`);
+        await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}?applicationId=app-1`);
         expect(mockRemoveApplicationDocument).toHaveBeenCalledWith(expect.anything(), 'app-1', DOC_ID);
     });
 
     test('a fileUrl pointing outside the uploads root is REFUSED, not unlinked', async () => {
         seedDraft([{ documentId: DOC_ID, fileUrl: '/uploads/application-drafts/../../../../etc/passwd' }]);
-        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}`);
+        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}?applicationId=app-1`);
         expect(res.status).toBe(200);
+        expect(mockUnlink).not.toHaveBeenCalled();
+    });
+
+    test('moved: a fileUrl that is an absolute path outside /uploads is REFUSED, not unlinked', async () => {
+        seedDraft([{ documentId: DOC_ID, fileUrl: '/etc/passwd' }]);
+        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}?applicationId=app-1`);
+        expect(res.status).toBe(200);
+        expect(mockUnlink).not.toHaveBeenCalled();
+    });
+
+    test('moved: a sibling directory that merely shares the root prefix is REFUSED', async () => {
+        seedDraft([{ documentId: DOC_ID, fileUrl: '/uploads/../uploads-evil/x.pdf' }]);
+        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}?applicationId=app-1`);
+        expect(res.status).toBe(200);
+        expect(mockUnlink).not.toHaveBeenCalled();
+    });
+
+    test('moved: the record is removed from formData even when its path is refused', async () => {
+        seedDraft([
+            { documentId: DOC_ID, fileUrl: '/etc/passwd' },
+            { documentId: 'doc-2', fileUrl: FILE_URL },
+        ]);
+        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}?applicationId=app-1`);
+        expect(res.status).toBe(200);
+        expect(res.body?.data?.deleted).toBe(true);
+        const written = JSON.stringify(applicationService.updateApplicantDraftColumns.mock.calls.map((c) => c.slice(1)));
+        expect(written).toContain('doc-2');
+        expect(written).not.toContain('/etc/passwd');
         expect(mockUnlink).not.toHaveBeenCalled();
     });
 
     test('a documentId that matches nothing unlinks nothing', async () => {
         seedDraft([{ documentId: 'other', fileUrl: FILE_URL }]);
-        const res = await request(buildApp()).delete('/api/applications/draft-documents/doc-missing');
+        const res = await request(buildApp()).delete('/api/applications/draft-documents/doc-missing?applicationId=app-1');
         expect(res.status).toBe(200);
         expect(res.body?.data?.deleted).toBe(false);
         expect(mockUnlink).not.toHaveBeenCalled();
@@ -214,7 +246,7 @@ describe('B3 — DELETE /draft-documents/:id removes the bytes', () => {
     test('an unlink failure does not fail the delete (the record is already gone)', async () => {
         seedDraft([{ documentId: DOC_ID, fileUrl: FILE_URL }]);
         mockUnlink.mockRejectedValueOnce(new Error('ENOENT'));
-        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}`);
+        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}?applicationId=app-1`);
         expect(res.status).toBe(200);
         expect(res.body?.data?.deleted).toBe(true);
     });
@@ -232,7 +264,7 @@ describe('DELETE /draft-documents/:id retires the document\'s pre-check', () => 
 
     function seedOrgDraft(docs) {
         seedDraft(docs);
-        applicationService.findLatestOpenDraftForHealth.mockResolvedValue({
+        applicationService.findApplicationByIdForHealth.mockResolvedValue({
             id: 'app-1',
             organizationId: 'org-1',
             applicationNumber: 'APP-2026-000001',
@@ -248,7 +280,7 @@ describe('DELETE /draft-documents/:id retires the document\'s pre-check', () => 
         const retire = jest.spyOn(documentPrecheck, 'retireForDocument').mockResolvedValue(1);
         seedOrgDraft([{ documentId: DOC_ID, fileUrl: FILE_URL, slotId: 'land_deed' }]);
 
-        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}`);
+        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}?applicationId=app-1`);
 
         expect(res.status).toBe(200);
         expect(retire).toHaveBeenCalledTimes(1);
@@ -258,11 +290,11 @@ describe('DELETE /draft-documents/:id retires the document\'s pre-check', () => 
     test('a retire that throws leaves the delete\'s response exactly as it was', async () => {
         seedOrgDraft([{ documentId: DOC_ID, fileUrl: FILE_URL, slotId: 'land_deed' }]);
         jest.spyOn(documentPrecheck, 'retireForDocument').mockResolvedValue(1);
-        const baseline = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}`);
+        const baseline = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}?applicationId=app-1`);
 
         seedOrgDraft([{ documentId: DOC_ID, fileUrl: FILE_URL, slotId: 'land_deed' }]);
         const retire = jest.spyOn(documentPrecheck, 'retireForDocument').mockRejectedValue(new Error('database down'));
-        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}`);
+        const res = await request(buildApp()).delete(`/api/applications/draft-documents/${DOC_ID}?applicationId=app-1`);
 
         expect(retire).toHaveBeenCalled();
         expect(res.status).toBe(200);
@@ -274,7 +306,7 @@ describe('DELETE /draft-documents/:id retires the document\'s pre-check', () => 
         const retire = jest.spyOn(documentPrecheck, 'retireForDocument').mockResolvedValue(0);
         seedOrgDraft([{ documentId: 'other', fileUrl: FILE_URL }]);
 
-        await request(buildApp()).delete('/api/applications/draft-documents/doc-missing');
+        await request(buildApp()).delete('/api/applications/draft-documents/doc-missing?applicationId=app-1');
 
         expect(retire).not.toHaveBeenCalled();
     });

@@ -21,6 +21,7 @@ const { safeErrorMessage } = require('../../../shared/api-response');
 const logger = require('../../../shared/logger');
 const { registerPlotRoutes } = require('./planting-cycles-plot-routes');
 const { registerActivityAndHarvestRoutes } = require('./planting-cycles-activity-harvest-routes');
+const { registerAttachmentRoutes } = require('./planting-cycles-attachment-routes');
 
 const {
   // Constants
@@ -51,6 +52,7 @@ const {
 // Sunset dates are deployment-visible policy, so they resolve in config/ where a
 // release owner can find them — not from a process.env read inside a route file.
 const { HARVEST_LEGACY_SUNSET } = require('../../../config/api-deprecation-policy');
+const { entityPermissionDeniedBody } = require('../../../shared/entity-permission-denied');
 
 
 router.use(authenticateHealth);
@@ -178,12 +180,7 @@ router.post('/', async (req, res) => {
       await assertFarmPermission({ farmId: ownedFarm.id, userId, permission: 'CYCLE_CREATE', req });
     } catch (permError) {
       if (permError?.code === 'ENTITY_PERMISSION_DENIED') {
-        return res.status(403).json({
-          success: false,
-          code: 'ENTITY_PERMISSION_DENIED',
-          permission: permError.permission || 'CYCLE_CREATE',
-          error: 'คุณไม่มีสิทธิ์สร้างรอบปลูกในพื้นที่ทำงานนี้',
-        });
+        return res.status(403).json(entityPermissionDeniedBody(permError.permission || 'CYCLE_CREATE'));
       }
       throw permError;
     }
@@ -364,6 +361,15 @@ registerActivityAndHarvestRoutes(router, {
   logger,
   storedAreaToSqm,
   qrcodeService,
+});
+
+// C4 (operator 2026-09-30): the activity page's attachments have their own door.
+registerAttachmentRoutes(router, {
+  ensureCycleReachable,
+  requireCycleFarmPermission,
+  resolveActivityPermission,
+  getAuthenticatedUserId,
+  logger,
 });
 
 module.exports = router;

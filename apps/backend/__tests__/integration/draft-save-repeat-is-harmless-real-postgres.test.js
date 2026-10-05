@@ -41,9 +41,10 @@ jest.mock('../../services/application-service', () => {
 });
 
 /** What buildDraftPayload (web use-auto-save.ts) sends for a step-1/step-4 wizard. */
-function wizardPayload(applicationId) {
+function wizardPayload(applicationId, holderId) {
     return {
-        ...(applicationId ? { applicationId } : {}),
+        // R2 Task 8: a first save (no id yet) names the holder the applicant chose at step 1.
+        ...(applicationId ? { applicationId } : { entityId: holderId }),
         plantId: 'cannabis',
         serviceType: null,
         areaType: 'OUTDOOR',
@@ -90,6 +91,11 @@ d('POST /api/applications/draft sent twice (a lost reply, retried) is harmless (
         const entity = await raw.entity.create({
             data: { type: 'INDIVIDUAL', displayName: 'ทดสอบ ส่งซ้ำ', organizationId: org.id },
         });
+        // R2 Task 8 (spec 2026-09-30 §3.2): a draft write needs the caller's ACTIVE,
+        // non-VIEWER membership on the draft's holder (holderScope(req).editIds).
+        await raw.entityMembership.create({
+            data: { userId: user.id, entityId: entity.id, role: 'OWNER', status: 'ACTIVE', organizationId: org.id },
+        });
         Object.assign(fx, { orgId: org.id, userId: user.id, canonicalId, entityId: entity.id });
         mockHealthIdentity.current = {
             reqUser: { id: user.id, role: 'health', canonicalRole: 'health' },
@@ -98,13 +104,10 @@ d('POST /api/applications/draft sent twice (a lost reply, retried) is harmless (
         const router = require('../../routes/api/applications/applications');
         app = express();
         app.use(express.json());
-        // The active entity the wizard's api-client sends (x-active-entity-id), so a
-        // first, id-less save can mint a draft.
-        // and the tenant scope tenant-context-middleware opens on every real request (the
+        // The tenant scope tenant-context-middleware opens on every real request (the
         // Prisma tenant extension stamps organizationId on a create from it).
         const { runWithTenantContext } = require('../../services/tenant-context');
         app.use((req, _res, next) => {
-            req.activeEntity = { entityId: fx.entityId };
             runWithTenantContext({ organizationId: fx.orgId }, () => next());
         });
         app.use('/api/applications', router);
@@ -205,13 +208,13 @@ d('POST /api/applications/draft sent twice (a lost reply, retried) is harmless (
         const before = await snapshot();
         expect(before.apps).toHaveLength(0);
 
-        const first = await request(app).post('/api/applications/draft').send(wizardPayload(undefined));
+        const first = await request(app).post('/api/applications/draft').send(wizardPayload(undefined, fx.entityId));
         expect(first.status).toBe(200);
         const afterFirst = await snapshot();
         expect(afterFirst.apps).toHaveLength(1);
 
         // The client never learned the id, so the retry carries none.
-        const second = await request(app).post('/api/applications/draft').send(wizardPayload(undefined));
+        const second = await request(app).post('/api/applications/draft').send(wizardPayload(undefined, fx.entityId));
         expect(second.status).toBe(200);
         const afterSecond = await snapshot();
 

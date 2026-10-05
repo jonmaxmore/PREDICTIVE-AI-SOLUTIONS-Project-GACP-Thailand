@@ -73,22 +73,19 @@ function toApplicantView(row) {
  * @param {string} args.applicationId
  * @param {{ userId: string, readIds: string[] }} args.holderScope  the caller's holder
  *        scope (holder-access.holderScope(req)) — the ownership check (spec 2026-09-30 §3.1)
- * @param {string} args.healthId  R1-legacy-pin: removed in Task 12 — the pre-R1 filer pin
  */
-async function listAuditNotesForApplicant({ prisma, applicationId, holderScope, healthId } = {}) {
+async function listAuditNotesForApplicant({ prisma, applicationId, holderScope } = {}) {
     // Ownership first, and a filing that is not this applicant's is a 404 rather than a
     // 403: telling a stranger that an application exists is itself a disclosure. No
     // scope reads nothing and is the same 404.
     // Required here, not at the top: routes/api/audit/onsite.js loads this module for
     // the staff-side writers, and holder-access pulls in the membership service.
-    const { r1ApplicationHolderOrPin } = require('./holder-access');
+    const { holderReadWhere } = require('./holder-access');
     const application = holderScope && Array.isArray(holderScope.readIds)
         ? await prisma.application.findFirst({
             where: {
                 id: String(applicationId || ''),
-                // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(holderScope, 'Application')).
-                // OR form: neutral also when no entity context is bound (final review C1).
-                ...r1ApplicationHolderOrPin(holderScope, { healthId: String(healthId || '') }),
+                ...holderReadWhere(holderScope, 'Application'),
                 isDeleted: false,
             },
             select: { id: true },

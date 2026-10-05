@@ -9,7 +9,7 @@ const router = express.Router();
 const { prisma } = require('../../../services/prisma-database');
 const authModule = require('../../../middleware/auth-middleware');
 const applicationService = require('../../../services/application-service');
-const { holderScope, r1HolderOrLegacyWhenScoped } = require('../../../services/holder-access');
+const { holderScope, holderReadWhere } = require('../../../services/holder-access');
 const { buildHealthProcessCounts } = require('../../../shared/health-dashboard-stage');
 const logger = require('../../../shared/logger');
 
@@ -89,30 +89,18 @@ router.get('/stats', authenticateAny, async (req, res) => {
             healthId: healthIdFromToken || undefined,
         });
         const actorUserId = healthIdentity.userId;
-        const actorHealthId = healthIdentity.healthId;
         // Spec 2026-09-30 §3.1: the filings whose holder is in the caller's scope.
         const scope = await holderScope(req);
 
         const [applications, farmsCount, noticesCount, certificatesCount] = await Promise.all([
-            applicationService.getHealthApplications(actorUserId || null, {
-                // R1-legacy-pin: removed in Task 12 — the pre-R1 where options.
-                userId: actorUserId,
-                healthId: actorHealthId,
-                strictHealthId: true,
-                holderScope: scope,
-            }),
+            applicationService.getHealthApplications(actorUserId || null, { holderScope: scope }),
+            // Review Focus 4 (R2 Task 12): the counter counts exactly the rows
+            // GET /farms/my lists — the membership-based farm fragment
+            // (farm-access) and isDeleted false — not Farm.ownerId.
             prisma.farm.count({
-                // Scope by Farm.ownerId = User.id (UUID). NOT owner.healthId:
-                // actorHealthId is the keyed-HMAC TOKEN but the User.healthId
-                // COLUMN is enc:v1: ciphertext at rest (STAGE B), so a relation
-                // filter on it never matches → farms:0 for an owner who has
-                // farms (reproduced live 2026-07-03). ownerId is never re-keyed.
                 where: {
+                    ...holderReadWhere(scope, 'Farm'),
                     isDeleted: false,
-                    ownerId: actorUserId,
-                    owner: { isDeleted: false },
-                    // R1-legacy-pin: removed in Task 12 — the pre-R1 owner where decides.
-                    ...r1HolderOrLegacyWhenScoped(scope, 'Farm', { ownerId: actorUserId, owner: { isDeleted: false } }),
                 },
             }),
             actorUserId
@@ -124,15 +112,11 @@ router.get('/stats', authenticateAny, async (req, res) => {
                 }).catch(() => 0)
                 : Promise.resolve(0),
             prisma.certificate.count({
-                // Same token-vs-ciphertext fix as farms: scope by
-                // Certificate.userId = User.id (UUID), not user.healthId.
+                // The holder's certificates, as GET /certificates/my lists them.
                 where: {
                     isDeleted: false,
                     status: { in: ['active', 'ACTIVE'] },
-                    userId: actorUserId,
-                    user: { isDeleted: false },
-                    // R1-legacy-pin: removed in Task 12 — the pre-R1 filer where decides.
-                    ...r1HolderOrLegacyWhenScoped(scope, 'Certificate', { userId: actorUserId, user: { isDeleted: false } }),
+                    ...holderReadWhere(scope, 'Certificate'),
                 },
             }),
         ]);

@@ -171,17 +171,14 @@ describe('certificate-service.listCertificates — tenant scoping (C3)', () => {
         expect(call.where.organizationId).toBeUndefined();
     });
 
-    it('scope=self narrows by the holder scope + the R1 userId pin (HEALTH owner) and ignores org filter', async () => {
+    it('scope=self narrows by the holder scope alone (no filer pin, R2 Task 12) and ignores org filter', async () => {
         const holderScope = { userId: 'user-1', readIds: ['entity-1'], editIds: ['entity-1'] };
         await certificateService.listCertificates({ scope: 'self', userId: 'user-1', holderScope, organizationId: 'org-A' });
         const call = prisma.certificate.findMany.mock.calls[0][0];
-        // Spec 2026-09-30 §3.1 (Task 4): the holder fragment (marked); R1 keeps { userId } as the AND member.
-        expect(hasHolderMarker(call.where.OR[0])).toBe(true);
-        expect(hasHolderMarker(call.where.OR[1])).toBe(true);
-        // R1 (Task 4 fix round 1): the pre-R1 pin decides; the OR carries the fragment.
+        // Spec 2026-09-30 §3.1: the holder fragment (marked), nothing else.
+        expect(hasHolderMarker(call.where)).toBe(true);
         expect(JSON.parse(JSON.stringify(call.where))).toEqual({
-            OR: [{ application: { entityId: { in: ['entity-1'] } } }, { userId: 'user-1' }],
-            AND: [{ userId: 'user-1' }],
+            application: { entityId: { in: ['entity-1'] } },
             isDeleted: false,
         });
         expect(call.where.organizationId).toBeUndefined();
@@ -211,16 +208,14 @@ describe('certificate-service.getCertificateForUser (ownership preserved)', () =
         expect(prisma.certificate.findFirst).not.toHaveBeenCalled();
     });
 
-    it('queries with id, the holder fragment, the R1 userId pin and isDeleted (IDOR guard)', async () => {
+    it('queries with id, the holder fragment and isDeleted (IDOR guard), no filer pin (R2 Task 12)', async () => {
         prisma.certificate.findFirst.mockResolvedValueOnce({ id: 'cert-1' });
         await certificateService.getCertificateForUser('cert-1', { userId: 'user-1', readIds: ['entity-1'], editIds: [] });
         const call = prisma.certificate.findFirst.mock.calls[0][0];
-        expect(hasHolderMarker(call.where.OR[0])).toBe(true);
-        expect(hasHolderMarker(call.where.OR[1])).toBe(true);
+        expect(hasHolderMarker(call.where)).toBe(true);
         expect(JSON.parse(JSON.stringify(call.where))).toEqual({
             id: 'cert-1',
-            OR: [{ application: { entityId: { in: ['entity-1'] } } }, { userId: 'user-1' }],
-            AND: [{ userId: 'user-1' }],
+            application: { entityId: { in: ['entity-1'] } },
             isDeleted: false,
         });
     });

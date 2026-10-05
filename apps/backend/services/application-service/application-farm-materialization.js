@@ -17,9 +17,9 @@
  * The filing HELD the address the farmer typed at step 3. It held it under the กทล.๑
  * ส่วนที่ ๒ vocabulary the six-step wizard writes — `siteName` / `siteAddress` — and every
  * reader downstream was looking for the previous wizard's `farmName` / `address`. The v1
- * door (application-submission-methods.executeWizardSubmission) mints the farm inside its
- * own submit transaction; the v2 door (routes/api/applications/applications.js POST
- * /submit) never did, and nothing else on the line would.
+ * door (executeWizardSubmission, deleted with /api/wizard in R2 Task 10) minted the farm
+ * inside its own submit transaction; the v2 door (routes/api/applications/applications.js
+ * POST /submit) never did, and nothing else on the line would.
  *
  * WHY THE MAP LIVES HERE AND NOT AT EITHER DOOR
  * Two copies of "which formData key feeds which Farm column" is precisely the defect

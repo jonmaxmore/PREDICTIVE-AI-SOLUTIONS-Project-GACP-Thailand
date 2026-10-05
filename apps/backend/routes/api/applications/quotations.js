@@ -35,7 +35,8 @@ const { normalizeRole, CANONICAL_ROLES } = require('../../../shared/canonical-rb
 const logger = require('../../../shared/logger');
 const quotationService = require('../../../services/quotation-service');
 const applicationService = require('../../../services/application-service');
-const { holderScope } = require('../../../services/holder-access');
+const { holderScope, assertHolderCapability } = require('../../../services/holder-access');
+const { entityPermissionDeniedBody } = require('../../../shared/entity-permission-denied');
 const { ISSUER_TYPES } = require('../../../config/invoice-issuers');
 const invoiceTemplateService = require('../../../services/pdf/invoice-template-service');
 const { collectUniqueCultivationMethods } = require('../../../modules/billing');
@@ -121,17 +122,21 @@ function resolveAllowedIssuerSides(user) {
  * คำขอค้างถาวรโดยไม่มีใครรู้ว่าเพราะอะไร
  */
 //
-// Spec 2026-09-30 §3.1: the application is read within the caller's holder
-// scope (holderScope, called here inside the handler) AND, in R1, the pre-R1
-// filer pin (applicant.id = req.user.id) on every door, reads and accept alike.
-async function isApplicantOwnerOfApplication(applicationId, req) {
+// Spec 2026-09-30 §3.1 (R2 Task 12): the application is read within the
+// caller's holder scope alone (holderScope, called here inside the handler):
+// any ACTIVE member of its holder reads its quotations. Accepting one is an
+// act for the holder and is gated separately (SUBMIT_APPLICATION, below).
+async function readableApplication(applicationId, req) {
     const userId = String(req?.user?.id || '').trim();
-    if (!applicationId || !userId) { return false; }
+    if (!applicationId || !userId) { return null; }
     const owned = await applicationService.findOwnedApplicationForApplicant(applicationId, {
         holderScope: await holderScope(req),
-        filerUserId: userId, // R1-legacy-pin: removed in Task 12
     });
-    return Boolean(owned && !owned.isDeleted);
+    return owned && !owned.isDeleted ? owned : null;
+}
+
+async function isApplicantOwnerOfApplication(applicationId, req) {
+    return Boolean(await readableApplication(applicationId, req));
 }
 
 // ── Routes ──────────────────────────────────────────────────────────────────
@@ -404,9 +409,21 @@ router.post('/:issuerType/accept', authenticateHealth, async (req, res) => {
             });
         }
 
-        const owns = await isApplicantOwnerOfApplication(applicationId, req);
-        if (!owns) {
+        const filing = await readableApplication(applicationId, req);
+        if (!filing) {
             return res.status(404).json({ success: false, error: 'Quotation not found' });
+        }
+        // Accepting the price commits the holder to the filing, as paying does
+        // (operator Q3, 2026-10-03): SUBMIT_APPLICATION on the holder. Reading the
+        // quotation is open to every member; accepting it is not (R2 Task 12: the
+        // filer pin that used to keep co-members out of this door is gone).
+        try {
+            await assertHolderCapability(req.user?.id, filing.entityId, 'SUBMIT_APPLICATION');
+        } catch (gateErr) {
+            if (gateErr?.code === 'ENTITY_PERMISSION_DENIED') {
+                return res.status(403).json(entityPermissionDeniedBody(gateErr.permission || 'SUBMIT_APPLICATION'));
+            }
+            throw gateErr;
         }
         const applicantScope = await holderScope(req);
 

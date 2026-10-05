@@ -334,11 +334,14 @@ async function getCapacitySummary(userId, farmIdFilter, { holderScope = null } =
     const [activeCertificates, plots, reservedCycles] = await Promise.all([
         prisma.certificate.findMany({
             where: {
-                userId: String(userId), farmId: { in: farmIds },
+                farmId: { in: farmIds },
                 isDeleted: false, status: { in: ['active', 'ACTIVE'] },
                 expiryDate: { gte: now },
-                // R1-legacy-pin: removed in Task 12 — the pre-R1 filer + farm where decides.
-                ...require('../holder-access').r1HolderOrLegacyWhenScoped(holderScope, 'Certificate', { userId: String(userId), farmId: { in: farmIds } }),
+                // A health door passes its holder scope: the certificates its holders
+                // hold. Without one the filer where stays.
+                ...(holderScope && Array.isArray(holderScope.readIds)
+                    ? require('../holder-access').holderReadWhere(holderScope, 'Certificate')
+                    : { userId: String(userId) }),
             },
             select: { farmId: true },
         }),

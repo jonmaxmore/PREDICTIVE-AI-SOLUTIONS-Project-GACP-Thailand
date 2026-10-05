@@ -16,8 +16,9 @@
  * Every query is AWAITED inside the contexts: a PrismaPromise is lazy, and one
  * returned unawaited runs after the contexts have exited.
  *
- *   (a) registered Application fragment, entity ALS bound → scoped, shadow and
- *       throw; the entityId rewrite really runs after the witness;
+ *   (a) registered Application fragment → scoped, shadow and throw; the
+ *       fragment's entityId reaches SQL unchanged (R2 Task 12 removed the entity
+ *       ALS that used to rewrite it);
  *   (b) the same read with entityId overridden → unscoped, counted, throws;
  *   (c) a fragment registered in request 1 (user A, [X]), reused in request 2
  *       (user B, which registered its own [W]) → unscoped;
@@ -34,7 +35,6 @@ const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
 const { describeIfTestDatabase: d } = require('../../test-support/test-database');
 const { prisma } = require('../../services/prisma-database');
-const { runWithEntityContext } = require('../../services/entity-context');
 const { tenantContextMiddleware } = require('../../middleware/tenant-context-middleware');
 const { holderScope, holderReadWhere } = require('../../services/holder-access');
 const { farmAccessWhere } = require('../../services/farm-access');
@@ -136,10 +136,10 @@ d('read witness by value (real Postgres, full prisma-database chain)', () => {
     }
 
     /**
-     * One request through the real tenant-context middleware, entity ALS bound,
-     * `fn` awaited inside both contexts. Rethrows what `fn` threw.
+     * One request through the real tenant-context middleware, `fn` awaited inside
+     * the context. Rethrows what `fn` threw.
      */
-    async function asRequest(fn, { canonicalRole = 'health', entityId = fx.X, userId = fx.userId } = {}) {
+    async function asRequest(fn, { canonicalRole = 'health', userId = fx.userId } = {}) {
         const req = {
             method: 'GET',
             baseUrl: '/api/applications',
@@ -150,7 +150,7 @@ d('read witness by value (real Postgres, full prisma-database chain)', () => {
         let failure = null;
         await tenantContextMiddleware()(req, { status: () => ({ json: () => {} }) }, async () => {
             try {
-                out = await runWithEntityContext({ entityId, role: 'OWNER', personal: false }, async () => await fn(req));
+                out = await fn(req);
             } catch (error) { failure = error; }
         });
         if (failure) { throw failure; }
@@ -179,15 +179,14 @@ d('read witness by value (real Postgres, full prisma-database chain)', () => {
             expect(witnessLogs()).toEqual([]);
         });
 
-        test('the entity ALS rewrite really runs after the witness: bound entity W replaces the fragment (W row back), no witness hit', async () => {
+        test('nothing rewrites the fragment any more (R2 Task 12): the fragment alone selects the X row, no witness hit', async () => {
             setMode(mode);
             const rows = await asRequest(async (req) => {
                 const frag = holderReadWhere(await holderScope(req), 'Application');
                 return prisma.application.findMany({ where: frag, select: { id: true } });
-            }, { entityId: fx.W });
-            // The fragment alone selects the X row; the W row proves applyReadScopes
-            // overwrote entityId, after the witness had already passed the read.
-            expect(rows).toEqual([{ id: fx.appW }]);
+            });
+            // Pre-R2 a bound entity W overwrote entityId after the witness (W row back).
+            expect(rows).toEqual([{ id: fx.appX }]);
             expect(witnessLogs()).toEqual([]);
         });
 
@@ -214,7 +213,7 @@ d('read witness by value (real Postgres, full prisma-database chain)', () => {
         test('shadow: the read runs, counted +1, logged with model/op/route/principal', async () => {
             setMode('shadow');
             const before = await counter('Application', 'findMany');
-            const rows = await asRequest(overridden, { entityId: fx.W });
+            const rows = await asRequest(overridden);
             expect(rows).toEqual([{ id: fx.appW }]);
             expect(await counter('Application', 'findMany')).toBe(before + 1);
             expect(witnessLogs()).toEqual([expect.objectContaining({
@@ -225,7 +224,7 @@ d('read witness by value (real Postgres, full prisma-database chain)', () => {
 
         test('throw: rejects HEALTH_READ_UNSCOPED', async () => {
             setMode('throw');
-            await expect(asRequest(overridden, { entityId: fx.W })).rejects.toMatchObject({ code: 'HEALTH_READ_UNSCOPED' });
+            await expect(asRequest(overridden)).rejects.toMatchObject({ code: 'HEALTH_READ_UNSCOPED' });
         });
 
         test('throw: a deleted key (fragment keys dropped) rejects too', async () => {
@@ -247,7 +246,7 @@ d('read witness by value (real Postgres, full prisma-database chain)', () => {
                 own: await prisma.application.count({ where: fragB }),
                 reused: await prisma.application.count({ where: fragA }),
             };
-        }, { userId: fx.userB, entityId: fx.W });
+        }, { userId: fx.userB });
         // Both reads run in shadow (entity W bound rewrites both to W); only the reuse is counted.
         expect(shadow).toEqual({ own: 1, reused: 1 });
         expect(await counter('Application', 'count')).toBe(before + 1);
@@ -255,7 +254,7 @@ d('read witness by value (real Postgres, full prisma-database chain)', () => {
         await expect(asRequest(async (req) => {
             holderReadWhere(await holderScope(req), 'Application');
             return prisma.application.count({ where: fragA });
-        }, { userId: fx.userB, entityId: fx.W })).rejects.toMatchObject({ code: 'HEALTH_READ_UNSCOPED' });
+        }, { userId: fx.userB })).rejects.toMatchObject({ code: 'HEALTH_READ_UNSCOPED' });
     });
 
     describe('(d) Invoice relation fragment', () => {
@@ -318,9 +317,10 @@ d('read witness by value (real Postgres, full prisma-database chain)', () => {
         const before = await counter('Application', 'findMany');
         const rows = await asRequest(
             () => prisma.application.findMany({ where: { id: { in: fx.apps } }, select: { id: true }, orderBy: { applicationNumber: 'asc' } }),
-            { canonicalRole: 'document_reviewer', entityId: fx.W },
+            { canonicalRole: 'document_reviewer' },
         );
-        expect(rows).toEqual([{ id: fx.appW }]);
+        // R2 Task 12: no entity context narrows a staff read any more (spec §3.1 (b)).
+        expect(rows.map((r) => r.id).sort()).toEqual([fx.appX, fx.appW].sort());
         expect(await counter('Application', 'findMany')).toBe(before);
         expect(witnessLogs()).toEqual([]);
     });

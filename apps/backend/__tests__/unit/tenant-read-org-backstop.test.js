@@ -6,19 +6,15 @@
  *   - flag ON  → organizationId injected on tenant-scoped reads when a tenant
  *     context is bound; fail-open (no injection) when context is null
  *     (withoutTenantScope / platform-admin / cron / public reads)
- *   - the entity dimension (entityId) is independent + always on
+ *   - there is no entity dimension any more (R2 Task 12): nothing rewrites entityId
  */
 
 'use strict';
 
 const mockTenant = { ctx: null };
-const mockEntity = { ctx: null };
 
 jest.mock('../../services/tenant-context', () => ({
     getTenantContext: () => mockTenant.ctx,
-}));
-jest.mock('../../services/entity-context', () => ({
-    getEntityContext: () => mockEntity.ctx,
 }));
 
 const { applyReadScopes, orgReadScopeEnabled } = require('../../services/tenant-prisma-extension');
@@ -27,7 +23,6 @@ describe('ENT-01 read backstop — applyReadScopes', () => {
     const ORIGINAL_FLAG = process.env.TENANT_READ_ORG_SCOPE;
     beforeEach(() => {
         mockTenant.ctx = null;
-        mockEntity.ctx = null;
         delete process.env.TENANT_READ_ORG_SCOPE;
     });
     afterAll(() => {
@@ -82,19 +77,17 @@ describe('ENT-01 read backstop — applyReadScopes', () => {
         });
     });
 
-    describe('entity dimension — independent, always on (flag-agnostic)', () => {
-        test('entity-scoped model + entity ctx → entityId injected regardless of flag', () => {
-            mockEntity.ctx = { entityId: 'ent-1' };
-            const out = applyReadScopes('Farm', { where: {} });
-            expect(out.where).toEqual({ entityId: 'ent-1' });
+    describe('no entity dimension (R2 Task 12: the active-workspace filter is gone)', () => {
+        test('Farm and Application reads keep their own entityId; nothing is injected', () => {
+            const out = applyReadScopes('Farm', { where: { entityId: { in: ['e-1', 'e-2'] } } });
+            expect(out.where).toEqual({ entityId: { in: ['e-1', 'e-2'] } });
         });
 
-        test('flag ON + Application (entity AND tenant scoped) + both ctx → both filters', () => {
+        test('flag ON + Application + tenant ctx → only the organization filter is added', () => {
             process.env.TENANT_READ_ORG_SCOPE = 'true';
-            mockEntity.ctx = { entityId: 'ent-1' };
             mockTenant.ctx = { organizationId: 'org-A' };
             const out = applyReadScopes('Application', { where: { status: 'DRAFT' } });
-            expect(out.where).toEqual({ status: 'DRAFT', entityId: 'ent-1', organizationId: 'org-A' });
+            expect(out.where).toEqual({ status: 'DRAFT', organizationId: 'org-A' });
         });
     });
 });

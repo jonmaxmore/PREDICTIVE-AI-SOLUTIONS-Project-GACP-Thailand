@@ -59,7 +59,7 @@ const ROLES = Object.freeze({
 
 /**
  * Wave C PR-4 — canonical capability codes layered on top of the four
- * coarse roles. Every action gated by an entity-context check looks up
+ * coarse roles. Every action gated by an entity capability check looks up
  * a code in this table and asks `assertCapability(role, code)`.
  *
  * The codes are stable strings; the role-to-codes map is documented
@@ -1388,56 +1388,6 @@ async function listMembershipsForUserWithHeal({ userId, healthId, includePending
 }
 
 /**
- * Append a row to entity_context_switches. Called from the workspace-switcher
- * client whenever the active entity changes; also called by the active-entity
- * middleware (Wave C PR-2) on the very first request after login when the
- * default fires.
- *
- * Best-effort: failures here log a warning but never throw — losing an audit
- * row is unfortunate, blocking the user's switch is worse.
- *
- * @param {object} args
- * @param {string} args.userId
- * @param {string|null} args.fromEntityId
- * @param {string} args.toEntityId
- * @param {string} args.organizationId
- * @param {string} [args.ipAddress]
- * @param {string} [args.userAgent]
- * @param {string} [args.source] HEADER | URL_SLUG | DEFAULT
- * @param {import('@prisma/client').Prisma.TransactionClient} [args.tx]
- */
-async function recordContextSwitch({
-    userId,
-    fromEntityId,
-    toEntityId,
-    organizationId,
-    ipAddress,
-    userAgent,
-    source = 'HEADER',
-    tx,
-}) {
-    if (!userId || !toEntityId || !organizationId) {return null;}
-    const client = tx || prisma;
-    try {
-        return await client.entityContextSwitch.create({
-            data: {
-                userId,
-                fromEntityId: fromEntityId || null,
-                toEntityId,
-                organizationId,
-                ipAddress: ipAddress || null,
-                userAgent: userAgent ? String(userAgent).slice(0, 512) : null,
-                source,
-            },
-        });
-    } catch (_err) {
-        // Don't propagate — audit failure must not break the switch.
-        // The caller logs at warn level if this returns null.
-        return null;
-    }
-}
-
-/**
  * Resolve a user's effective role on an entity by reading EntityMembership.
  * Returns null when the user has no active membership.
  *
@@ -1529,11 +1479,11 @@ const CLAIM_REFUSED_CODE = 'ENTITY_ALREADY_REGISTERED';
 // them in a circle.
 const CLAIM_REFUSAL_MESSAGES = Object.freeze({
     STRANGER: Object.freeze({
-        [TYPES.JURISTIC]: 'นิติบุคคลนี้ลงทะเบียนแล้ว — ขอคำเชิญจากเจ้าของ workspace',
-        [TYPES.COMMUNITY_ENTERPRISE]: 'วิสาหกิจชุมชนนี้ลงทะเบียนแล้ว — ขอคำเชิญจากเจ้าของ workspace',
+        [TYPES.JURISTIC]: 'นิติบุคคลนี้ลงทะเบียนแล้ว — ขอคำเชิญจากเจ้าของนิติบุคคลนี้',
+        [TYPES.COMMUNITY_ENTERPRISE]: 'วิสาหกิจชุมชนนี้ลงทะเบียนแล้ว — ขอคำเชิญจากเจ้าของนิติบุคคลนี้',
     }),
-    PENDING: 'คุณมีคำเชิญค้างอยู่ — กดยอมรับที่หน้า workspace',
-    ACTIVE_MEMBER: 'คุณเป็นสมาชิกอยู่แล้ว — สลับ workspace แทนการลงทะเบียนใหม่',
+    PENDING: 'คุณมีคำเชิญค้างอยู่ — กดยอมรับที่หน้า "นิติบุคคลและวิสาหกิจชุมชนของคุณ"',
+    ACTIVE_MEMBER: 'คุณเป็นสมาชิกอยู่แล้ว ไม่ต้องลงทะเบียนใหม่ — เลือกเป็นผู้ยื่นได้ที่ขั้นตอนที่ 1 ของคำขอ',
 });
 
 function claimRefusalMessage({ entityType, membership }) {
@@ -1776,7 +1726,7 @@ async function ensureCommunityEntity({ user, applicantData, tx }) {
 // ensureJuristicEntity / ensureCommunityEntity) is deleted. It turned whatever
 // applicantType + registration number a client posted into an Entity the caller
 // owned, and its single production caller — the /prepare legacy-materialise
-// branch — only woke up when the active-entity middleware fail-opened.
+// branch — only woke up when the (since removed) active-entity middleware fail-opened.
 // Workspaces are created through POST /api/entities alone now. Spec §H1.
 
 /**
@@ -1938,7 +1888,6 @@ module.exports = {
     listMembershipsForUserWithHeal,
     listMembersForEntity,
     presentEntityForMember,
-    recordContextSwitch,
     findInviteeByIdentifier,
     slugify,
     nextAvailableSlug,

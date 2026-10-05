@@ -17,6 +17,8 @@ export type PlantingCycleSummary = {
   farm?: {
     id: string;
     farmName?: string;
+    /** Holder entity of the farm; null/absent for a farm with no holder. */
+    entityId?: string | null;
   };
   plantSpecies?: {
     id: string;

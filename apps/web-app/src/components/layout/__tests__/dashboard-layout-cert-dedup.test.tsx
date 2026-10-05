@@ -54,7 +54,6 @@ jest.mock('@/lib/services/auth-service', () => ({
 }));
 
 jest.mock('@/components/layout/Footer', () => ({ Footer: () => null }));
-jest.mock('@/components/layout/entity-switcher', () => ({ EntitySwitcher: () => null }));
 
 import HealthHomeClientView from '@/app/health/home/client-view';
 

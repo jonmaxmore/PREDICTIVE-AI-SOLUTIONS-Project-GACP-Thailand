@@ -297,18 +297,23 @@ export default function CertificateDetailClientView({ id }: ClientViewProps) {
                     <h2 className="text-sm font-semibold text-muted-foreground">
                         ตรวจสอบใบรับรองสาธารณะ
                     </h2>
-                    <div className="rounded-xl border border-slate-200 bg-white p-3 print:border-none">
-                        <QrImage
-                            value={verifyUrl}
-                            alt={`QR ตรวจสอบใบรับรอง ${cert.certificateNumber}`}
-                            size={224}
-                            className="h-52 w-52 sm:h-56 sm:w-56"
-                            fallbackSrc={cert.qrCode ?? null}
-                        />
-                    </div>
-                    <p className="text-center text-xs text-muted-foreground">
-                        สแกน QR หรือเปิดลิงก์เพื่อยืนยันความถูกต้องของใบรับรอง
-                    </p>
+                    {/* C5: the QR only for a caller who may print it; the public link below stays. */}
+                    {cert.canPrintQr !== false && (
+                        <>
+                            <div className="rounded-xl border border-slate-200 bg-white p-3 print:border-none">
+                                <QrImage
+                                    value={verifyUrl}
+                                    alt={`QR ตรวจสอบใบรับรอง ${cert.certificateNumber}`}
+                                    size={224}
+                                    className="h-52 w-52 sm:h-56 sm:w-56"
+                                    fallbackSrc={cert.qrCode ?? null}
+                                />
+                            </div>
+                            <p className="text-center text-xs text-muted-foreground">
+                                สแกน QR หรือเปิดลิงก์เพื่อยืนยันความถูกต้องของใบรับรอง
+                            </p>
+                        </>
+                    )}
                     <div className="w-full rounded-lg bg-slate-50 px-3 py-2 text-center">
                         <p className="text-[11px] text-muted-foreground">
                             ลิงก์ตรวจสอบ

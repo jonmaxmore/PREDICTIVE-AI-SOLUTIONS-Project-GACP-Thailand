@@ -304,10 +304,8 @@ async function assertRequiredDocumentsPresent({
             // §3.1); staff and system callers pass none and keep this where.
             where: {
                 applicationId: application.id,
-                // R1-legacy-pin: removed in Task 12 (→ holderReadWhere); the application the
-                // door's gate resolved decides, as pre-R1.
                 ...(holderScope && Array.isArray(holderScope.readIds)
-                    ? require('./holder-access').r1HolderOrLegacy(holderScope, 'ApplicationDocument', { applicationId: application.id })
+                    ? require('./holder-access').holderReadWhere(holderScope, 'ApplicationDocument')
                     : {}),
             },
             // supersededAt travels with the type: a replaced row is history, never
@@ -352,10 +350,8 @@ async function assertRequiredDocumentsPresent({
             // §3.1); staff and system callers pass none and keep this where.
             where: {
                 applicationId: application.id,
-                // R1-legacy-pin: removed in Task 12 (→ holderReadWhere); the application the
-                // door's gate resolved decides, as pre-R1.
                 ...(holderScope && Array.isArray(holderScope.readIds)
-                    ? require('./holder-access').r1HolderOrLegacy(holderScope, 'ApplicationDocument', { applicationId: application.id })
+                    ? require('./holder-access').holderReadWhere(holderScope, 'ApplicationDocument')
                     : {}),
             },
             // supersededAt travels with the type: a replaced row is history, never

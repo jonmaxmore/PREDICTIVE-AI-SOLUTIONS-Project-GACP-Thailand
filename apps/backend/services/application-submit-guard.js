@@ -18,8 +18,8 @@
  *      model is invented here, and the denial keeps the engine's own code
  *      `ENTITY_PERMISSION_DENIED` (plan D5).
  *
- * The entity checked is the one on the APPLICATION ROW — never the
- * `x-active-entity` header. Keying off the header is how a member of entity A
+ * The entity checked is the one on the APPLICATION ROW — never a value the
+ * request supplies. Keying off a request value is how a member of entity A
  * could submit a draft belonging to entity B.
  *
  * Every rejection writes an AuditLog FAILURE row through `auditLogger.log()`,
@@ -35,6 +35,7 @@
 
 const { assertEntityActionPermission } = require('./entity-effective-permissions-service');
 const { auditLogger, AuditCategory, AuditSeverity, ResourceType } = require('../middleware/audit-logger');
+const { ENTITY_PERMISSION_DENIED_EN } = require('../shared/entity-permission-denied');
 
 /** The capability every submit door gates on. */
 const SUBMIT_PERMISSION = 'SUBMIT_APPLICATION';
@@ -92,12 +93,9 @@ async function writeDenialAudit({ userId, application, entityId, auditContext, s
             errorCode: code,
             errorMessage: reason,
             metadata: {
-                // The heart of AC3: in whose name was this attempted.
+                // The heart of AC3: in whose name was this attempted. The holder
+                // alone; no workspace field (R2 Task 9, spec §3.2 Submit).
                 onBehalfOfEntityId: entityId || null,
-                // What the caller CLAIMED to be acting as, when it differs —
-                // a header pointing elsewhere is the signature of the
-                // cross-entity submit attempt this gate exists to stop.
-                activeEntityId: ctx.activeEntityId ?? null,
                 // What the refusal is about: SUBMIT_APPLICATION, or the certificate
                 // holder rule for a RENEWAL/REPLACEMENT claim.
                 permission,
@@ -124,7 +122,7 @@ async function writeDenialAudit({ userId, application, entityId, auditContext, s
  * @param {object} args
  * @param {string} args.userId            the human pressing submit
  * @param {object} args.application       the application ROW (needs id + entityId)
- * @param {object} [args.auditContext]    { actorRole, actorType, ipAddress, userAgent, organizationId, activeEntityId, route }
+ * @param {object} [args.auditContext]    { actorRole, actorType, ipAddress, userAgent, organizationId, route }
  * @param {object} [args.prisma]          optional client passed through to the engine
  * @param {object} [args.holderScope]     the door's holder scope, for the certificate read
  * @returns {Promise<{ entityId: string }>} the entity the submit acts for
@@ -160,7 +158,7 @@ async function assertSubmitAllowed({ userId, application, auditContext, prisma, 
             userId: null, application: app, entityId, auditContext,
             status: 403, code: PERMISSION_DENIED, reason: 'no actor on the submit request',
         });
-        throw new SubmitGuardError(403, PERMISSION_DENIED, 'ไม่มีสิทธิ์ยื่นคำขอในนามนิติบุคคลนี้');
+        throw new SubmitGuardError(403, PERMISSION_DENIED, ENTITY_PERMISSION_DENIED_EN);
     }
 
     try {
@@ -181,12 +179,110 @@ async function assertSubmitAllowed({ userId, application, auditContext, prisma, 
                 ? 'effective permission set lacks SUBMIT_APPLICATION'
                 : `permission check failed: ${err?.message || 'unknown error'}`,
         });
-        throw new SubmitGuardError(403, PERMISSION_DENIED, 'ไม่มีสิทธิ์ยื่นคำขอในนามนิติบุคคลนี้');
+        throw new SubmitGuardError(403, PERMISSION_DENIED, ENTITY_PERMISSION_DENIED_EN);
     }
 
     await assertRenewalHolderMatches({ userId: actorId, application: app, auditContext, holderScope, prisma });
 
     return { entityId };
+}
+
+const RENEWAL_ALREADY_IN_PROGRESS = 'RENEWAL_ALREADY_IN_PROGRESS';
+
+/**
+ * One renewal or replacement per certificate at a time (re-review of the operator
+ * ruling 2026-10-03: every member with SUBMIT_APPLICATION on the holder may renew,
+ * so two members could each start one, each with its own quotation).
+ *
+ * In flight = a live (not soft-deleted) application whose formData links one of
+ * `certificateIds` (renewalOf or replacementOf) and whose status is neither one of
+ * the status writer's TERMINAL_STATUSES nor DRAFT. A DRAFT claim was never filed (no
+ * quotation, nothing to pay): counting it would let an abandoned draft block every
+ * member of the holder for good. `excludeApplicationId` leaves the filing being
+ * submitted out. A health caller's read carries its holder fragment (the in-flight
+ * filing is under the same holder, which the caller may read).
+ * @param {object} args
+ * @param {object} args.db             prisma client or transaction client
+ * @param {string[]} args.certificateIds
+ * @param {?string} [args.excludeApplicationId]
+ * @param {?object} [args.holderScope]
+ * @returns {Promise<?{ id: string }>}
+ */
+async function findInFlightSuccession({ db, certificateIds, excludeApplicationId = null, holderScope = null } = {}) {
+    const ids = [...new Set((certificateIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+    if (ids.length === 0) { return null; }
+    // Lazy: the status writer is a large module; only its terminal set is needed here.
+    const { TERMINAL_STATUSES } = require('./application-status-writer');
+    const { holderReadWhereIfScoped } = require('./holder-access');
+    return db.application.findFirst({
+        where: {
+            ...holderReadWhereIfScoped(holderScope, 'Application'),
+            isDeleted: false,
+            status: { notIn: [...TERMINAL_STATUSES, 'DRAFT'] },
+            ...(excludeApplicationId ? { NOT: { id: String(excludeApplicationId) } } : {}),
+            AND: [{
+                OR: ids.flatMap((id) => [
+                    { formData: { path: ['renewalOf'], equals: id } },
+                    { formData: { path: ['replacementOf'], equals: id } },
+                ]),
+            }],
+        },
+        select: { id: true },
+    });
+}
+
+/** The certificate ids a filing claims to succeed (renewalOf / replacementOf), sorted. */
+function claimedSuccessionIds(formData) {
+    const fd = formData && typeof formData === 'object' ? formData : {};
+    return [...new Set([fd.renewalOf, fd.replacementOf].map((id) => String(id || '').trim()).filter(Boolean))].sort();
+}
+
+/**
+ * Per-certificate advisory locks for a succession (renewal / replacement), held to
+ * the end of the transaction `tx` (pg_advisory_xact_lock). The renewal door and every
+ * submit transaction of a succession claim take these as the FIRST statement of the
+ * transaction, one key per certificate (`renewal:<certificateId>`), in ascending id
+ * order. Lock ordering: no transaction that takes them holds a row lock yet (the
+ * ordered-draft FOR UPDATE and the checkout locks are taken by other transactions that
+ * never wait on these keys, or later in this one), and two transactions take their
+ * keys in the same order, so no wait cycle can form.
+ * @param {object} tx                 interactive transaction client
+ * @param {string[]} certificateIds
+ */
+async function lockCertificateSuccessions(tx, certificateIds) {
+    const ids = [...new Set((certificateIds || []).map((id) => String(id || '').trim()).filter(Boolean))].sort();
+    if (typeof tx?.$executeRaw !== 'function') { return; }
+    for (const id of ids) {
+        // eslint-disable-next-line no-await-in-loop -- keys must be taken one by one, in order
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`renewal:${id}`}))`;
+    }
+}
+
+/**
+ * Inside a submit transaction, before anything else: lock the claimed certificates and
+ * refuse (409 RENEWAL_ALREADY_IN_PROGRESS, audit row) when another filing of one of them
+ * is in flight. A filing that claims no certificate passes untouched.
+ * @param {object} tx
+ * @param {{ application: object, userId?: string, holderScope?: object, auditContext?: object }} args
+ */
+async function lockAndAssertNoSuccessionInFlight(tx, { application, userId = null, holderScope = null, auditContext = null } = {}) {
+    const ids = claimedSuccessionIds(application?.formData);
+    if (ids.length === 0) { return; }
+    await lockCertificateSuccessions(tx, ids);
+    const other = await findInFlightSuccession({ db: tx, certificateIds: ids, excludeApplicationId: application.id, holderScope });
+    if (!other) { return; }
+    await writeDenialAudit({
+        userId: String(userId || '').trim() || null, application, entityId: application.entityId || null, auditContext,
+        status: 409, code: RENEWAL_ALREADY_IN_PROGRESS, permission: HOLDER_RULE,
+        reason: `succession while application ${other.id} of the same certificate is in flight`,
+    });
+    throw renewalInProgressError();
+}
+
+/** The refusal both doors answer with (renewal door 409, submit guard 409). */
+function renewalInProgressError() {
+    const { ERROR_CODES } = require('../shared/error-codes');
+    return new SubmitGuardError(409, RENEWAL_ALREADY_IN_PROGRESS, ERROR_CODES.RENEWAL_ALREADY_IN_PROGRESS.messageTh);
 }
 
 /** A renewal or replacement of a certificate held by another holder (operator ruling 2026-10-03). */
@@ -217,7 +313,7 @@ const HOLDER_RULE = 'CERTIFICATE_HOLDER_MATCH';
  * @param {string} args.userId
  * @param {object} args.application   the row (id, entityId, formData)
  * @param {object} [args.auditContext]
- * @param {object} [args.holderScope] the door's holder scope (R1 reads)
+ * @param {object} [args.holderScope] the door's holder scope
  * @param {object} [args.prisma]      client for the certificate read (default: prisma-database)
  * @returns {Promise<void>}
  * @throws {SubmitGuardError} 422 RENEWAL_HOLDER_MISMATCH
@@ -237,15 +333,15 @@ async function assertRenewalHolderMatches({ userId, application, auditContext, h
     const holders = [];
     if (linkedIds.length > 0) {
         const db = injected || require('./prisma-database').prisma;
-        const { r1HolderOrLegacyWhenScoped } = require('./holder-access');
+        const { holderReadWhereIfScoped } = require('./holder-access');
         for (const certificateId of linkedIds) {
-            // R1-legacy-pin: removed in Task 12. The legacy branch is the certificate id
-            // beside the same key: the holder filter cannot hide it from this check.
+            // A health door passes its holder scope: a certificate outside it reads as
+            // no holder, which the rule below refuses (fail closed).
             const cert = await db.certificate.findFirst({
                 where: {
                     id: certificateId,
                     isDeleted: false,
-                    ...r1HolderOrLegacyWhenScoped(holderScope, 'Certificate', { id: certificateId }),
+                    ...holderReadWhereIfScoped(holderScope, 'Certificate'),
                 },
                 select: { application: { select: { entityId: true } } },
             });
@@ -254,7 +350,21 @@ async function assertRenewalHolderMatches({ userId, application, auditContext, h
     }
     const certHolder = holders.find((h) => h) || null;
     if (filingEntityId && holders.length > 0 && holders.every((h) => h === filingEntityId)) {
-        return;
+        // Same holder: refuse only when another renewal/replacement of the certificate
+        // is already in flight (one per certificate, RENEWAL_ALREADY_IN_PROGRESS).
+        const db = injected || require('./prisma-database').prisma;
+        const other = await findInFlightSuccession({
+            db, certificateIds: linkedIds, excludeApplicationId: app.id, holderScope,
+        });
+        if (!other) {
+            return;
+        }
+        await writeDenialAudit({
+            userId: String(userId || '').trim() || null, application: app, entityId: filingEntityId, auditContext,
+            status: 409, code: RENEWAL_ALREADY_IN_PROGRESS, permission: HOLDER_RULE,
+            reason: `${requestType || 'succession'} while application ${other.id} of the same certificate is in flight`,
+        });
+        throw renewalInProgressError();
     }
     await writeDenialAudit({
         userId: String(userId || '').trim() || null, application: app, entityId: filingEntityId || null, auditContext,
@@ -274,6 +384,11 @@ module.exports = {
     assertSubmitAllowed,
     assertRenewalHolderMatches,
     RENEWAL_HOLDER_MISMATCH,
+    RENEWAL_ALREADY_IN_PROGRESS,
+    findInFlightSuccession,
+    renewalInProgressError,
+    lockCertificateSuccessions,
+    lockAndAssertNoSuccessionInFlight,
     // The renewals door writes the same refusal row (renewal-service).
     recordSubmitDenial: writeDenialAudit,
     SubmitGuardError,

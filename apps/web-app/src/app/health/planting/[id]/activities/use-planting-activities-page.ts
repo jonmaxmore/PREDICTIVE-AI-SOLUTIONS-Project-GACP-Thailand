@@ -41,7 +41,9 @@ export function usePlantingActivitiesPage(cycleId: string) {
   // activity type requires the matching ACTIVITY_<TYPE> effective
   // permission in a workspace context (personal/solo → always true;
   // fetch errors fail OPEN; the BE re-checks with 403 regardless).
-  const { has: hasWorkspacePermission, reportPermissionDenial } = useEntityPermissions();
+  const { has: hasWorkspacePermission, reportPermissionDenial } = useEntityPermissions(
+    cycle?.farm?.entityId ?? null,
+  );
   const requiredActivityPermission = activityPermissionFor(form.activityType);
   // F5 — extracted, behavior-tested derivation (polarity-proof).
   const canLogSelectedActivity =
@@ -96,14 +98,18 @@ export function usePlantingActivitiesPage(cycleId: string) {
     try {
       const data = new FormData();
       data.append('file', file);
-      data.append('slotId', `planting_activity_${Date.now()}`);
-      data.append('stepKey', 'planting_activity');
 
+      // C4 (operator 2026-09-30): the cycle's own attachment door, gated by the
+      // farm and the selected activity type's capability. It never creates or
+      // touches an application.
       const payload = await api.post<{
           documentId?: string;
           fileName?: string;
           fileUrl?: string;
-      }>('/applications/draft-documents', data);
+      }>(
+        `/planting-cycles/${encodeURIComponent(cycleId)}/attachments?activityType=${encodeURIComponent(form.activityType)}`,
+        data,
+      );
 
       if (!payload?.success || !payload.data?.documentId) {
         throw new Error(payload?.error || 'ไม่สามารถอัปโหลดไฟล์แนบได้');
@@ -131,11 +137,13 @@ export function usePlantingActivitiesPage(cycleId: string) {
         attachmentInputRef.current.value = '';
       }
     }
-  }, []);
+  }, [cycleId, form.activityType]);
 
   const removeAttachment = useCallback(async (documentId: string) => {
     try {
-      await api.delete(`/applications/draft-documents/${encodeURIComponent(documentId)}`);
+      await api.delete(
+        `/planting-cycles/${encodeURIComponent(cycleId)}/attachments/${encodeURIComponent(documentId)}`,
+      );
     } catch {
       toast.warning('ลบไฟล์แนบไม่สำเร็จ', {
         description: 'ระบบลบรายการจากฟอร์มไม่สำเร็จ กรุณาลองใหม่',
@@ -144,7 +152,7 @@ export function usePlantingActivitiesPage(cycleId: string) {
     }
 
     setUploadedAttachments((prev) => prev.filter((item) => item.documentId !== documentId));
-  }, []);
+  }, [cycleId]);
 
   const plotOptions = useMemo(
     () => (cycle?.plots || []).map((plot) => ({

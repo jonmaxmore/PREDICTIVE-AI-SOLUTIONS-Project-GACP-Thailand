@@ -17,11 +17,15 @@
 // __tests__/integration/renewal-requires-submit-capability-real-postgres.test.js.
 const mockAssertSubmitAllowed = jest.fn(async ({ application }) => ({ entityId: application.entityId }));
 jest.mock('../../services/application-submit-guard', () => ({
+        // One renewal per certificate (RENEWAL_ALREADY_IN_PROGRESS): none in flight here.
+        findInFlightSuccession: async () => null,
+        lockCertificateSuccessions: async () => {},
+        RENEWAL_ALREADY_IN_PROGRESS: 'RENEWAL_ALREADY_IN_PROGRESS',
     assertSubmitAllowed: (...a) => mockAssertSubmitAllowed(...a),
     recordSubmitDenial: async () => {},
 }));
 jest.mock('../../services/holder-access', () => ({
-    r1HolderOrLegacyWhenScoped: () => ({}),
+    holderReadWhereIfScoped: () => ({}),
 }));
 const mockIssue = jest.fn(async () => ({
     company: { id: 'qt-ren-1' }, dtam: null, platform: { id: 'qt-ren-1' },
@@ -47,7 +51,7 @@ jest.mock('../../services/notification/domain-helpers', () => {
 });
 
 // `userId` is load-bearing: createRenewalApplication refuses anyone but the
-// certificate owner (renewal-service.js:285 FORBIDDEN_NOT_OWNER), so a stub
+// certificate holder (the submit guard, SUBMIT_APPLICATION), so a stub
 // without it never reaches the code under test.
 const CERT = {
     id: 'cert-old-1',
@@ -58,21 +62,21 @@ const CERT = {
     applicationId: 'app-src-1',
     organizationId: 'org-1',
     isDeleted: false,
-    // The holder, read through the certificate's own application relation. A
-    // null holder is now refused before any write (APPLICANT_ENTITY_MISSING).
-    application: { entityId: 'entity-1' },
+    application: { entityId: 'ent-1' }, // R2 Task 8 fix round 1: the holder, via the relation
 };
 const SOURCE_APP = {
     id: 'app-src-1',
     healthId: 'HID-1',
     organizationId: 'org-1',
-    entityId: 'entity-1',
+    entityId: 'ent-1',
     areaType: 'OUTDOOR',
     formData: { cultivationMethods: ['outdoor'] },
     cultivationScopeCount: 1,
     isDeleted: false,
 };
 const prismaStub = {
+    // The renewal is filed by the acting user (operator ruling 2026-10-03).
+    user: { findUnique: jest.fn(async ({ where }) => ({ canonicalId: `canon-${where.id}` })) },
     certificate: { findFirst: jest.fn(async () => CERT), findUnique: jest.fn(async () => CERT) },
     application: {
         findFirst: jest.fn(async () => SOURCE_APP),
@@ -81,6 +85,7 @@ const prismaStub = {
     },
 };
 
+const HOLDER_SCOPE = Object.freeze({ userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] }); // R2 Task 8 fix round 1
 const renewalService = require('../../services/renewal-service');
 
 beforeEach(() => jest.clearAllMocks());
@@ -90,6 +95,7 @@ test('creating a renewal application issues its quotation', async () => {
         originalCertificateId: 'cert-old-1',
         actorId: 'user-1',
         actorRole: 'HEALTH',
+        holderScope: HOLDER_SCOPE,
         prisma: prismaStub,
     });
     expect(mockIssue).toHaveBeenCalledTimes(1);
@@ -102,6 +108,7 @@ test('a quotation failure does not undo the renewal application already created'
         originalCertificateId: 'cert-old-1',
         actorId: 'user-1',
         actorRole: 'HEALTH',
+        holderScope: HOLDER_SCOPE,
         prisma: prismaStub,
     });
     // The resolved shape is `{ applicationId, renewalOf, ... }` — read from
@@ -135,6 +142,7 @@ describe('a renewal whose issuance fails is as loud as a submit whose issuance f
             originalCertificateId: 'cert-old-1',
             actorId: 'user-1',
             actorRole: 'HEALTH',
+            holderScope: HOLDER_SCOPE,
             prisma: prismaStub,
         });
         expect(failedIssueRows()).toHaveLength(1);
@@ -156,6 +164,7 @@ describe('a renewal whose issuance fails is as loud as a submit whose issuance f
             originalCertificateId: 'cert-old-1',
             actorId: 'user-1',
             actorRole: 'HEALTH',
+            holderScope: HOLDER_SCOPE,
             prisma: prismaStub,
         });
         expect(mockNotifyAdmin).toHaveBeenCalledWith(expect.objectContaining({
@@ -168,6 +177,7 @@ describe('a renewal whose issuance fails is as loud as a submit whose issuance f
             originalCertificateId: 'cert-old-1',
             actorId: 'user-1',
             actorRole: 'HEALTH',
+            holderScope: HOLDER_SCOPE,
             prisma: prismaStub,
         });
         expect(failedIssueRows()).toHaveLength(0);
@@ -191,6 +201,7 @@ test('issuance runs on the client the caller injected, not on a module global', 
         originalCertificateId: 'cert-old-1',
         actorId: 'user-1',
         actorRole: 'HEALTH',
+        holderScope: HOLDER_SCOPE,
         prisma: prismaStub,
     });
     expect(mockIssue).toHaveBeenCalledWith('app-ren-1', expect.objectContaining({
@@ -214,9 +225,9 @@ test('the renewal row is stamped with the scope count its own formData implies',
     // (:121-125). Measured divergence for this exact formData, 2 methods:
     // quotation 35,310 THB vs checkout 70,620 THB.
     //
-    // A new application is unaffected because the submit door stamps the column
-    // (application-submission-methods.js:156) before issuance at
-    // applications.js:1211; a renewal passes through neither door.
+    // The legacy wizard submit door stamped the column for a new application
+    // (application-submission-methods.js, deleted with /api/wizard in R2 Task 10);
+    // a renewal never passed through it.
     const twoScopeApp = {
         ...SOURCE_APP,
         formData: { cultivationMethods: ['outdoor', 'greenhouse'] },
@@ -227,14 +238,15 @@ test('the renewal row is stamped with the scope count its own formData implies',
         originalCertificateId: 'cert-old-1',
         actorId: 'user-1',
         actorRole: 'HEALTH',
+        holderScope: HOLDER_SCOPE,
         prisma: prismaStub,
     });
 
     const created = prismaStub.application.create.mock.calls[0][0].data;
     expect(created.cultivationScopeCount).toBe(2);
     // The retired name for the same number, written by every other writer
-    // (application-submission-methods.js:161, application-draft-query-methods
-    // .js:76) so a rollback to the previous image still prices correctly. Its
+    // (application-draft-query-methods.js; the deleted application-submission-methods.js
+    // did too) so a rollback to the previous image still prices correctly. Its
     // column default is 1 (prisma/schema/application.prisma:80), so leaving it
     // unwritten is not neutral: it actively states "one scope".
     expect(created.totalAreaTypes).toBe(2);
@@ -245,6 +257,7 @@ test('a single-method renewal is still one scope (the fix does not inflate a pri
         originalCertificateId: 'cert-old-1',
         actorId: 'user-1',
         actorRole: 'HEALTH',
+        holderScope: HOLDER_SCOPE,
         prisma: prismaStub,
     });
     const created = prismaStub.application.create.mock.calls[0][0].data;
@@ -277,6 +290,7 @@ test('the quotation end and the checkout end now price the renewal identically',
         originalCertificateId: 'cert-old-1',
         actorId: 'user-1',
         actorRole: 'HEALTH',
+        holderScope: HOLDER_SCOPE,
         prisma: prismaStub,
     });
     const row = prismaStub.application.create.mock.calls[0][0].data;

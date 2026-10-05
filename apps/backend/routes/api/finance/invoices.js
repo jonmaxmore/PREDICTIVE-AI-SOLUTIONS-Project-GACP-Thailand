@@ -34,11 +34,6 @@ function requestHolderScope(req) {
     return require('../../../services/holder-access').holderScope(req);
 }
 
-// R1-legacy-pin: removed in Task 12. Who the pre-R1 owner doors asked about.
-async function r1OwnerOf(req) {
-    return { userId: req.user.id, healthId: await resolveHealthId(req.user) };
-}
-
 const requirePermission = (permission) => (req, res, next) => {
     const canonicalRole = normalizeRole(req.user?.canonicalRole || req.user?.role);
     if (!canonicalRole || !hasPermission(canonicalRole, permission)) {
@@ -90,16 +85,9 @@ router.get('/my', authenticateHealth, async (req, res) => {
         // Whose invoices these are is decided by the holder entities the caller is an
         // ACTIVE member of, not by who filed (operator ruling: company co-members see
         // company finance documents; spec 2026-09-30-remove-workspace-mode §3.1).
-        // R1 (ruling C1): the answer is exactly the pre-R1 one — the active
-        // workspace's invoices, plus in the personal workspace the caller's own
-        // entity-less ones; `r1Legacy` carries what that door asked with
-        // (R1-legacy-pin, removed in Task 12 together with the workspace header).
-        // A forged x-active-entity-id is answered 403 ACTIVE_ENTITY_MISMATCH by
-        // active-entity-middleware before this line.
         const invoices = await invoiceService.listForHolders({
             scope: await requestHolderScope(req),
             status: req.query.status,
-            r1Legacy: { healthId, activeEntity: req.activeEntity || null },
         });
         res.json({ success: true, data: invoices });
     } catch (error) {
@@ -123,8 +111,7 @@ router.get('/my', authenticateHealth, async (req, res) => {
 router.get('/my/:invoiceId/receipt/pdf', authenticateHealth, async (req, res) => {
     try {
         const scope = await requestHolderScope(req);
-        const r1Owner = await r1OwnerOf(req);
-        const invoice = await findHealthInvoice(req.params.invoiceId, scope, { r1Owner });
+        const invoice = await findHealthInvoice(req.params.invoiceId, scope);
         if (!hasIssuedReceipt(invoice)) {
             return res.status(409).json({
                 success: false,
@@ -132,7 +119,7 @@ router.get('/my/:invoiceId/receipt/pdf', authenticateHealth, async (req, res) =>
                 code: 'RECEIPT_NOT_ISSUED',
             });
         }
-        const pdfBuffer = await invoiceService.generateReceiptPdf(invoice.id, { scope, r1Owner });
+        const pdfBuffer = await invoiceService.generateReceiptPdf(invoice.id, { scope });
         res.set({
             'Content-Type': 'application/pdf',
             'Content-Disposition': `attachment; filename="${receiptFileName(invoice)}"`,
@@ -203,9 +190,8 @@ router.get('/:invoiceId', authenticateProvider, requirePermission(PERMISSIONS.IN
 router.get('/:invoiceId/pdf', authenticateHealth, async (req, res) => {
     try {
         const scope = await requestHolderScope(req);
-        const r1Owner = await r1OwnerOf(req);
-        await findHealthInvoice(req.params.invoiceId, scope, { r1Owner });
-        const pdfBuffer = await invoiceService.generatePdf(req.params.invoiceId, { scope, r1Owner });
+        await findHealthInvoice(req.params.invoiceId, scope);
+        const pdfBuffer = await invoiceService.generatePdf(req.params.invoiceId, { scope });
         res.set({
             'Content-Type': 'application/pdf',
             'Content-Disposition': `attachment; filename="invoice-${req.params.invoiceId}.pdf"`,

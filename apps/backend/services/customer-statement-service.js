@@ -72,10 +72,10 @@ const { classifyInvoiceSide, INVOICE_SIDES } = require('./finance/invoice-side')
 // unit tests flows through correctly — same pattern as
 // quotation-service.js and trial-balance-service.js.
 let _prismaModule;
-// R1-legacy-pin: removed in Task 12. Lazy: holder-access loads farm-access and the
-// permission engine, which the staff report paths never need.
-function r1ScopedOrLegacy(scope, model, legacy) {
-    return require('./holder-access').r1HolderOrLegacyWhenScoped(scope, model, legacy);
+// Lazy: holder-access loads farm-access and the permission engine, which the
+// staff report paths never need. A health statement passes its holder scope.
+function holderScoped(scope, model) {
+    return require('./holder-access').holderReadWhereIfScoped(scope, model);
 }
 
 function _resolvePrisma() {
@@ -394,9 +394,7 @@ async function generateCustomerStatement(args = {}) {
                     where: {
                         applicationId: { in: applicationIds },
                         isDeleted: false,
-                        // R1-legacy-pin: removed in Task 12 — a health statement passes its holder
-                        // scope; the applications read above already decided the set.
-                        ...r1ScopedOrLegacy(holderScope, 'Quotation', { applicationId: { in: applicationIds } }),
+                        ...holderScoped(holderScope, 'Quotation'),
                     },
                     orderBy: { createdAt: 'asc' },
                 });
@@ -410,8 +408,7 @@ async function generateCustomerStatement(args = {}) {
                     // pulling in a future-dated invoice issued after
                     // the asOf timestamp.
                     createdAt: { lte: asOf },
-                    // R1-legacy-pin: removed in Task 12 (see the quotation read above).
-                    ...r1ScopedOrLegacy(holderScope, 'Invoice', { applicationId: { in: applicationIds } }),
+                    ...holderScoped(holderScope, 'Invoice'),
                 },
                 orderBy: { createdAt: 'asc' },
             }),

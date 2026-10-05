@@ -104,7 +104,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),

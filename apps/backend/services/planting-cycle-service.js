@@ -19,6 +19,7 @@ const { plotAreaSqm } = require('../shared/area-utils');
 // generator — see shared/harvest-identifiers.js header for the full
 // before/after.
 const { buildBatchNumber, buildLotNumber } = require('../shared/harvest-identifiers');
+const { entityPermissionDeniedBody } = require('../shared/entity-permission-denied');
 
 // ─── Constants ──────────────────────────────────────────────
 
@@ -540,7 +541,7 @@ async function assertFarmPermission({ farmId, farm, userId, permission, req }) {
         userId,
         permission,
         cache: req ? getRequestPermissionCache(req) : undefined,
-        // Spec 2026-09-30 §3.1 (R1): the farm read carries the holder scope.
+        // Spec 2026-09-30 §3.1: the farm read carries the holder scope.
         holderScope: req ? await require('./holder-access').holderScope(req) : null,
     });
 }
@@ -580,18 +581,13 @@ function requireCycleFarmPermission(permissionOrResolver) {
                 userId,
                 permission,
                 cache: getRequestPermissionCache(req),
-                // Spec 2026-09-30 §3.1 (R1): the farm read carries the holder scope.
+                // Spec 2026-09-30 §3.1: the farm read carries the holder scope.
                 holderScope: await require('./holder-access').holderScope(req),
             });
             return next();
         } catch (error) {
             if (error?.code === 'ENTITY_PERMISSION_DENIED') {
-                return res.status(403).json({
-                    success: false,
-                    code: 'ENTITY_PERMISSION_DENIED',
-                    permission: error.permission || null,
-                    error: 'คุณไม่มีสิทธิ์ดำเนินการรายการนี้ในพื้นที่ทำงาน',
-                });
+                return res.status(403).json(entityPermissionDeniedBody(error.permission || null));
             }
             logger.error('[cycle-permission-gate] unexpected failure:', error);
             return res.status(500).json({ success: false, error: 'Failed to verify permission' });

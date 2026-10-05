@@ -53,7 +53,6 @@ jest.mock('@/lib/services/auth-service', () => ({
 }));
 
 jest.mock('@/components/layout/Footer', () => ({ Footer: () => null }));
-jest.mock('@/components/layout/entity-switcher', () => ({ EntitySwitcher: () => null }));
 
 import { DashboardLayout } from '../dashboard-layout';
 

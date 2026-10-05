@@ -53,9 +53,9 @@ export const ROLE_CAPABILITY_SUMMARY_TH: Record<InvitableRole, string> = {
     VIEWER: 'ดูข้อมูลได้อย่างเดียว บันทึกหรือแก้ไขอะไรไม่ได้',
 };
 
-/** SummaryHeader eyebrow — personal farms are not a "Workspace". */
+/** SummaryHeader eyebrow — personal farms are not a juristic/community entity. */
 export function eyebrowFor(personal: boolean): string {
-    return personal ? 'ฟาร์มของฉัน · ทีมงาน' : 'ผู้ขอรับรอง · Workspace';
+    return personal ? 'ฟาร์มของฉัน · ทีมงาน' : 'ผู้ขอรับรอง · นิติบุคคลและวิสาหกิจชุมชน';
 }
 
 /** SummaryHeader description line — swaps "จัดการสมาชิก" org-copy for personal-farm copy. */

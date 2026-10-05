@@ -1,20 +1,17 @@
 'use strict';
 
 /**
- * R1 is behaviour-neutral for the Application health doors (operator ruling C1,
- * controller ruling on Task 3 fix round 1): for every actor, workspace header
- * and door below, the R1 code answers with exactly the status and row set the
- * pre-R1 code (e46ceba0) answered with. The widening to "co-members read the
- * company's filings" happens in R2 (Tasks 8, 9, 12), never in R1.
+ * The Application health doors, actor × context × door, on a real Postgres.
+ * Built in R1 to prove behaviour-neutrality against e46ceba0; since R2 Task 12
+ * EXPECTED holds the R2 answers: the workspace header, the active-entity
+ * middleware and every filer pin are gone, so every context of an actor answers
+ * alike and a door answers by membership of the filing's holder (re-recorded
+ * 2026-10-03; every moved row is checked against the R2 rule in
+ * evidence/remove-workspace-mode/task-12/green.txt).
  *
- * EXPECTED was captured by running this same file against e46ceba0's
- * implementation files (the Task 3 fix-round RED/record run, see
- * evidence/remove-workspace-mode/task-3/fix1-*.txt); row ids are mapped to
- * fixture labels so the table is stable across runs.
- *
- * Real Postgres, the real prisma-database client, the real tenant-context and
- * active-entity middlewares; only authentication is attached by hand, and
- * multer is stubbed so the CAR door needs no file on disk.
+ * Real Postgres, the real prisma-database client and the real tenant-context
+ * middleware; only authentication is attached by hand, and multer is stubbed so
+ * the CAR door needs no file on disk.
  *
  * Doors: GET /my, /my/statuses, / (lists), GET /draft, GET /dashboard/stats (count),
  * and per filing GET /:id, /status, /statement, /history, /activities, /katorlor1,
@@ -30,12 +27,8 @@
  *   N — no entity and no membership at all.           filings nN, nD (entityId null)
  *   A also filed aN with entityId null (a filing outside every membership).
  *
- * No entity context (final review C1, 2026-10-03): N gets no context because
- * the active-entity middleware finds no personal entity; any user gets none
- * when that middleware's resolution throws (its catch falls through). Without
- * a context nothing overwrites a top-level entityId, so a door that ANDs the
- * holder fragment with its pin narrows. The `transient` rows drive that catch
- * for real (the first read of the workspace header throws).
+ * The `transient` rows once drove the active-entity middleware's catch path (R1);
+ * with the middleware gone they are ordinary requests and answer like `none`.
  */
 
 const crypto = require('crypto');
@@ -44,31 +37,14 @@ const request = require('supertest');
 const { PrismaClient } = require('@prisma/client');
 const { describeIfTestDatabase: d } = require('../../test-support/test-database');
 
-const mockActor = { current: null, transient: false };
+const mockActor = { current: null };
 jest.mock('../../middleware/auth-middleware', () => {
     const actual = jest.requireActual('../../middleware/auth-middleware');
     const { tenantContextMiddleware } = jest.requireActual('../../middleware/tenant-context-middleware');
-    const { activeEntityMiddleware } = jest.requireActual('../../middleware/active-entity-middleware');
     const bindTenant = tenantContextMiddleware();
-    const bindEntity = activeEntityMiddleware();
-    // `transient`: the first read of the workspace header throws, so the
-    // active-entity middleware takes its catch path and binds no context.
-    const failOnce = (headers) => {
-        let thrown = false;
-        return new Proxy(headers, {
-            get(target, key, receiver) {
-                if (key === 'x-active-entity-id' && !thrown) {
-                    thrown = true;
-                    throw new Error('simulated transient membership lookup failure');
-                }
-                return Reflect.get(target, key, receiver);
-            },
-        });
-    };
     const attach = (req, res, next) => {
         req.user = { ...mockActor.current };
-        if (mockActor.transient) { req.headers = failOnce(req.headers); }
-        return bindTenant(req, res, () => bindEntity(req, res, next));
+        return bindTenant(req, res, next);
     };
     return { ...actual, authenticateAny: attach, authenticateHealth: attach, authenticateProvider: attach, authenticateToken: attach };
 });
@@ -108,11 +84,11 @@ const BY_ID_DOORS = [
 ];
 const LIST_DOORS = ['/api/applications/my', '/api/applications/my/statuses', '/api/applications/'];
 
-// Captured from e46ceba0 (pre-R1) — see the header. `<status> <sorted labels>` for
-// lists, `<status>` for by-id doors, `<status> <label>` for POST /draft.
+// `<status> <sorted labels>` for lists, `<status>` for by-id doors, `<status> <label>`
+// for POST /draft. R2 answers since Task 12 — see the header.
 const EXPECTED = require('../fixtures/r1-application-reads-neutral.expected.json');
 
-d('R1 Application health doors answer exactly as pre-R1 (real Postgres)', () => {
+d('Application health doors answer by holder membership (R2) (real Postgres)', () => {
     /** @type {import('@prisma/client').PrismaClient} */
     let raw;
     let app;
@@ -152,12 +128,15 @@ d('R1 Application health doors answer exactly as pre-R1 (real Postgres)', () => 
         label.set(row.id, name);
     };
 
-    const as = (name, { transient = false } = {}) => {
-        mockActor.transient = transient;
+    // `transient` used to make the active-entity middleware fail once (R1); the
+    // middleware is gone (R2 Task 12), so a transient row is an ordinary request.
+    const as = (name) => {
         const u = fx.users[name];
         mockActor.current = { id: u.id, canonicalId: u.canonicalId, healthId: u.canonicalId, role: 'health', canonicalRole: 'health', organizationId: fx.org };
     };
-    const headerFor = (h) => (h === 'none' ? {} : { 'x-active-entity-id': fx.entities[h] });
+    // R2 Task 12: no request sends the workspace header. The context label stays in each
+    // row key so the re-recorded table shows that every context now answers alike.
+    const headerFor = () => ({});
     const labelOf = (id) => label.get(id) || 'NEW';
     const listLabels = (res) => (Array.isArray(res.body?.data)
         ? res.body.data.map((r) => labelOf(r.id || r.applicationId)).sort().join(',')
@@ -233,7 +212,7 @@ d('R1 Application health doors answer exactly as pre-R1 (real Postgres)', () => 
     const actual = {};
     const record = (key, value) => { actual[key] = value; };
 
-    test('read doors: every actor × header × door gives the pre-R1 status and row set', async () => {
+    test('read doors: every actor × context × door gives the R2 status and row set', async () => {
         for (const actor of ACTORS) {
             for (const h of HEADERS) {
                 as(actor);
@@ -254,9 +233,9 @@ d('R1 Application health doors answer exactly as pre-R1 (real Postgres)', () => 
                 }
             }
         }
-        // The middleware's catch path (no context for anyone): A and N, no header.
+        // Former middleware catch path rows (R1); now ordinary requests: A and N.
         for (const actor of ['A', 'N']) {
-            as(actor, { transient: true });
+            as(actor);
             for (const path of LIST_DOORS) {
                 const res = await request(app).get(path);
                 record(`${actor}|transient|GET ${path.replace('/api/applications', '')}`, `${res.status} ${listLabels(res)}`);
@@ -274,9 +253,40 @@ d('R1 Application health doors answer exactly as pre-R1 (real Postgres)', () => 
         const reads = Object.fromEntries(Object.entries(actual).filter(([k]) => k.includes('|GET ')));
         const expectedReads = Object.fromEntries(Object.entries(EXPECTED).filter(([k]) => k.includes('|GET ')));
         expect(reads).toEqual(expectedReads);
+    }, 120000); // ~1300 requests: 25-30 s alone, past jest's 30 s default under load
+
+    // Review Focus 4 (R2 Task 9 fix round 1): the list and every count or badge of
+    // that list read the same rows. For each actor × context the read doors above
+    // walked: the ids of GET /my equal the ids of GET /my/statuses and of GET /, and
+    // /dashboard/stats counts exactly that many applications.
+    test('Review Focus 4: /my, /my/statuses and / list the same ids, and /dashboard/stats counts them, for every actor × context', () => {
+        const contexts = [...new Set(Object.keys(actual).filter((k) => k.endsWith('|GET /my'))
+            .map((k) => k.slice(0, -'|GET /my'.length)))];
+        expect(contexts.length).toBeGreaterThan(0);
+        const ids = (value) => {
+            const [status, labels = ''] = String(value).split(' ');
+            return { status, ids: labels.split(',').filter(Boolean).sort().join(',') };
+        };
+        const mismatches = [];
+        for (const ctx of contexts) {
+            const list = ids(actual[`${ctx}|GET /my`]);
+            for (const other of ['GET /my/statuses', 'GET /']) {
+                const got = ids(actual[`${ctx}|${other}`]);
+                if (got.status !== list.status || got.ids !== list.ids) {
+                    mismatches.push(`${ctx}: /my ${JSON.stringify(list)} vs ${other} ${JSON.stringify(got)}`);
+                }
+            }
+            const stats = actual[`${ctx}|GET /dashboard/stats`];
+            if (stats && list.status === '200' && stats.startsWith('200 ')) {
+                const counted = Number(stats.split(' ')[1]);
+                const listed = list.ids ? list.ids.split(',').length : 0;
+                if (counted !== listed) { mismatches.push(`${ctx}: /my lists ${listed} but /dashboard/stats counts ${counted}`); }
+            }
+        }
+        expect(mismatches).toEqual([]);
     });
 
-    test('write doors: V, M, W and S never act on A\'s filings; every answer equals pre-R1', async () => {
+    test('write doors: V, W and S never act on A\'s filings, M only edits A\'s draft on C; every answer is the recorded R2 answer', async () => {
         const before = await raw.application.findMany({
             where: { id: { in: [fx.apps.aC, fx.apps.aRev, fx.apps.aCar] } },
             select: { id: true, status: true, formData: true, updatedAt: true },
@@ -289,6 +299,7 @@ d('R1 Application health doors answer exactly as pre-R1 (real Postgres)', () => 
                 record(`${actor}|${h}|POST /:id/revision-resubmit|aRev`, `${rev.status}`);
                 const car = await request(app).post(`/api/applications/${fx.apps.aCar}/car`).set(hdr).send({ notes: 'หลักฐาน' });
                 record(`${actor}|${h}|POST /:id/car|aCar`, `${car.status}`);
+                if (actor === 'M') { continue; } // M's draft edit runs below, after the snapshot
                 const draft = await request(app).post('/api/applications/draft').set(hdr).send({ applicationId: fx.apps.aC });
                 record(`${actor}|${h}|POST /draft|aC`, `${draft.status} ${draft.body?.data?.id ? labelOf(draft.body.data.id) : '-'}`);
             }
@@ -300,21 +311,30 @@ d('R1 Application health doors answer exactly as pre-R1 (real Postgres)', () => 
         // Nothing of A's moved: no status write, no form write, no touch.
         expect(after.sort((x, y) => x.id.localeCompare(y.id))).toEqual(before.sort((x, y) => x.id.localeCompare(y.id)));
 
+        // R2 Task 9 (spec §3.2 draft edits): M, a MANAGER of C, may fill in a draft
+        // held by C whoever filed it; it still cannot submit it (submit guard).
+        for (const h of HEADERS) {
+            as('M');
+            const draft = await request(app).post('/api/applications/draft').set(headerFor(h)).send({ applicationId: fx.apps.aC });
+            record(`M|${h}|POST /draft|aC`, `${draft.status} ${draft.body?.data?.id ? labelOf(draft.body.data.id) : '-'}`);
+        }
+
         // The filer still acts on their own filing (last, so it mutates nothing above).
         as('A');
         const own = await request(app).post('/api/applications/draft').set(headerFor('C')).send({ applicationId: fx.apps.aC });
         record('A|C|POST /draft|aC', `${own.status} ${own.body?.data?.id ? labelOf(own.body.data.id) : '-'}`);
         const ownRev = await request(app).post(`/api/applications/${fx.apps.aRev}/revision-resubmit`).set(headerFor('C')).send({});
         record('A|C|POST /:id/revision-resubmit|aRev', `${ownRev.status}`);
-        // N (no entity, no context) saves their own null-holder draft by explicit id,
-        // and again with the middleware's catch path taken.
+        // N (no entity, no membership) tries to save their own null-holder draft by
+        // explicit id, twice. R2 Task 8: 404 (a null holder is in no one's editIds; D1
+        // heals such rows before deploy).
         as('N');
         const nOwn = await request(app).post('/api/applications/draft').send({ applicationId: fx.apps.nD });
         record('N|none|POST /draft|nD', `${nOwn.status} ${nOwn.body?.data?.id ? labelOf(nOwn.body.data.id) : '-'}`);
-        as('N', { transient: true });
+        as('N');
         const nTransient = await request(app).post('/api/applications/draft').send({ applicationId: fx.apps.nD });
         record('N|transient|POST /draft|nD', `${nTransient.status} ${nTransient.body?.data?.id ? labelOf(nTransient.body.data.id) : '-'}`);
-        as('A', { transient: true });
+        as('A');
         const aTransient = await request(app).post('/api/applications/draft').send({ applicationId: fx.apps.aC });
         record('A|transient|POST /draft|aC', `${aTransient.status} ${aTransient.body?.data?.id ? labelOf(aTransient.body.data.id) : '-'}`);
         as('A');
@@ -326,7 +346,7 @@ d('R1 Application health doors answer exactly as pre-R1 (real Postgres)', () => 
             for (const h of HEADERS) {
                 expect(writes[`${actor}|${h}|POST /:id/revision-resubmit|aRev`]).not.toMatch(/^2/);
                 expect(writes[`${actor}|${h}|POST /:id/car|aCar`]).not.toMatch(/^2/);
-                expect(writes[`${actor}|${h}|POST /draft|aC`]).not.toMatch(/ aC$/);
+                if (actor !== 'M') { expect(writes[`${actor}|${h}|POST /draft|aC`]).not.toMatch(/ aC$/); }
             }
         }
     });

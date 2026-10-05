@@ -33,9 +33,13 @@
 
 export const ENTITY_PERMISSION_DENIED_CODE = 'ENTITY_PERMISSION_DENIED';
 
-/** Generic Thai copy when a denial body carries no human message. */
+/**
+ * Thai copy when a denial body carries no human message. The same sentence as the
+ * backend catalogue (apps/backend/shared/error-codes.js ENTITY_PERMISSION_DENIED.messageTh),
+ * which every backend door now sends in `error` and `messageTh` (R2 Task 10 round 3).
+ */
 export const ENTITY_PERMISSION_DENIED_FALLBACK_TH =
-    'ไม่มีสิทธิ์ดำเนินการนี้ ติดต่อเจ้าของ workspace';
+    'คุณไม่มีสิทธิ์ทำรายการนี้ในนามของผู้ถือรายนี้ ขอให้เจ้าของมอบสิทธิ์ให้คุณก่อน แล้วลองอีกครั้ง';
 
 /**
  * Detect the denial on the RAW backend JSON body (pre-envelope). Handles

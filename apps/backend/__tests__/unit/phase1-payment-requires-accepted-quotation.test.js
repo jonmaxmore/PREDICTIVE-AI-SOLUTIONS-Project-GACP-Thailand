@@ -46,7 +46,15 @@ jest.mock('../../services/payment-service', () => ({
 const mockFindForPaymentOwnership = jest.fn();
 jest.mock('../../services/application-service', () => ({
     findForPaymentOwnership: (...a) => mockFindForPaymentOwnership(...a),
+    // R2 Task 9 fix round 1: the Q3 gate reads the holder first; this suite measures
+    // the quotation gate behind it, so the caller may pay.
+    findApplicationHolderForHealth: jest.fn(async (id) => ({ id, entityId: 'ent-1' })),
     resolveHealthIdentity: jest.fn(async () => ({ healthId: 'health-1' })),
+}));
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] })),
+    assertHolderCapability: jest.fn(async () => undefined),
 }));
 
 const mockGate = jest.fn(async () => ({ quotation: { id: 'qt-1' }, phase: 'PHASE_1', snapshot: null }));
@@ -152,7 +160,10 @@ describe.each([
         const res = await press();
 
         expect(res.status).toBe(200);
-        expect(mockCreatePhase1).toHaveBeenCalledWith(APP_ID, 'health-1');
+        // R2 Task 9 fix round 1b: the door also hands its holder scope to the reads.
+        expect(mockCreatePhase1).toHaveBeenCalledWith(APP_ID, 'health-1', {
+            holderScope: { userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] },
+        });
     });
 
     it('an application that is not the caller`s is 404, and the gate is not asked', async () => {

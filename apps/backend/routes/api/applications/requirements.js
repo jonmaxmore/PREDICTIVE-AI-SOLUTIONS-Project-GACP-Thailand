@@ -18,7 +18,7 @@
  * Ownership is resolved the way every other applicant-facing application door resolves
  * it (spec 2026-09-30 §3.1): the row is read with the holder fragment of the caller's
  * membership set (holderScope/holderReadWhere), never with an id from the request
- * body. In R1 the pre-R1 healthId pin rides along (R1-legacy-pin, removed in Task 12).
+ * body, with no filer pin: any ACTIVE member of the holder reads it.
  * resolveHealthIdentity still runs first and refuses a non-health account.
  * A filing that is not yours answers 404 rather than
  * 403 — the same anti-probe convention the rest of this tree follows, so that asking
@@ -35,7 +35,7 @@ const { respondError } = require('../../../shared/api-response');
 const { authenticateAny: authenticateHealth } = require('../../../middleware/auth-middleware');
 const applicationService = require('../../../services/application-service');
 const { getHealthScopeOptions } = require('../helpers/applications-helpers');
-const { holderScope, r1ApplicationHolderOrPin, r1HolderOrLegacy } = require('../../../services/holder-access');
+const { holderScope, holderReadWhere } = require('../../../services/holder-access');
 const {
     resolveApplicationRequirements,
 } = require('../../../services/application-requirements-service');
@@ -65,7 +65,7 @@ async function withApplicantPrechecks(applicationId, slots, scope) {
 router.get('/:id/requirements', authenticateHealth, async (req, res) => {
     try {
         const applicationId = req.params.id;
-        const identity = await applicationService.resolveHealthIdentity(
+        await applicationService.resolveHealthIdentity(
             req.user.id,
             getHealthScopeOptions(req.user),
         );
@@ -74,9 +74,7 @@ router.get('/:id/requirements', authenticateHealth, async (req, res) => {
         const application = await prisma.application.findFirst({
             where: {
                 id: applicationId,
-                // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(scope, 'Application')).
-                // OR form: neutral also when no entity context is bound (final review C1).
-                ...r1ApplicationHolderOrPin(scope, { healthId: identity.healthId }),
+                ...holderReadWhere(scope, 'Application'),
                 isDeleted: false,
             },
             include: { entity: true },
@@ -88,8 +86,7 @@ router.get('/:id/requirements', authenticateHealth, async (req, res) => {
         // The rows the sync service keeps, which is where a document uploaded under an
         // old slot name still lives. formData.draftDocuments is read by the lens itself.
         const documentRows = await prisma.applicationDocument.findMany({
-            // R1-legacy-pin: removed in Task 12 (→ holderReadWhere): the gated application decides.
-            where: { applicationId: application.id, ...r1HolderOrLegacy(scope, 'ApplicationDocument', { applicationId: application.id }) },
+            where: { applicationId: application.id, ...holderReadWhere(scope, 'ApplicationDocument') },
             select: {
                 documentId: true,
                 documentType: true,
@@ -176,9 +173,7 @@ router.post('/:id/prechecks/:precheckId/acknowledge', authenticateHealth, async 
         const application = await prisma.application.findFirst({
             where: {
                 id: req.params.id,
-                // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(scope, 'Application')).
-                // OR form: neutral also when no entity context is bound (final review C1).
-                ...r1ApplicationHolderOrPin(scope, { healthId: identity.healthId }),
+                ...holderReadWhere(scope, 'Application'),
                 isDeleted: false,
             },
             select: { id: true },
@@ -190,8 +185,7 @@ router.post('/:id/prechecks/:precheckId/acknowledge', authenticateHealth, async 
             where: {
                 id: req.params.precheckId,
                 applicationId: application.id,
-                // R1-legacy-pin: removed in Task 12 (→ holderReadWhere): the gated application decides.
-                ...r1HolderOrLegacy(scope, 'DocumentPrecheck', { applicationId: application.id }),
+                ...holderReadWhere(scope, 'DocumentPrecheck'),
             },
             select: { id: true },
         });
@@ -210,7 +204,7 @@ router.post('/:id/prechecks/:precheckId/acknowledge', authenticateHealth, async 
             where: {
                 id: precheck.id,
                 applicationId: application.id,
-                ...r1HolderOrLegacy(scope, 'DocumentPrecheck', { applicationId: application.id }), // R1-legacy-pin: removed in Task 12
+                ...holderReadWhere(scope, 'DocumentPrecheck'),
             },
             select: { applicantAcknowledgedAt: true },
         });

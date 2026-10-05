@@ -1,10 +1,8 @@
 /**
  * Health billing page id-selection — rewritten 2026-09-05.
- * → permanent spinner + colliding picker keys.
  *
  * The backend `mapHealthApplication` (routes/api/helpers/applications-helpers.js)
- * The route used to emit `_id`, MongoDB's key convention in a codebase that stores
- * nothing in MongoDB. The billing page read
+ * used to emit `_id`, a name the PostgreSQL schema never had. The billing page read
  * `list[0].id` / `app.id`, which is ALWAYS undefined for that shape, so:
  *   - loadStatement(selectedAppId) never fired with a real id → permanent spinner
  *   - every picker button rendered key={undefined} → React key collision (all

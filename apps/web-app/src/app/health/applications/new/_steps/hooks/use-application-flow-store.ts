@@ -21,6 +21,7 @@ const initialState: WizardState = {
   // would decide which papers the law demands of them.
   requestType: null,
   certScope: null,
+  holderEntityId: null,
   applicantType: null,
   // v2 step 4 — ว่างเปล่า ไม่ใช่แถวตัวอย่าง: ฟอร์มถาม ไม่ได้สมมติให้
   varieties: [],
@@ -415,6 +416,7 @@ export function useApplicationFlowStore() {
     plantId: store.plantId,
     requestType: store.requestType,
     certScope: store.certScope,
+    holderEntityId: store.holderEntityId,
     applicantType: store.applicantType,
     varieties: store.varieties,
     varietiesNote: store.varietiesNote,

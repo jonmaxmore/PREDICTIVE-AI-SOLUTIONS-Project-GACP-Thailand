@@ -26,14 +26,14 @@ const router = express.Router();
 
 router.get('/:id/audit-notes', authenticateHealth, async (req, res) => {
     try {
-        const identity = await applicationService.resolveHealthIdentity(
+        // The identity check stays (an unresolvable caller is refused as before).
+        await applicationService.resolveHealthIdentity(
             req.user.id, getHealthScopeOptions(req.user),
         );
         const payload = await listAuditNotesForApplicant({
             prisma,
             applicationId: req.params.id,
             holderScope: await holderScope(req),
-            healthId: identity.healthId, // R1-legacy-pin: removed in Task 12
         });
         return res.json({ success: true, data: payload });
     } catch (error) {

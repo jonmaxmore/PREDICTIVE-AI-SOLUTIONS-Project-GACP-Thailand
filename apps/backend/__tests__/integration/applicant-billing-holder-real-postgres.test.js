@@ -2,7 +2,7 @@
 
 /**
  * The applicant's billing doors on a REAL Postgres, through the REAL
- * tenant-context + active-entity middlewares and the REAL read witness
+ * tenant-context middleware and the REAL read witness
  * (staging walk 2026-09-29 defects P1 + P6; holder read scope, Task 5 of
  * 2026-09-30-remove-workspace-mode).
  *
@@ -16,14 +16,10 @@
  * Task 5: GET /api/invoices/my (invoiceService.listForHolders) and the two
  * owner PDF doors (findHealthInvoice) read Invoice through a registered holder
  * fragment, so the witness in THROW mode lets every one of them through and
- * logs nothing. R1 (operator ruling C1) answers exactly what the pre-R1 doors
- * answered — the matrix in r1-billing-doors-neutral-real-postgres.test.js
- * proves that for every actor and header. The R1 answers pinned below change in
- * R2 (Task 12), each marked where it sits:
- *   - a stranger and a REVOKED member get 403 in R1 (404 in R2);
- *   - a null-entity invoice stays visible to its filer in R1 (invisible in R2);
- *   - a co-member lists the company's invoices with the company header in R1
- *     (Task 12 drops the header).
+ * logs nothing. R2 Task 12: the fragment alone decides (no workspace header, no
+ * filer pin): the account lists both of its holders' invoices, a co-member lists
+ * the company's, and a stranger, a REVOKED member and anyone asking for a
+ * null-entity invoice get 404.
  *
  * The receipt the owner downloads is rendered from the stored row (the receipt
  * template's own HTML, real data — Puppeteer is replaced by `htmlOnly` because
@@ -43,12 +39,10 @@ const { describeIfTestDatabase: d } = require('../../test-support/test-database'
 const mockActor = { current: null };
 jest.mock('../../middleware/auth-middleware', () => {
     const { tenantContextMiddleware } = jest.requireActual('../../middleware/tenant-context-middleware');
-    const { activeEntityMiddleware } = jest.requireActual('../../middleware/active-entity-middleware');
     const bindTenant = tenantContextMiddleware();
-    const bindEntity = activeEntityMiddleware();
     const attach = (req, res, next) => {
         req.user = { ...mockActor.current };
-        return bindTenant(req, res, () => bindEntity(req, res, next));
+        return bindTenant(req, res, next);
     };
     return { authenticateAny: attach, authenticateHealth: attach, authenticateProvider: attach };
 });
@@ -217,35 +211,28 @@ d('applicant billing follows the active workspace; the owner gets the receipt (r
         await raw.$disconnect();
     });
 
-    describe('GET /api/invoices/my (P6)', () => {
-        test('personal workspace by default (no header): only the personal invoice, never the company\'s', async () => {
+    describe('GET /api/invoices/my (P6; R2 Task 12)', () => {
+        test('the owner lists the invoices of both its holders (personal and company), no header needed', async () => {
             as(fx.owner);
             const { status, ids } = await myInvoiceIds();
             expect(status).toBe(200);
-            expect(ids).toEqual([fx.personalBill.invoice.id]);
+            expect(ids).toEqual([fx.personalBill.invoice.id, fx.companyBill.invoice.id].sort());
         });
 
-        test('personal workspace named in the header: only the personal invoice', async () => {
+        test('a stale workspace header changes nothing: the same two invoices', async () => {
             as(fx.owner);
             const { ids } = await myInvoiceIds({ 'x-active-entity-id': fx.personal.id });
-            expect(ids).toEqual([fx.personalBill.invoice.id]);
+            expect(ids).toEqual([fx.personalBill.invoice.id, fx.companyBill.invoice.id].sort());
         });
 
-        test('company workspace: only the company\'s invoice', async () => {
-            as(fx.owner);
-            const { ids } = await myInvoiceIds({ 'x-active-entity-id': fx.company.id });
-            expect(ids).toEqual([fx.companyBill.invoice.id]);
-        });
-
-        test('a non-member forging the company header is refused (403 ACTIVE_ENTITY_MISMATCH), no rows', async () => {
+        test('a non-member sending the company header sees none of the company\'s invoices (200, no 403)', async () => {
             as(fx.stranger);
-            const { status, body } = await myInvoiceIds({ 'x-active-entity-id': fx.company.id });
-            expect(status).toBe(403);
-            expect(body.code).toBe('ACTIVE_ENTITY_MISMATCH');
-            expect(body.data).toBeUndefined();
+            const { status, ids } = await myInvoiceIds({ 'x-active-entity-id': fx.company.id });
+            expect(status).toBe(200);
+            expect(ids).toEqual([]);
         });
 
-        test('the non-member in their own workspace sees none of the owner\'s invoices', async () => {
+        test('the non-member sees none of the owner\'s invoices', async () => {
             as(fx.stranger);
             const { status, ids } = await myInvoiceIds();
             expect(status).toBe(200);
@@ -259,7 +246,6 @@ d('applicant billing follows the active workspace; the owner gets the receipt (r
             captured = null;
             const res = await request(app)
                 .get(`/api/invoices/my/${fx.companyBill.invoice.id}/receipt/pdf`)
-                .set({ 'x-active-entity-id': fx.company.id })
                 .buffer(true).parse((r, cb) => { const c = []; r.on('data', (x) => c.push(x)); r.on('end', () => cb(null, Buffer.concat(c))); });
 
             expect(res.status).toBe(200);
@@ -279,11 +265,11 @@ d('applicant billing follows the active workspace; the owner gets the receipt (r
             expect(html).toContain('0-1055-61234-56-0');
         });
 
-        test('a stranger cannot download it (403), the template is never reached', async () => {
+        test('a stranger cannot download it (404, R2 Task 12), the template is never reached', async () => {
             as(fx.stranger);
             captured = null;
             const res = await request(app).get(`/api/invoices/my/${fx.companyBill.invoice.id}/receipt/pdf`);
-            expect(res.status).toBe(403);
+            expect(res.status).toBe(404);
             expect(captured).toBeNull();
         });
 
@@ -310,41 +296,41 @@ d('applicant billing follows the active workspace; the owner gets the receipt (r
         });
     });
 
-    describe('Task 5: holder doors in R1 (the R2 answers are Task 12\'s)', () => {
-        const pdfDoor = (id, headers = {}) => request(app).get(`/api/invoices/${id}/pdf`).set(headers);
-        const receiptDoor = (id, headers = {}) => request(app).get(`/api/invoices/my/${id}/receipt/pdf`).set(headers);
+    describe('Task 5 holder doors with the R2 answers (Task 12)', () => {
+        const pdfDoor = (id) => request(app).get(`/api/invoices/${id}/pdf`);
+        const receiptDoor = (id) => request(app).get(`/api/invoices/my/${id}/receipt/pdf`);
 
-        test('co-member B lists the company invoice A filed (R1: with the company header; Task 12 drops it)', async () => {
+        test('co-member B lists and downloads the company invoice A filed, with no header', async () => {
             as(fx.coMember);
-            const { status, ids } = await myInvoiceIds({ 'x-active-entity-id': fx.company.id });
+            const { status, ids } = await myInvoiceIds();
             expect(status).toBe(200);
             expect(ids).toEqual([fx.companyBill.invoice.id]);
             expect((await receiptDoor(fx.companyBill.invoice.id)).status).toBe(200);
             expect((await pdfDoor(fx.companyBill.invoice.id)).status).toBe(200);
         });
 
-        test('a stranger is refused on the invoice PDF and the receipt PDF (R1: 403 as pre-R1; R2/Task 12: 404)', async () => {
+        test('a stranger is refused on the invoice PDF and the receipt PDF with 404 (R1 answered 403)', async () => {
             as(fx.stranger);
-            expect((await pdfDoor(fx.companyBill.invoice.id)).status).toBe(403);
-            expect((await receiptDoor(fx.companyBill.invoice.id)).status).toBe(403);
+            expect((await pdfDoor(fx.companyBill.invoice.id)).status).toBe(404);
+            expect((await receiptDoor(fx.companyBill.invoice.id)).status).toBe(404);
         });
 
-        test('a REVOKED member is refused (R1: 403 as pre-R1; R2/Task 12: 404)', async () => {
+        test('a REVOKED member is refused with 404 (R1 answered 403) and does not list it', async () => {
             as(fx.revoked);
-            expect((await pdfDoor(fx.companyBill.invoice.id)).status).toBe(403);
-            expect((await receiptDoor(fx.companyBill.invoice.id)).status).toBe(403);
+            expect((await pdfDoor(fx.companyBill.invoice.id)).status).toBe(404);
+            expect((await receiptDoor(fx.companyBill.invoice.id)).status).toBe(404);
             const { ids } = await myInvoiceIds();
             expect(ids).not.toContain(fx.companyBill.invoice.id);
         });
 
-        test('a null-entity invoice stays its filer\'s (R1, pre-R1 filer pin; R2/Task 12: invisible, spec §3.1)', async () => {
+        test('a null-entity invoice is invisible to everyone, its filer included (spec §3.1 no filer fallback)', async () => {
             as(fx.legacyFiler);
             const { status, ids } = await myInvoiceIds();
             expect(status).toBe(200);
-            expect(ids).toEqual([fx.legacyBill.invoice.id]);
-            expect((await receiptDoor(fx.legacyBill.invoice.id)).status).toBe(200);
+            expect(ids).toEqual([]);
+            expect((await receiptDoor(fx.legacyBill.invoice.id)).status).toBe(404);
             as(fx.owner);
-            expect((await receiptDoor(fx.legacyBill.invoice.id)).status).toBe(403);
+            expect((await receiptDoor(fx.legacyBill.invoice.id)).status).toBe(404);
         });
 
         test('the witness, in throw mode for this whole file, counted no unscoped Invoice read', () => {

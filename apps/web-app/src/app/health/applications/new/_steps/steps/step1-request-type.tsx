@@ -16,13 +16,16 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useApplicationFlowStore } from '../hooks/use-application-flow-store';
 import { Icons } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
+import { useMyEntities } from '@/lib/services/my-entities-provider';
+import { HolderPicker, mayUseHolder } from '@/components/holder/holder-picker';
+import { orderHolders } from '@/components/holder/holder-labels';
 import { FALLBACK_PLANTS } from './plant-selection-config';
 import {
     REQUEST_TYPE_OPTIONS,
-    APPLICANT_TYPE_OPTIONS,
     needsCertScope,
     needsPreviousCertificate,
     SUCCEEDING_REQUEST_NOTE_TH,
@@ -72,7 +75,17 @@ function Step1RequestTypeComponent() {
     const [previousCert, setPreviousCert] = useState<string>(state?.previousCertificateNumber ?? '');
 
     const requestType = state?.requestType ?? null;
-    const applicantType = state?.applicantType ?? null;
+    const { entities } = useMyEntities();
+    const holderParam = useSearchParams()?.get('holder') ?? null;
+    // Whom the application is filed for. Never defaulted behind the user's back: the one
+    // case with a single possible answer is stated as a fact (the picker says so), and
+    // ?holder=<id> is the user's own earlier choice (the create-entity page returns with
+    // it). Both only count when the user may actually fill an application for that entity.
+    const fileable = orderHolders(entities).filter((e) => mayUseHolder(e, 'file'));
+    const impliedHolder =
+        fileable.find((e) => e.id === holderParam)
+        ?? (fileable.length === 1 ? fileable[0] : undefined);
+    const holderEntityId = state?.holderEntityId ?? impliedHolder?.id ?? null;
     const plantId = state?.plantId ?? null;
     // Only the plants whose law is actually filed can be chosen; the register decides,
     // the screen only shows what it holds.
@@ -97,6 +110,20 @@ function Step1RequestTypeComponent() {
             updateState({ plantId: onlyPlantCode });
         }
     }, [requestType, onlyPlantCode, plantId, updateState]);
+
+    const chooseHolder = (entityId: string) => {
+        const holder = entities.find((e) => e.id === entityId);
+        if (!holder) { return; }
+        // The type is the entity's own, so it cannot disagree with the holder.
+        updateState({ holderEntityId: holder.id, applicantType: holder.type });
+    };
+    // Written once the applicant has started answering, for the same reason as the plant
+    // above: merely LOOKING at step 1 must not persist anything.
+    useEffect(() => {
+        if (requestType === null || !impliedHolder || state?.holderEntityId) return;
+        chooseHolder(impliedHolder.id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [requestType, impliedHolder?.id, state?.holderEntityId]);
 
     const chooseRequestType = (value: typeof REQUEST_TYPE_OPTIONS[number]['value']) => {
         // Changing the request type retires the answers that only its old value asked
@@ -159,16 +186,12 @@ function Step1RequestTypeComponent() {
                 CERT_SCOPE vocabulary stays in config: the engine's certScope dimension
                 and the register's processing rows are real, for the day that flow returns. */}
 
-            <Question title="ผู้ยื่นคำขอ" icon={<Icons.User size={16} className="text-leaf-700" />}>
-                {APPLICANT_TYPE_OPTIONS.map((option) => (
-                    <ChoiceCard
-                        key={option.value}
-                        option={option}
-                        selected={applicantType === option.value}
-                        onSelect={(value) => updateState({ applicantType: value })}
-                    />
-                ))}
-            </Question>
+            <HolderPicker
+                entities={entities}
+                value={holderEntityId}
+                onChange={chooseHolder}
+                purpose="file"
+            />
 
             {/* ชนิดพืช — ย้ายมาจากขั้น 4 (F-QA-04, มติ operator 2026-09-06). กฎหมายยื่นเป็นรายพืช
                 และกติกาเอกสารทั้งหมดห้อยจากพืช ถ้าไม่ถามตรงนี้ ขั้น 2-3 จะไม่มีเอกสารให้แนบเลย */}

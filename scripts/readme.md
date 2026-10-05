@@ -30,7 +30,6 @@ node scripts/test/run-regression-gate.js
 ```
 
 Runs required end-to-end API journeys:
-- wizard flow
 - payment + receipt gate
 - provider workflow
 - auto-trace first cycle

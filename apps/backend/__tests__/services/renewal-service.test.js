@@ -34,6 +34,9 @@ jest.mock('../../shared/logger', () => {
 // service args so the lazy require path can stay tolerant.
 jest.mock('../../services/prisma-database', () => ({ prisma: null }));
 
+// The submit guard's answer for the case under test (null = allowed).
+const mockSubmitRefusal = { current: null };
+
 const servicePath = path.resolve(__dirname, '../../services/renewal-service.js');
 function loadService() {
     jest.resetModules();
@@ -44,11 +47,18 @@ function loadService() {
     // is proven on a real Postgres in
     // __tests__/integration/renewal-requires-submit-capability-real-postgres.test.js.
     jest.doMock('../../services/application-submit-guard', () => ({
-        assertSubmitAllowed: async ({ application }) => ({ entityId: application.entityId }),
+        // One renewal per certificate (RENEWAL_ALREADY_IN_PROGRESS): none in flight here.
+        findInFlightSuccession: async () => null,
+        lockCertificateSuccessions: async () => {},
+        RENEWAL_ALREADY_IN_PROGRESS: 'RENEWAL_ALREADY_IN_PROGRESS',
+        assertSubmitAllowed: async ({ application }) => {
+            if (mockSubmitRefusal.current) { throw mockSubmitRefusal.current; }
+            return { entityId: application.entityId };
+        },
         recordSubmitDenial: async () => {},
     }));
     jest.doMock('../../services/holder-access', () => ({
-        r1HolderOrLegacyWhenScoped: () => ({}),
+        holderReadWhereIfScoped: () => ({}),
     }));
     jest.doMock('../../shared/logger', () => {
         const l = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
@@ -64,6 +74,8 @@ function makePrismaStub(seed = {}) {
     const applications = new Map(Object.entries(seed.applications || {}));
 
     const stub = {
+        // The renewal is filed by the acting user (operator ruling 2026-10-03).
+        user: { findUnique: jest.fn(async ({ where }) => ({ canonicalId: `canon-${where.id}` })) },
         certificate: {
             findFirst: jest.fn(async ({ where }) => {
                 for (const cert of certificates.values()) {
@@ -123,6 +135,8 @@ function makePrismaStub(seed = {}) {
 
 // --- Seed helpers ----------------------------------------------------------
 
+const HOLDER_SCOPE = Object.freeze({ userId: 'user-1', readIds: ['entity-1'], editIds: ['entity-1'] }); // R2 Task 8 fix round 1
+
 function seedCertificate(partial = {}) {
     return {
         id: 'cert-1',
@@ -137,6 +151,8 @@ function seedCertificate(partial = {}) {
         organizationId: 'org-1',
         renewedCertificateId: null,
         previousCertificateId: null,
+        // R2 Task 8 fix round 1: the holder, read through the certificate's relation.
+        application: { entityId: 'entity-1' },
         ...partial,
     };
 }
@@ -216,6 +232,7 @@ describe('renewal-service', () => {
             const result = await svc.createRenewalApplication({
                 originalCertificateId: cert.id,
                 actorId: 'user-1',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             });
 
@@ -244,7 +261,7 @@ describe('renewal-service', () => {
                 expect.arrayContaining(['SUBMITTED']),
             );
             expect(created.formData.workflowStatesSkipped).not.toContain('AUDIT_FEE_PAID');
-            expect(created.healthId).toBe('user-1');
+            expect(created.healthId).toBe('canon-user-1'); // the acting user's canonicalId (operator ruling 2026-10-03)
             expect(created.organizationId).toBe('org-1');
             expect(created.formData.renewalOf).toBe(cert.id);
             expect(created.formData.renewalSourceApplicationId).toBe(app.id);
@@ -265,22 +282,30 @@ describe('renewal-service', () => {
             await expect(svc.createRenewalApplication({
                 originalCertificateId: 'cert-missing',
                 actorId: 'user-1',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             })).rejects.toMatchObject({ code: 'CERT_NOT_FOUND', statusCode: 404 });
         });
 
-        test('rejects when actor is not the certificate owner', async () => {
+        // Operator ruling 2026-10-03: the filer of the certificate is not asked; a member
+        // the submit guard lets through renews it and files the renewal as themselves.
+        test('a member who did not file the certificate renews it, filed under that member', async () => {
             const cert = seedCertificate({ userId: 'user-other' });
             const app = seedApplication();
             const { stub } = makePrismaStub({
                 certificates: { [cert.id]: cert },
                 applications: { [app.id]: app },
             });
-            await expect(svc.createRenewalApplication({
+            const out = await svc.createRenewalApplication({
                 originalCertificateId: cert.id,
                 actorId: 'user-1',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
-            })).rejects.toMatchObject({ code: 'FORBIDDEN_NOT_OWNER', statusCode: 403 });
+            });
+            expect(out.applicationId).toBeTruthy();
+            expect(stub.application.create).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ healthId: 'canon-user-1', submitterId: 'user-1' }),
+            }));
         });
 
         test('rejects when certificate is REVOKED', async () => {
@@ -293,6 +318,7 @@ describe('renewal-service', () => {
             await expect(svc.createRenewalApplication({
                 originalCertificateId: cert.id,
                 actorId: 'user-1',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             })).rejects.toMatchObject({ code: 'CERT_NOT_ACTIVE', statusCode: 409 });
         });
@@ -307,6 +333,7 @@ describe('renewal-service', () => {
             await expect(svc.createRenewalApplication({
                 originalCertificateId: cert.id,
                 actorId: 'user-1',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             })).rejects.toMatchObject({ code: 'CERT_NOT_ACTIVE' });
         });
@@ -323,15 +350,60 @@ describe('renewal-service', () => {
             await expect(svc.createRenewalApplication({
                 originalCertificateId: cert.id,
                 actorId: 'user-1',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             })).rejects.toMatchObject({ code: 'CERT_ALREADY_EXPIRED', statusCode: 409 });
         });
 
+        // R2 Task 8 fix round 1 (spec 2026-09-30 §3.2 + C3): the holder decides before any write.
+        test('rejects a source with NO holder (400 APPLICATION_HOLDER_REQUIRED) and creates nothing', async () => {
+            const cert = seedCertificate({ application: { entityId: null } });
+            const app = seedApplication({ entityId: null });
+            const { stub, applications } = makePrismaStub({
+                certificates: { [cert.id]: cert },
+                applications: { [app.id]: app },
+            });
+            const before = applications.size;
+            await expect(svc.createRenewalApplication({
+                originalCertificateId: cert.id, actorId: 'user-1', holderScope: HOLDER_SCOPE, prisma: stub,
+            })).rejects.toMatchObject({ code: 'APPLICATION_HOLDER_REQUIRED', statusCode: 400 });
+            expect(applications.size).toBe(before);
+        });
+
+        // Operator ruling 2026-10-03 (merged over R2 Task 8's editIds gate): the
+        // renewal needs SUBMIT_APPLICATION on the holder, decided by the submit
+        // guard; its refusal propagates and nothing is created. The guard itself
+        // is proven on real Postgres (renewal-requires-submit-capability).
+        test('rejects when the submit guard refuses SUBMIT_APPLICATION on the holder (403) and creates nothing', async () => {
+            const cert = seedCertificate();
+            const app = seedApplication();
+            const { stub, applications } = makePrismaStub({
+                certificates: { [cert.id]: cert },
+                applications: { [app.id]: app },
+            });
+            const before = applications.size;
+            mockSubmitRefusal.current = Object.assign(new Error('denied'), { code: 'ENTITY_PERMISSION_DENIED', statusCode: 403 });
+            try {
+                await expect(svc.createRenewalApplication({
+                    originalCertificateId: cert.id, actorId: 'user-1', holderScope: HOLDER_SCOPE, prisma: stub,
+                })).rejects.toMatchObject({ code: 'ENTITY_PERMISSION_DENIED', statusCode: 403 });
+            } finally {
+                mockSubmitRefusal.current = null;
+            }
+            expect(applications.size).toBe(before);
+        });
+
+        test('refuses to run without the caller\'s holder scope (TypeError, nothing read or written)', async () => {
+            const { stub } = makePrismaStub();
+            await expect(svc.createRenewalApplication({ originalCertificateId: 'c', actorId: 'u', prisma: stub }))
+                .rejects.toThrow(TypeError);
+        });
+
         test('rejects on missing required args', async () => {
             const { stub } = makePrismaStub();
-            await expect(svc.createRenewalApplication({ actorId: 'u', prisma: stub }))
+            await expect(svc.createRenewalApplication({ actorId: 'u', holderScope: HOLDER_SCOPE, prisma: stub }))
                 .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
-            await expect(svc.createRenewalApplication({ originalCertificateId: 'c', prisma: stub }))
+            await expect(svc.createRenewalApplication({ originalCertificateId: 'c', holderScope: HOLDER_SCOPE, prisma: stub }))
                 .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
         });
     });
@@ -417,6 +489,7 @@ describe('renewal-service', () => {
                 certificateId: cert.id,
                 reminderType: 'D60',
                 dispatchId: 'fanout-key-1',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             });
             expect(out.alreadySent).toBe(false);
@@ -443,6 +516,7 @@ describe('renewal-service', () => {
             const first = await svc.markRenewalReminderSent({
                 certificateId: cert.id,
                 reminderType: 'D30',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             });
             expect(first.alreadySent).toBe(false);
@@ -450,6 +524,7 @@ describe('renewal-service', () => {
             const second = await svc.markRenewalReminderSent({
                 certificateId: cert.id,
                 reminderType: 'D30',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             });
             expect(second.alreadySent).toBe(true);
@@ -487,6 +562,7 @@ describe('renewal-service', () => {
             await expect(svc.markRenewalReminderSent({
                 certificateId: cert.id,
                 reminderType: 'D7',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
         });
@@ -496,6 +572,7 @@ describe('renewal-service', () => {
             await expect(svc.markRenewalReminderSent({
                 certificateId: 'cert-missing',
                 reminderType: 'D60',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             })).rejects.toMatchObject({ code: 'CERT_NOT_FOUND' });
         });
@@ -514,6 +591,7 @@ describe('renewal-service', () => {
             const out = await svc.supersedeCertificate({
                 oldCertificateId: 'cert-old',
                 newCertificateId: 'cert-new',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             });
             expect(out.oldCertificateId).toBe('cert-old');
@@ -548,6 +626,7 @@ describe('renewal-service', () => {
             await expect(svc.supersedeCertificate({
                 oldCertificateId: 'cert-x',
                 newCertificateId: 'cert-x',
+                holderScope: HOLDER_SCOPE,
                 prisma: stub,
             })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
         });

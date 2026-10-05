@@ -3,9 +3,12 @@
  *
  * Covers three surfaces:
  *   1. farm-service.updateFarm → EDIT_FARM assert (service-level, real service)
- *   2. routes farms.js: POST / → FARM_CREATE only in a real workspace context
- *      (personal:true or no context = solo farmer, byte-identical, NO gate);
- *      PATCH /:id maps the service denial to 403 ENTITY_PERMISSION_DENIED.
+ *   2. routes farms.js: POST / names its holder in body.entityId (R2 Task 10,
+ *      spec 2026-09-30-remove-workspace-mode §3.2 B7/B8). Missing → 400
+ *      APPLICATION_HOLDER_REQUIRED; FARM_CREATE is checked on that entity every
+ *      time, the personal entity included (its OWNER holds it by role); the
+ *      active-entity header never decides. PATCH /:id maps the service denial
+ *      to 403 ENTITY_PERMISSION_DENIED.
  *   3. routes plots.js: plot create + delete → CYCLE_CREATE (plots are
  *      cycle-prep per the plan mapping).
  */
@@ -111,41 +114,73 @@ beforeEach(() => {
 });
 afterAll(() => { delete global.__testActiveEntity; });
 
-describe('POST /farms — FARM_CREATE gated ONLY in a real workspace context', () => {
-    it('no active-entity context → no gate, 201 (legacy solo farmer path)', async () => {
+const DENIED_TH = 'คุณไม่มีสิทธิ์ทำรายการนี้ในนามของผู้ถือรายนี้ ขอให้เจ้าของมอบสิทธิ์ให้คุณก่อน แล้วลองอีกครั้ง';
+const HOLDER_REQUIRED_TH = 'ยังไม่ได้เลือกว่าจะยื่นในนามใคร กรุณาเลือกที่ขั้นตอนที่ 1 หากเปิดหน้านี้ค้างไว้ ให้โหลดหน้าใหม่ก่อน';
+
+describe('POST /farms — the farm names its holder; FARM_CREATE is checked on it every time', () => {
+    it('POST /farms without entityId → 400 APPLICATION_HOLDER_REQUIRED, nothing created', async () => {
         const res = await request(app).post('/api/farms').send(FARM_BODY);
-        expect(res.status).toBe(201);
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe('APPLICATION_HOLDER_REQUIRED');
+        expect(res.body.messageTh).toBe(HOLDER_REQUIRED_TH);
+        expect(mockFarmService.createFarm).not.toHaveBeenCalled();
         expect(mockAssertEntityActionPermission).not.toHaveBeenCalled();
     });
 
-    it('personal:true context → no gate, 201 (owner under own personal entity ALWAYS passes)', async () => {
+    it('without entityId the active-entity header is no fallback → still 400', async () => {
         global.__testActiveEntity = { entityId: 'ent-personal', role: 'OWNER', personal: true };
         const res = await request(app).post('/api/farms').send(FARM_BODY);
-        expect(res.status).toBe(201);
-        expect(mockAssertEntityActionPermission).not.toHaveBeenCalled();
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe('APPLICATION_HOLDER_REQUIRED');
+        expect(mockFarmService.createFarm).not.toHaveBeenCalled();
     });
 
-    it('workspace context (personal:false) → FARM_CREATE asserted against that entity', async () => {
-        global.__testActiveEntity = { entityId: 'ent-work', role: 'MANAGER', personal: false };
+    it('POST /farms passes body.entityId to createFarm and checks FARM_CREATE on it', async () => {
         mockAssertEntityActionPermission.mockResolvedValue({ allowed: true });
-
-        const res = await request(app).post('/api/farms').send(FARM_BODY);
-
+        const res = await request(app).post('/api/farms').send({ ...FARM_BODY, entityId: 'ent-work' });
         expect(res.status).toBe(201);
         expect(mockAssertEntityActionPermission).toHaveBeenCalledWith(expect.objectContaining({
             entityId: 'ent-work', userId: 'caller-1', permission: 'FARM_CREATE',
         }));
+        expect(mockFarmService.createFarm).toHaveBeenCalledWith(
+            'caller-1', expect.objectContaining({ farmName: FARM_BODY.farmName }), undefined, { entityId: 'ent-work' },
+        );
     });
 
-    it('workspace context, denied → 403 ENTITY_PERMISSION_DENIED', async () => {
-        global.__testActiveEntity = { entityId: 'ent-work', role: 'MANAGER', personal: false };
+    it('the body names the holder, not the header: header PA + body C → checked and written on C', async () => {
+        global.__testActiveEntity = { entityId: 'ent-personal', role: 'OWNER', personal: true };
+        mockAssertEntityActionPermission.mockResolvedValue({ allowed: true });
+        const res = await request(app).post('/api/farms').send({ ...FARM_BODY, entityId: 'ent-company' });
+        expect(res.status).toBe(201);
+        expect(mockAssertEntityActionPermission).toHaveBeenCalledTimes(1);
+        expect(mockAssertEntityActionPermission.mock.calls[0][0].entityId).toBe('ent-company');
+        expect(mockFarmService.createFarm.mock.calls[0][3]).toEqual({ entityId: 'ent-company' });
+    });
+
+    it('FARM_CREATE is checked on the personal entity too (its OWNER passes by role)', async () => {
+        global.__testActiveEntity = { entityId: 'ent-personal', role: 'OWNER', personal: true };
+        mockAssertEntityActionPermission.mockResolvedValue({ allowed: true });
+        const res = await request(app).post('/api/farms').send({ ...FARM_BODY, entityId: 'ent-personal' });
+        expect(res.status).toBe(201);
+        expect(mockAssertEntityActionPermission).toHaveBeenCalledWith(expect.objectContaining({
+            entityId: 'ent-personal', userId: 'caller-1', permission: 'FARM_CREATE',
+        }));
+    });
+
+    it('denied → 403 ENTITY_PERMISSION_DENIED, nothing created', async () => {
         mockAssertEntityActionPermission.mockRejectedValue(deniedError('FARM_CREATE'));
-
-        const res = await request(app).post('/api/farms').send(FARM_BODY);
-
+        const res = await request(app).post('/api/farms').send({ ...FARM_BODY, entityId: 'ent-work' });
         expect(res.status).toBe(403);
         expect(res.body.code).toBe('ENTITY_PERMISSION_DENIED');
         expect(res.body.permission).toBe('FARM_CREATE');
+        expect(res.body.error).toBe(DENIED_TH);
+        expect(mockFarmService.createFarm).not.toHaveBeenCalled();
+    });
+
+    it('missing required fields → 400 before the holder is checked, nothing created', async () => {
+        const res = await request(app).post('/api/farms').send({ farmName: 'x', entityId: 'ent-work' });
+        expect(res.status).toBe(400);
+        expect(mockAssertEntityActionPermission).not.toHaveBeenCalled();
         expect(mockFarmService.createFarm).not.toHaveBeenCalled();
     });
 });
@@ -193,6 +228,8 @@ describe('plots — CYCLE_CREATE on create + delete (plots are cycle-prep)', () 
 
         expect(res.status).toBe(403);
         expect(res.body.code).toBe('ENTITY_PERMISSION_DENIED');
+        expect(res.body.messageTh).toBe(DENIED_TH);
+        expect(res.body.error).toBe(DENIED_TH);
         expect(mockPlantingService.createPlotForFarm).not.toHaveBeenCalled();
     });
 

@@ -61,6 +61,7 @@ const mockRows = [
         applicationNumber: 'GACP-001',
         healthId: FK_TOKEN,
         applicantUserId: USER_UUID,
+        entityId: 'entity-own',
         isDeleted: false,
         formData: {
             draftDocuments: [
@@ -81,6 +82,7 @@ const mockRows = [
         applicationNumber: 'GACP-002',
         healthId: OTHER_TOKEN,
         applicantUserId: OTHER_UUID,
+        entityId: 'entity-other',
         isDeleted: false,
         formData: {
             draftDocuments: [
@@ -97,6 +99,8 @@ function mockRowsMatching(where = {}) {
         .filter((row) => {
             if (where.isDeleted !== undefined && where.isDeleted !== row.isDeleted) { return false; }
             if (where.healthId !== undefined && where.healthId !== row.healthId) { return false; }
+            // R2 Task 12: the holder fragment (spec 2026-09-30 §3.1) decides the rows.
+            if (where.entityId && Array.isArray(where.entityId.in) && !where.entityId.in.includes(row.entityId)) { return false; }
             if (where.applicant !== undefined) {
                 const applicantWhere = where.applicant || {};
                 if (applicantWhere.id !== undefined && applicantWhere.id !== row.applicantUserId) { return false; }
@@ -109,8 +113,15 @@ function mockRowsMatching(where = {}) {
 const mockFindMany = jest.fn(async ({ where }) => mockRowsMatching(where));
 
 // the project rules rule: mock prisma-database (process.exit(1) without DATABASE_URL).
+// The caller is an ACTIVE OWNER of entity-own only (holder-access reads memberships).
 jest.mock('../../services/prisma-database', () => ({
-    prisma: { application: { findMany: mockFindMany } },
+    prisma: {
+        application: { findMany: mockFindMany },
+        entityMembership: {
+            findMany: jest.fn(async ({ where } = {}) => (where && where.userId === 'b3b8a4a0-1111-4222-8333-444455556666'
+                ? [{ entityId: 'entity-own', role: 'OWNER' }] : [])),
+        },
+    },
 }));
 
 jest.mock('../../shared/api-response', () => ({

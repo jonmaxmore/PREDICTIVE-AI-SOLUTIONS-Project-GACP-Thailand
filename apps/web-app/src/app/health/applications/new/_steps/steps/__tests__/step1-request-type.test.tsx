@@ -12,13 +12,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
     REQUEST_TYPE_OPTIONS,
-    APPLICANT_TYPE_OPTIONS,
     CERT_SCOPE_OPTIONS,
     needsPreviousCertificate,
     needsCertScope,
     step1CanProceed,
     SUCCEEDING_REQUEST_NOTE_TH,
 } from '../step1-request-type-config';
+jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams('') }));
 import Step1RequestType from '../step1-request-type';
 
 describe('step 1 vocabulary — the words the register knows', () => {
@@ -28,11 +28,11 @@ describe('step 1 vocabulary — the words the register knows', () => {
         expect(REQUEST_TYPE_OPTIONS.map((o) => o.value)).not.toContain('RENEW');
     });
 
-    it('offers exactly the register’s three holder types, spelled its way', () => {
-        expect(APPLICANT_TYPE_OPTIONS.map((o) => o.value))
-            .toEqual(['COMMUNITY_ENTERPRISE', 'INDIVIDUAL', 'JURISTIC']);
-        // The wizard's OLDER field says COMMUNITY. The register says COMMUNITY_ENTERPRISE.
-        expect(APPLICANT_TYPE_OPTIONS.map((o) => o.value)).not.toContain('COMMUNITY');
+    it('no longer keeps its own list of holder types: the holder is an entity and the type is its own', () => {
+        // R2 (spec 2026-09-30 §3.2). APPLICANT_TYPE_OPTIONS is gone; the three words now
+        // come from the entity (INDIVIDUAL | JURISTIC | COMMUNITY_ENTERPRISE).
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        expect(require('../step1-request-type-config').APPLICANT_TYPE_OPTIONS).toBeUndefined();
     });
 
     it('keeps the scope vocabulary in config, but the screen no longer asks it', () => {
@@ -45,7 +45,7 @@ describe('step 1 vocabulary — the words the register knows', () => {
     });
 
     it('every option reads as Thai and never shows its own enum', () => {
-        [...REQUEST_TYPE_OPTIONS, ...APPLICANT_TYPE_OPTIONS, ...CERT_SCOPE_OPTIONS].forEach((o) => {
+        [...REQUEST_TYPE_OPTIONS, ...CERT_SCOPE_OPTIONS].forEach((o) => {
             expect(o.labelTH).toMatch(/[ก-๙]/);
             expect(o.helpTH).toMatch(/[ก-๙]/);
             expect(o.labelTH).not.toContain(o.value);
@@ -123,7 +123,7 @@ describe('the screen itself', () => {
     it('prints every choice in Thai and no raw enum anywhere in the markup', () => {
         const html = renderToStaticMarkup(<Step1RequestType />);
 
-        [...REQUEST_TYPE_OPTIONS, ...APPLICANT_TYPE_OPTIONS].forEach((o) => {
+        REQUEST_TYPE_OPTIONS.forEach((o) => {
             expect(html).toContain(o.labelTH);
         });
         ['COMMUNITY_ENTERPRISE', 'REPLACEMENT', 'PROCESSING'].forEach((enumWord) => {

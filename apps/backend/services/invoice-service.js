@@ -174,76 +174,13 @@ function holderAccess() {
 
 const isHolderScope = (scope) => Boolean(scope) && Array.isArray(scope.readIds);
 
-const NO_ENTITY = Object.freeze({ OR: [{ applicationId: null }, { application: { is: { entityId: null } } }] });
-
 /**
- * R1-legacy-pin: removed in Task 12.
- * The pre-R1 (9616ccdf) GET /api/invoices/my where, verbatim, minus isDeleted:
- *   - personal workspace: its entity's invoices plus the caller's own
- *     entity-less ones;
- *   - any other workspace: its entity's invoices (no filer pin);
- *   - no workspace: only the caller's own entity-less invoices (logged).
- * Null when the old door asked nothing (no workspace and no caller id).
- * @param {{ healthId?: string, activeEntity?: { entityId: string, personal?: boolean } | null }} legacy
- * @returns {object|null}
- */
-function r1LegacyWorkspaceInvoiceWhere({ healthId, activeEntity } = {}) {
-    const callerId = String(healthId || '').trim();
-    const ownEntityless = callerId
-        ? { healthId: callerId, OR: [{ applicationId: null }, { application: { is: { entityId: null } } }] }
-        : null;
-    const entityId = activeEntity?.entityId || null;
-    if (entityId) {
-        const ofEntity = { application: { is: { entityId } } };
-        return activeEntity.personal === true && ownEntityless ? { OR: [ofEntity, ownEntityless] } : ofEntity;
-    }
-    require('../shared/logger').warn('[invoices] listForHolders called without an active workspace — answering with the caller\'s own entity-less invoices only');
-    return ownEntityless;
-}
-
-/**
- * R1-legacy-pin: removed in Task 12.
- * The pre-R1 (9616ccdf) assertHealthOwnsInvoice rule as a where: an ACTIVE
- * EntityMembership, any role, on the application's entity; or, when the
- * application has no entity, the filer pin (the invoice's healthId, or the
- * applicant relation's User.id). Empty identifiers never match.
- * @param {{ userId?: string, healthId?: string }} owner
- * @returns {object|null} null when no branch can match
- */
-function r1LegacyInvoiceOwnerWhere({ userId, healthId } = {}) {
-    const uid = String(userId || '').trim();
-    const hid = String(healthId || '').trim();
-    const branches = [];
-    if (uid) {
-        branches.push({ application: { is: { entity: { is: { members: { some: { userId: uid, status: 'ACTIVE' } } } } } } });
-    }
-    const filer = [];
-    if (hid) { filer.push({ healthId: hid }); }
-    if (uid) { filer.push({ applicant: { is: { id: uid } } }); }
-    if (filer.length > 0) {
-        branches.push({ AND: [NO_ENTITY, { OR: filer }] });
-    }
-    return branches.length > 0 ? { OR: branches } : null;
-}
-
-/**
- * The where of a health by-id Invoice read (the owner PDF doors).
- * Task 12 target: { isDeleted: false, ...holderReadWhere(scope, 'Invoice') }.
- * R1 (operator ruling C1): the holder fragment and the pre-R1 owner rule form one
- * registered OR, with the owner rule also the AND pin, so the rows are exactly
- * the pre-R1 rows.
+ * The where of a health by-id Invoice read (the owner PDF doors): the holder
+ * fragment alone, no filer pin (spec 2026-09-30-remove-workspace-mode §3.1).
  * @param {{ readIds: string[] }} scope
- * @param {{ userId?: string, healthId?: string }} r1Owner
  */
-function holderOwnedInvoiceWhere(scope, r1Owner) {
-    const { r1HolderOrLegacy, r1LegacyApplicantPin } = holderAccess();
-    const legacy = r1LegacyInvoiceOwnerWhere(r1Owner);
-    return {
-        isDeleted: false,
-        // R1-legacy-pin: removed in Task 12 (→ holderReadWhere(scope, 'Invoice'))
-        ...r1HolderOrLegacy(scope, 'Invoice', legacy),
-        ...r1LegacyApplicantPin(legacy),
-    };
+function holderOwnedInvoiceWhere(scope) {
+    return { isDeleted: false, ...holderAccess().holderReadWhere(scope, 'Invoice') };
 }
 
 class InvoiceService {
@@ -305,34 +242,15 @@ class InvoiceService {
     /**
      * The invoices a health user may read (GET /api/invoices/my): those of the
      * applications filed under a holder entity in the caller's holder scope
-     * (spec 2026-09-30-remove-workspace-mode §3.1; holderScope(req)).
-     *
-     * Task 12 target: { isDeleted: false, ...holderReadWhere(scope, 'Invoice') }
-     * plus the status filter; no filer pin, no null-entity branch.
-     *
-     * R1 (operator ruling C1): the rows are exactly the pre-R1 (9616ccdf)
-     * listForWorkspace rows. `r1Legacy` carries what that door asked with (the
-     * caller's healthId and the active workspace); its where is the registered
-     * legacy OR branch beside the holder fragment AND the pin, so nothing widens
-     * or narrows. Membership of the workspace was checked by
-     * active-entity-middleware (a forged header is 403 before this runs).
+     * (spec 2026-09-30-remove-workspace-mode §3.1; holderScope(req)). No filer
+     * pin and no null-holder branch: co-members see the holder's invoices.
      *
      * No holder scope: fail closed, no query.
-     * @param {{ scope: { readIds: string[] }, status?: string,
-     *           r1Legacy?: { healthId?: string, activeEntity?: { entityId: string, personal?: boolean } | null } }} args
+     * @param {{ scope: { readIds: string[] }, status?: string }} args
      */
-    async listForHolders({ scope, status, r1Legacy } = {}) {
+    async listForHolders({ scope, status } = {}) {
         if (!isHolderScope(scope)) { return []; }
-        const { r1HolderOrLegacy, r1LegacyApplicantPin } = holderAccess();
-        // R1-legacy-pin: removed in Task 12.
-        const legacy = r1LegacyWorkspaceInvoiceWhere(r1Legacy || {});
-        if (!legacy) { return []; }
-        const where = {
-            isDeleted: false,
-            // R1-legacy-pin: removed in Task 12 (→ holderReadWhere(scope, 'Invoice'))
-            ...r1HolderOrLegacy(scope, 'Invoice', legacy),
-            ...r1LegacyApplicantPin(legacy),
-        };
+        const where = { isDeleted: false, ...holderAccess().holderReadWhere(scope, 'Invoice') };
         const statusFilter = statusFilterForQuery(status);
         if (statusFilter) { where.status = statusFilter; }
 
@@ -353,31 +271,14 @@ class InvoiceService {
     /**
      * One invoice a health user may read, by id — the billing view (the same
      * select as getById). Null when the caller's holder scope does not reach it,
-     * or it is missing or soft-deleted. Used by invoice-helpers.findHealthInvoice.
+     * or it is missing or soft-deleted (the doors answer 404 for all three).
+     * Used by invoice-helpers.findHealthInvoice.
      * @param {string} id
-     * @param {{ scope: { readIds: string[] }, r1Owner?: { userId?: string, healthId?: string } }} args
+     * @param {{ scope: { readIds: string[] } }} args
      */
-    async getForHolder(id, { scope, r1Owner } = {}) {
+    async getForHolder(id, { scope } = {}) {
         if (!isHolderScope(scope)) { return null; }
-        return this._findOneInvoice(id, BILLING_APPLICATION_SELECT, holderOwnedInvoiceWhere(scope, r1Owner));
-    }
-
-    /**
-     * R1-legacy-pin: removed in Task 12 (R2 answers 404 for every invoice the
-     * holder scope does not reach). Pre-R1 the owner doors told a live invoice
-     * the caller may not read (403) from a missing or soft-deleted one (404);
-     * this keeps that answer. The where is the id the door already holds,
-     * registered as the legacy fragment so the witness accepts it.
-     * @param {string} id
-     * @returns {Promise<boolean>}
-     */
-    async r1LiveInvoiceExists(id) {
-        const { r1LegacyFilerFragment } = holderAccess();
-        const row = await prisma.invoice.findFirst({
-            where: { ...r1LegacyFilerFragment('Invoice', { id }), isDeleted: false },
-            select: { id: true },
-        });
-        return Boolean(row);
+        return this._findOneInvoice(id, BILLING_APPLICATION_SELECT, holderOwnedInvoiceWhere(scope));
     }
 
     /**
@@ -481,11 +382,11 @@ class InvoiceService {
      * as PAYER_ID on the invoice/receipt for an individual payer — a leak,
      * caught before merge. Do not re-add it.
      */
-    async getForDocument(id, { scope, r1Owner } = {}) {
+    async getForDocument(id, { scope } = {}) {
         // A health door passes its holder scope (Task 5): the document read goes
         // through the same scoped where as its gate. Staff doors and the PDF
         // worker pass none and keep the plain { id } read.
-        const holderWhere = isHolderScope(scope) ? holderOwnedInvoiceWhere(scope, r1Owner) : null;
+        const holderWhere = isHolderScope(scope) ? holderOwnedInvoiceWhere(scope) : null;
         return this._findOneInvoice(id, {
             // The discriminator column on Entity is `type`
             // (prisma/schema/entity.prisma:33), NOT `entityType` (B1).
@@ -539,8 +440,8 @@ class InvoiceService {
     /**
      * Generate PDF Buffer
      */
-    async generatePdf(id, { scope, r1Owner } = {}) {
-        const invoice = await this.getForDocument(id, { scope, r1Owner });
+    async generatePdf(id, { scope } = {}) {
+        const invoice = await this.getForDocument(id, { scope });
         if (!invoice) { throw new Error('Invoice not found'); }
 
         // Try queue-based generation first, fallback to direct PDFKit
@@ -750,8 +651,8 @@ class InvoiceService {
      * stored TAX-PRD receipt number (invoice-template-service.generateReceiptTaxInvoicePdf).
      * Served by the staff route and by the applicant's own route alike.
      */
-    async generateReceiptPdf(invoiceId, { scope, r1Owner } = {}) {
-        const invoice = await this.getForDocument(invoiceId, { scope, r1Owner });
+    async generateReceiptPdf(invoiceId, { scope } = {}) {
+        const invoice = await this.getForDocument(invoiceId, { scope });
         if (!invoice) { throw new Error('Invoice not found'); }
         // Precondition, not a server fault: invoice exists but no receipt issued
         // yet → 409 (respondError honours error.statusCode). Previously this plain

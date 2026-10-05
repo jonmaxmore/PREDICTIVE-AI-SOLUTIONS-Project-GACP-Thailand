@@ -40,7 +40,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -49,6 +48,11 @@ jest.mock('../../services/application-service', () => ({
     findUserOrganizationId: jest.fn(),
     getApplicantReadinessSnapshot: jest.fn(),
     getLatestOpenDraftForApplicant: jest.fn(),
+}));
+// R2 Task 8: every draft write names its draft, and the caller edits for its holder.
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] })),
 }));
 
 jest.mock('../../services/entity-service', () => ({
@@ -163,6 +167,7 @@ let draftDocuments = [];
 function uploadPermit(slotId, filename) {
     return request(buildApp())
         .post('/api/applications/draft-documents')
+        .field('applicationId', 'app-1')
         .field('slotId', slotId)
         .field('stepKey', 'documents')
         .attach('file', realisticPdf(), { filename, contentType: 'application/pdf' });
@@ -172,8 +177,7 @@ beforeEach(() => {
     jest.clearAllMocks();
     draftDocuments = [];
     applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-    applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
-    applicationService.findLatestOpenDraftForHealth.mockImplementation(async () => ({
+    applicationService.findApplicationByIdForHealth.mockImplementation(async () => ({
         id: 'app-1',
         applicationNumber: 'APP-2026-000001',
         status: 'DRAFT',

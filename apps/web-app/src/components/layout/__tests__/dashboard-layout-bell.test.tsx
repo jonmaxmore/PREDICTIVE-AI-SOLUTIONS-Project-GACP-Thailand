@@ -60,10 +60,6 @@ jest.mock('@/components/layout/Footer', () => ({
     Footer: () => null,
 }));
 
-// EntitySwitcher pulls in active-entity-provider hooks; stub it.
-jest.mock('@/components/layout/entity-switcher', () => ({
-    EntitySwitcher: () => null,
-}));
 
 const NAV_ITEMS = [
     { href: '/health/dashboard', label: 'หน้าแรก', Icon: Home },

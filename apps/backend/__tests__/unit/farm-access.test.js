@@ -187,6 +187,34 @@ describe('Wave A chunk 3 — farm-service query guards use the access predicate'
         expect(where).toEqual({ ...markHolderScoped({ ownerId: 'u1', entityId: null }), isDeleted: false });
     });
 
+    it('getByOwner with a holder scope: reads the R1 holder fragment, not the owner pin - R2 task 15 fix 2', async () => {
+        const { holderReadWhere } = require('../../services/holder-access');
+        const scope = { userId: 'worker-1', readIds: ['ent-1'], editIds: ['ent-1'] };
+        prisma.farm.findMany.mockResolvedValue([]);
+        await farmService.getByOwner('worker-1', { holderScope: scope });
+        const args = prisma.farm.findMany.mock.calls[0][0];
+        expect(args.where).toEqual({ ...holderReadWhere(scope, 'Farm'), isDeleted: false });
+        // the holder fragment never asks for memberships itself: the scope decides
+        expect(prisma.entityMembership.findMany).not.toHaveBeenCalled();
+    });
+
+    it('a REVOKED member has an empty read scope, so the where matches no holder farm - R2 task 15 fix 2', async () => {
+        const { holderReadWhere } = require('../../services/holder-access');
+        const scope = { userId: 'gone-1', readIds: [], editIds: [] };
+        prisma.farm.findMany.mockResolvedValue([]);
+        await farmService.getByOwner('gone-1', { holderScope: scope });
+        const where = prisma.farm.findMany.mock.calls[0][0].where;
+        expect(JSON.stringify(where)).not.toMatch(/ent-1/);
+        expect(where).toEqual({ ...holderReadWhere(scope, 'Farm'), isDeleted: false });
+    });
+
+    it('the farm list select carries entityId (the holder chip) - R2 task 15 fix 2', async () => {
+        prisma.farm.findMany.mockResolvedValue([]);
+        prisma.entityMembership.findMany.mockResolvedValue([]);
+        await farmService.getByOwner('u1');
+        expect(prisma.farm.findMany.mock.calls[0][0].select.entityId).toBe(true);
+    });
+
     it('getById: keeps 404-semantics chokepoint but honours co-membership', async () => {
         prisma.entityMembership.findMany.mockResolvedValue([{ entityId: 'ent-1', role: 'MANAGER' }]);
         await farmService.getById('farm-1', 'worker-1');

@@ -65,6 +65,8 @@ jest.mock('../../routes/api/helpers/lots-label-routes', () => ({ registerLotLabe
 jest.mock('../../routes/api/helpers/lots-utility-routes', () => ({ registerLotUtilityRoutes: jest.fn() }));
 jest.mock('../../services/traceability-service', () => ({
     listOwnerFarmIdsForTrace: (...a) => mockListOwnerFarmIds(...a),
+    // The lot write gate (owner farms, pre-R2); the same stub answers both lists here.
+    listWritableFarmIdsForTrace: (...a) => mockListOwnerFarmIds(...a),
     findHarvestBatchFarmId: (...a) => mockFindBatchFarmId(...a),
     findLotForUpdate: (...a) => mockFindLotForUpdate(...a),
     createLotWithQuotaCheck: (...a) => mockCreateLot(...a),

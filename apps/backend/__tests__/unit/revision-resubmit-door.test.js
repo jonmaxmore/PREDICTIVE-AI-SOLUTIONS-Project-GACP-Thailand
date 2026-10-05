@@ -41,6 +41,16 @@ jest.mock('../../services/application-status-writer', () => ({
     writeApplicationStatus: (...a) => mockWriteStatus(...a),
 }));
 
+// R2 Task 12 (spec §3.3: a resubmit is a submit): the door asks the submit guard
+// first. The guard itself is proven on a real Postgres (holder-scope-real-postgres).
+const mockAssertSubmitAllowed = jest.fn();
+jest.mock('../../services/application-submit-guard', () => {
+    class SubmitGuardError extends Error {
+        constructor(message, { statusCode, code }) { super(message); this.statusCode = statusCode; this.code = code; }
+    }
+    return { assertSubmitAllowed: (...a) => mockAssertSubmitAllowed(...a), SubmitGuardError };
+});
+
 function app() {
     const a = express();
     a.use(express.json());
@@ -54,6 +64,7 @@ const REPLACED_AT = new Date('2026-09-06T10:00:00.000Z');
 beforeEach(() => {
     jest.clearAllMocks();
     mockWriteStatus.mockResolvedValue({ ok: true });
+    mockAssertSubmitAllowed.mockResolvedValue({ entityId: 'entity-1' });
     mockDb.application.findFirst.mockResolvedValue({
         id: 'app-1', healthId: 'health-1', status: 'REVISION_REQUESTED', isDeleted: false,
     });
@@ -76,10 +87,25 @@ describe('who may send a filing back', () => {
         expect(mockDb.application.findFirst).not.toHaveBeenCalled();
     });
 
-    test('another applicant\'s filing is 404 — the healthId is in the query, not a check after', async () => {
+    test('a filing outside the caller\'s holders is 404 — the holder scope is in the query, not a check after', async () => {
         mockDb.application.findFirst.mockResolvedValue(null);
         const res = await post();
         expect(res.status).toBe(404);
+        expect(mockAssertSubmitAllowed).not.toHaveBeenCalled();
+        expect(mockWriteStatus).not.toHaveBeenCalled();
+    });
+
+    test('R2 Task 12: the submit guard decides before anything else; its refusal moves nothing', async () => {
+        const { SubmitGuardError } = require('../../services/application-submit-guard');
+        mockAssertSubmitAllowed.mockRejectedValue(new SubmitGuardError('denied', { statusCode: 403, code: 'ENTITY_PERMISSION_DENIED' }));
+        const res = await post();
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('ENTITY_PERMISSION_DENIED');
+        expect(mockAssertSubmitAllowed).toHaveBeenCalledWith(expect.objectContaining({
+            userId: 'user-1',
+            application: expect.objectContaining({ id: 'app-1' }),
+        }));
+        expect(mockDb.applicationDocumentReview.findMany).not.toHaveBeenCalled();
         expect(mockWriteStatus).not.toHaveBeenCalled();
     });
 });

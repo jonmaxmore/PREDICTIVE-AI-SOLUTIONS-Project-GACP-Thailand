@@ -151,3 +151,46 @@ ROLLBACK;
   **เฉพาะ** `...-applied-rollback.csv` ของรอบนั้น (ไม่ใช่ไฟล์แผน — แผนมีแถวที่สคริปต์ไม่ได้เขียน) ตั้ง
   `entityId` กลับเป็น NULL เฉพาะแถวที่ยังมีค่าเท่ากับคอลัมน์ `entityId` ในไฟล์ (`WHERE id = <id> AND
   "entityId" = <entityId>`) เพื่อไม่ลบผู้ถือที่ถูกเปลี่ยนหลังจากนั้น
+
+## R2 deploy — `[OPERATOR-ONLY]`
+
+R2 ถอดโหมด workspace ออกทั้งระบบ: ไม่มี `x-active-entity-id`, ไม่มีตัวสลับ, ไม่มีบริบท entity ที่ active ·
+การอ่านและเขียนฝั่งผู้ยื่นตัดสินด้วยผู้ถือ (holder) และสิทธิ์ของสมาชิกบนผู้ถือเท่านั้น (spec §3, §5) ·
+**ไม่มี migration ใหม่** · สถานะของงานนี้: `PENDING` (ยังไม่ได้ deploy · view-pack ยังไม่ได้ถ่าย)
+
+### เงื่อนไขก่อน deploy (ต้องผ่านทั้งสองฐาน)
+
+- **D0 = 0** และ **D1 = `0 | 0`** บนฐานเป้าหมาย — บันทึกวันที่และชื่อ operator ที่ตรวจ
+- ค่าที่บันทึกไว้แล้ว: ทั้ง staging และ demo ณ **2026-10-03** D0 = 0 · D1 หลัง operator เติมผู้ถือ
+  (staging 5 แถว / demo 2 แถว) = `0 | 0` — **ต้องตรวจซ้ำก่อน deploy จริง** เพราะมีคำขอใหม่เกิดได้หลังวันนั้น
+  ตรวจด้วยขั้น D0/D1 ด้านบน (D1 แบบดูอย่างเดียว: ผลต้องเป็น 0 แถวที่ต้องเติม) ถ้าไม่เป็น 0 ให้หยุดและ
+  รัน D1 รอบใหม่ก่อน เพราะ R2 ถอดตัวตรึงผู้ยื่น: แถวที่ `entityId` ว่างจะไม่มีผู้ยื่นคนใดเห็น
+- ฐานอยู่ที่ระดับ migration เดียวกับ tree ที่จะ build (main นำหน้าฐานได้ — `migrate deploy` ก่อน image เสมอ)
+
+### ลำดับ deploy
+
+1. **build image ทั้งสองจาก SHA เดียวกัน** (backend + web) — ห้ามผสม SHA
+2. deploy **backend ก่อน แล้ว web ในหน้าต่างเวลาเดียวกัน** (ไม่เว้นข้ามวัน): การอ่านยังใช้ได้ แต่ **การสร้างคำขอพังในช่วงนี้**
+   เพราะ web เก่าไม่ส่ง `entityId` — `POST /applications/draft` ตอบ 400 `APPLICATION_HOLDER_REQUIRED` และการเรียกประตู
+   `/api/wizard` ที่ถูกลบแล้วตอบ 404 (ไม่มีความเสี่ยงต่อข้อมูล) ดังนั้นให้ **จำกัดช่วง backend→web ไว้ไม่กี่นาที
+   และ deploy staging ก่อนเสมอ** ส่วน web ใหม่กับ backend เก่าจะเรียกประตูที่ยังไม่มี
+3. หลัง restart เดินตาม view-pack ของ spec §4 (flow 1-7 สว่าง/มืด) ด้วยบัญชีทดสอบ แล้วจึง deploy demo
+
+### Post-deploy: metric
+
+หลังเดิน view-pack ให้อ่าน metric จาก backend ที่เพิ่ง restart (คำสั่งเดียวกับขั้น 3 ของ R1 ด้านบน)
+**คาด: `health_read_unscoped_total` = 0 ทุกบรรทัด** (ชื่อในโค้ด `apps/backend/shared/prometheus.js:62` —
+เอกสารบางที่เรียก `gacp_backend_health_read_unscoped_total`) ถ้าไม่เป็น 0: log `signal: HEALTH_READ_UNSCOPED`
+บอก model/op/route ของประตูที่อ่านโดยไม่มี holder fragment — ถือว่า R2 ไม่ผ่าน ให้ rollback แล้วแก้
+
+ข้อจำกัด: ตัวนับ `health_read_unscoped_total` มองไม่เห็นการอ่านที่อยู่ใน `withoutTenantScope` หรือ raw SQL
+
+### Rollback
+
+redeploy **image เก่าทั้งสอง (backend และ web) พร้อมกัน** (spec §5) — ไม่มี migration ให้ย้อน ·
+ห้ามย้อนเพียงฝั่งเดียว (web เก่า + backend ใหม่ หรือกลับกัน ใช้ไม่ได้) · ข้อมูลที่ D1 เติมไว้คงอยู่ได้ โค้ดเก่าทนได้
+
+### งานอื่นที่อาจเข้า main ก่อน
+
+การเปลี่ยนเรื่องแยกหน้าที่ (separation of duties) จากสาขาอื่นอาจเข้า main ก่อน R2 — **R2 ไม่พึ่งพามัน**
+และมันไม่พึ่งพา R2 · ถ้าเข้าก่อน ให้ merge main เข้าสาขานี้และรัน gate ใหม่ก่อน build SHA ที่จะ deploy

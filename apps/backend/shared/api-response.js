@@ -30,13 +30,17 @@ const DEFAULT_ERROR_MESSAGES = {
     en: 'Resource not found',
     th: 'ไม่พบข้อมูลที่ต้องการ',
   },
-  // W4 2026-08-22 — the account has no legal-applicant Entity, so no draft can
-  // be opened for it and every wizard document upload 400s. Without a row here
-  // sendErrorResponse falls back to INTERNAL_SERVER_ERROR's Thai
-  // ("เกิดข้อผิดพลาดภายในระบบ"), which is both untrue and unactionable.
-  APPLICANT_ENTITY_MISSING: {
-    en: 'No legal applicant (entity) is linked to this account, so an application cannot be created',
-    th: 'บัญชีนี้ยังไม่มีผู้ยื่นตามกฎหมาย (entity) จึงสร้างคำขอไม่ได้ กรุณาออกจากระบบแล้วเข้าใหม่ หากยังไม่หาย โปรดติดต่อผู้ดูแลระบบ',
+  // R2 Task 8 (spec 2026-09-30-remove-workspace-mode §3.6): a new draft names its
+  // holder; without one the door refuses. The Thai copy is the spec's, verbatim.
+  APPLICATION_HOLDER_REQUIRED: {
+    en: 'No holder was chosen for this application. Choose it at step 1; if this page has been open for a while, reload it first',
+    th: 'ยังไม่ได้เลือกว่าจะยื่นในนามใคร กรุณาเลือกที่ขั้นตอนที่ 1 หากเปิดหน้านี้ค้างไว้ ให้โหลดหน้าใหม่ก่อน',
+  },
+  // One renewal or replacement per certificate at a time: the catalogue's copy, read
+  // lazily (the catalogue is large and this file loads early).
+  get RENEWAL_ALREADY_IN_PROGRESS() {
+    const row = require('./error-codes').ERROR_CODES.RENEWAL_ALREADY_IN_PROGRESS;
+    return { en: row.messageEn, th: row.messageTh };
   },
   CONFLICT: {
     en: 'Request conflicts with the current state of the resource',
@@ -122,6 +126,17 @@ function sendErrorResponse(
     extra = {},
   } = {},
 ) {
+  // ENTITY_PERMISSION_DENIED has ONE answer at every door, whatever the thrower wrote
+  // (R2 Task 10 round 2): the catalogue copy, the same body entityPermissionDeniedBody
+  // builds. Required lazily: the catalogue module is large and this file loads early.
+  if (code === 'ENTITY_PERMISSION_DENIED') {
+    const { entityPermissionDeniedBody } = require('./entity-permission-denied');
+    return res.status(status).json({
+      ...entityPermissionDeniedBody(extra?.permission),
+      ...(details ? { details } : {}),
+      ...responseMeta(req),
+    });
+  }
   const fallbackMessages = DEFAULT_ERROR_MESSAGES[code] || DEFAULT_ERROR_MESSAGES.INTERNAL_SERVER_ERROR;
   const resolvedMessage = message || fallbackMessages.en;
   const resolvedMessageTh = messageTh || fallbackMessages.th;
@@ -155,7 +170,7 @@ const SAFE_ERROR_PHRASES = [
  * even if they also happen to contain a safe phrase.
  */
 const UNSAFE_ERROR_INDICATORS = [
-  'prisma', 'prismaclient', 'sqlstate', 'sequelize', 'mongo', 'mongoose',
+  'prisma', 'prismaclient', 'sqlstate', 'sequelize',
   'pg_', 'postgres', 'mysql', 'sqlite',
   'at object.', 'at async ', 'at process.', 'at /', 'at \\',
   'node_modules', '/app/', '\\app\\', 'c:\\', '/usr/', '/var/',

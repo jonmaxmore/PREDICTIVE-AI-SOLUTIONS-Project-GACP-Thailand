@@ -23,6 +23,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { SummaryHeader } from '@/components/feature';
 import { motion } from 'framer-motion';
 import { AREA_UNIT_LABEL, formatAreaSqm, legacyAreaToSqm } from '@/lib/area';
+import { HolderFilterChips, HolderLine, useHolderFilter } from '@/components/holder/holder-list';
 
 interface Farm {
     id: string;
@@ -34,6 +35,8 @@ interface Farm {
     areaUnit: string;
     status: string;
     createdAt: string;
+    /** The holder the farm is registered under. */
+    entityId?: string | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -47,6 +50,7 @@ export default function EstablishmentsPage() {
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
     const [farms, setFarms] = useState<Farm[]>([]);
+    const holder = useHolderFilter();
     const [loading, setLoading] = useState(true);
     const [isCertified, setIsCertified] = useState(false);
     const [checkingAccess, setCheckingAccess] = useState(true);
@@ -138,16 +142,18 @@ export default function EstablishmentsPage() {
                 title="สถานประกอบการ"
                 description="ฟาร์มและแหล่งผลิตที่ได้รับการรับรองมาตรฐาน GACP"
                 metrics={[
-                    { label: 'ฟาร์มทั้งหมด', value: farms.length.toLocaleString('th-TH'), icon: '🏭' },
+                    { label: 'ฟาร์มทั้งหมด', value: farms.length.toLocaleString('th-TH') },
                 ]}
                 actions={
                     <Button asChild className="rounded-full bg-primary px-6 font-bold hover:bg-primary/90">
-                        <Link href="/health/establishments/new">
+                        <Link href={holder.selectedId ? `/health/establishments/new?holder=${encodeURIComponent(holder.selectedId)}` : '/health/establishments/new'}>
                             <Plus className="mr-2 h-4 w-4" /> เพิ่มสถานประกอบการ
                         </Link>
                     </Button>
                 }
             />
+
+            <HolderFilterChips entities={farms.some((f) => holder.holderOf(f)) ? holder.entities : []} selectedId={holder.selectedId} onSelect={holder.setSelectedId} />
 
             {loading ? (
                 <div className="flex h-[40vh] items-center justify-center">
@@ -155,7 +161,7 @@ export default function EstablishmentsPage() {
                 </div>
             ) : farms.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {farms.map((farm, idx) => (
+                    {farms.filter(holder.matches).map((farm, idx) => (
                         <motion.div
                             key={farm.id}
                             initial={{ opacity: 0, y: 10 }}
@@ -182,6 +188,7 @@ export default function EstablishmentsPage() {
                                             <MapPin className="h-3 w-3" />
                                             {farm.district}, {farm.province}
                                         </p>
+                                        <HolderLine name={holder.holderOf(farm)} />
 
                                         <div className="mt-auto grid grid-cols-2 gap-4 border-t border-border/50 pt-4">
                                             <div>

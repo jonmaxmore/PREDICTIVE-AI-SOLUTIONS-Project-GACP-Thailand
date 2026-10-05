@@ -128,7 +128,7 @@ router.get('/schedule', authenticateHealth, async (req, res) => {
         if (!userId) {return res.status(401).json({ success: false, error: 'Unauthorized' });}
 
         // Get active certificates
-        // Spec 2026-09-30 §3.1: the holder scope (R1: the pre-R1 userId pin decides).
+        // Spec 2026-09-30 §3.1: the certificates of the caller's holders.
         const certificates = await documentService.listActiveCertificatesForUser(
             await holderScopeOf(req),
         );
@@ -302,7 +302,7 @@ router.post('/', authenticateHealth, async (req, res) => {
             });
         }
 
-        // Check certificate belongs to user
+        // The certificate is one of the caller's holders' (spec 2026-09-30 §3.1).
         const certificate = await documentService.findCertificateForUser(
             certificateId,
             await holderScopeOf(req),
@@ -310,6 +310,21 @@ router.post('/', authenticateHealth, async (req, res) => {
 
         if (!certificate) {
             return res.status(404).json({ success: false, error: 'Certificate not found' });
+        }
+
+        // Filing a report writes a record for the holder: RECORDS_MANAGE on it
+        // (the farm-records permission; MANAGER and OWNER hold it by role, a VIEWER
+        // does not). R2 Task 12: the filer pin that used to keep co-members out of
+        // this door is gone, so who may write is asked here.
+        try {
+            await require('../../../services/holder-access')
+                .assertHolderCapability(req.user?.id, certificate.application?.entityId, 'RECORDS_MANAGE');
+        } catch (gateErr) {
+            if (gateErr?.code === 'ENTITY_PERMISSION_DENIED') {
+                const { entityPermissionDeniedBody } = require('../../../shared/entity-permission-denied');
+                return res.status(403).json(entityPermissionDeniedBody(gateErr.permission || 'RECORDS_MANAGE'));
+            }
+            throw gateErr;
         }
 
         // Check for duplicate

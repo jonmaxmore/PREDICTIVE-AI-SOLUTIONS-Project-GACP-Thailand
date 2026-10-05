@@ -150,6 +150,8 @@ interface DraftResponse {
   id: string;
   formData?: DraftFormData;
   status?: string;
+  /** The holder entity of the application row (GET /applications/draft carries it). */
+  entityId?: string | null;
 }
 
 /**
@@ -388,6 +390,10 @@ export default function ApplicationStepPage() {
             ?? (formData.applicantData?.applicantType === 'COMMUNITY'
               ? 'COMMUNITY_ENTERPRISE'
               : formData.applicantData?.applicantType ?? null),
+          // The holder is the application row's own `entityId` (fixed at create, never in
+          // formData). Only written when the server says it; otherwise the holder this
+          // browser already holds for the draft is kept rather than blanked.
+          ...(typeof draft.entityId === 'string' ? { holderEntityId: draft.entityId } : {}),
           previousCertificateNumber: formData.previousCertificateNumber ?? null,
           serviceType: formData.serviceType ?? null,
           certificationPurposes: storedPurposes.valid,

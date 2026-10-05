@@ -16,6 +16,7 @@ const logger = require('../../../shared/logger');
 // Wave B fix S9 (2026-07-03): writes gate on RECORDS_MANAGE (per-member
 // engine); reads stay plain co-member.
 const { assertFarmActionPermission } = require('../../../services/entity-effective-permissions-service');
+const { entityPermissionDeniedBody } = require('../../../shared/entity-permission-denied');
 
 /** S9 — assert RECORDS_MANAGE; writes the canonical 403 and returns false on denial. */
 async function assertRecordsManageOrRespond(res, { farmId, userId }) {
@@ -24,12 +25,7 @@ async function assertRecordsManageOrRespond(res, { farmId, userId }) {
         return true;
     } catch (permError) {
         if (permError?.code === 'ENTITY_PERMISSION_DENIED') {
-            res.status(403).json({
-                success: false,
-                code: 'ENTITY_PERMISSION_DENIED',
-                permission: permError.permission || 'RECORDS_MANAGE',
-                error: 'คุณไม่มีสิทธิ์จัดการบันทึกฟาร์มในพื้นที่ทำงานนี้',
-            });
+            res.status(403).json(entityPermissionDeniedBody(permError.permission || 'RECORDS_MANAGE'));
             return false;
         }
         throw permError;

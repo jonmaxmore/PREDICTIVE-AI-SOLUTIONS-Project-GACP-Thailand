@@ -8,8 +8,6 @@
  *       GET /api/invoices/my/:id/receipt/pdf). Unpaid: the invoice PDF, as before.
  *   P5  The filter chip printed the application UUID ("กรองตามคำขอ: aa75ba6e-…").
  *       It now prints the application NUMBER the applicant knows.
- *   P6  Billing reads follow the active workspace: switching workspace on this
- *       page reloads the invoices, the applications and the quotation lookup.
  *   ?applicationId=  The page read only ?app=; a link carrying ?applicationId=
  *       showed another application's quotation. Both are read now,
  *       ?applicationId= first.
@@ -64,18 +62,6 @@ jest.mock('@/lib/services/auth-service', () => ({
     getUser: () => ({ id: 'user-1', role: 'HEALTH', email: 'farmer@test' }),
     getToken: () => 'test-token',
   },
-}));
-
-// The workspace the page is in. Mutated between renders to simulate a switch.
-const workspace: { current: { id: string } | null } = { current: null };
-jest.mock('@/lib/services/active-entity-provider', () => ({
-  useActiveEntity: () => ({
-    entities: [],
-    activeEntity: workspace.current,
-    isLoading: false,
-    setActiveEntity: async () => {},
-    refresh: async () => {},
-  }),
 }));
 
 jest.mock('@/components/payments/RefundVisibilitySection', () => ({ __esModule: true, default: () => null }));
@@ -176,7 +162,6 @@ describe('/health/payments — applicant receipt, application number, workspace 
 
   beforeEach(() => {
     jest.clearAllMocks();
-    workspace.current = null;
     search.current = new URLSearchParams();
     mockDownloadInvoicePdf.mockResolvedValue(true);
     mockDownloadReceiptPdf.mockResolvedValue(true);
@@ -316,41 +301,6 @@ describe('/health/payments — applicant receipt, application number, workspace 
       await renderPage();
 
       expect(quotationCalls()).toEqual([`/applications/${encodeURIComponent(APP_UUID)}/quotations`]);
-    });
-  });
-
-  describe('P6 — the page follows the active workspace', () => {
-    it('switching workspace reloads the invoices, the applications and the quotation lookup', async () => {
-      workspace.current = { id: 'entity-company' };
-      routeApi({ invoices: [rawPaidWithReceipt], applications: [{ id: APP_UUID, applicationNumber: APP_NUMBER, status: 'DOC_FEE_PAID' }] });
-      await renderPage();
-      const before = {
-        invoices: callsTo((p) => p === '/invoices/my'),
-        applications: callsTo((p) => p === '/applications/my'),
-      };
-      expect(before.invoices).toBe(1);
-
-      // The personal workspace holds nothing of the company's.
-      routeApi({ invoices: [], applications: [] });
-      workspace.current = { id: 'entity-personal' };
-      await rerender();
-
-      expect(callsTo((p) => p === '/invoices/my')).toBe(before.invoices + 1);
-      expect(callsTo((p) => p === '/applications/my')).toBe(before.applications + 1);
-      // Nothing of the company's application is asked for in the personal workspace.
-      expect(quotationCalls().filter((p) => p.includes(APP_UUID))).toHaveLength(1);
-    });
-
-    it('the workspace arriving after the first render (provider hydration) does not fetch twice', async () => {
-      workspace.current = null;
-      routeApi({ invoices: [rawPaidWithReceipt], applications: [{ id: APP_UUID, applicationNumber: APP_NUMBER, status: 'DOC_FEE_PAID' }] });
-      await renderPage();
-      workspace.current = { id: 'entity-company' };
-      await rerender();
-
-      expect(callsTo((p) => p === '/invoices/my')).toBe(1);
-      expect(callsTo((p) => p === '/applications/my')).toBe(1);
-      expect(quotationCalls()).toHaveLength(1);
     });
   });
 });

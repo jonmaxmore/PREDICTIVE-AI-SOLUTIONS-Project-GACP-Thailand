@@ -17,8 +17,7 @@
  *        affecting any other DashboardLayout state (bell badge, theme).
  *
  * Mocking strategy mirrors dashboard-layout-bell.test.tsx — same
- * pattern, same fetch-mock for notifications, same Footer +
- * EntitySwitcher stubs.
+ * pattern, same fetch-mock for notifications, same Footer stub.
  */
 
 import * as React from 'react';
@@ -57,9 +56,6 @@ jest.mock('@/components/layout/Footer', () => ({
     Footer: () => null,
 }));
 
-jest.mock('@/components/layout/entity-switcher', () => ({
-    EntitySwitcher: () => null,
-}));
 
 const NAV_ITEMS = [
     { href: '/health/dashboard', label: 'หน้าแรก', Icon: Home },

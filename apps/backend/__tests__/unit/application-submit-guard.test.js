@@ -101,17 +101,31 @@ describe('M1 assertSubmitAllowed', () => {
         expect(auditLogger.log).not.toHaveBeenCalled();
     });
 
-    it('keys off the APPLICATION row entityId — an x-active-entity header for another entity changes nothing', async () => {
+    it('keys off the APPLICATION row entityId alone', async () => {
         assertEntityActionPermission.mockImplementation(({ entityId }) => (
             entityId === 'e1' ? Promise.resolve({ allowed: true }) : Promise.reject(deniedError())
         ));
         await expect(assertSubmitAllowed({
             userId: 'u1',
             application: { id: 'a1', entityId: 'e2' },
-            auditContext: { ...ctx, activeEntityId: 'e1' },
+            auditContext: ctx,
         })).rejects.toMatchObject({ status: 403, code: 'ENTITY_PERMISSION_DENIED' });
         expect(assertEntityActionPermission).toHaveBeenCalledWith(
             expect.objectContaining({ entityId: 'e2', permission: 'SUBMIT_APPLICATION' }));
+    });
+
+    // R2 Task 9 (spec 2026-09-30 §3.2 Submit): only the `activeEntityId` audit field
+    // is dropped; `onBehalfOfEntityId` stays. A stray context key is not recorded.
+    it('the denial row names the holder (onBehalfOfEntityId) and carries no activeEntityId', async () => {
+        assertEntityActionPermission.mockRejectedValue(deniedError());
+        await expect(assertSubmitAllowed({
+            userId: 'u1',
+            application: { id: 'a1', entityId: 'e2' },
+            auditContext: { ...ctx, activeEntityId: 'e1' },
+        })).rejects.toMatchObject({ status: 403 });
+        const row = auditLogger.log.mock.calls[0][0];
+        expect(row.metadata.onBehalfOfEntityId).toBe('e2');
+        expect(row.metadata).not.toHaveProperty('activeEntityId');
     });
 
     it('fails CLOSED when the engine throws something that is not the canonical denial', async () => {

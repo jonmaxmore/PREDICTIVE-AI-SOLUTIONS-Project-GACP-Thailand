@@ -29,12 +29,11 @@ const {
 
 
 /**
- * R1-legacy-pin: removed in Task 12 (→ holderReadWhere). The applicant preview
- * passes its holder scope; the application its gate resolved decides, as pre-R1.
+ * The holder fragment when the applicant preview passes its holder scope;
+ * `{}` for a caller with none (spec 2026-09-30 §3.1).
  */
-function r1Scoped(holderScope, model, applicationId) {
-  return require('../../../services/holder-access')
-    .r1HolderOrLegacyWhenScoped(holderScope, model, { applicationId });
+function holderScoped(holderScope, model) {
+  return require('../../../services/holder-access').holderReadWhereIfScoped(holderScope, model);
 }
 
 /**
@@ -63,7 +62,7 @@ async function readPhase1FinancialDocuments(application, { holderScope = null } 
         applicationId: appId,
         serviceType: { in: getServiceTypesForPhaseComponent('PHASE_1', 'STATE') },
         isDeleted: false,
-        ...r1Scoped(holderScope, 'Invoice', appId),
+        ...holderScoped(holderScope, 'Invoice'),
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -72,7 +71,7 @@ async function readPhase1FinancialDocuments(application, { holderScope = null } 
         applicationId: appId,
         serviceType: { in: getServiceTypesForPhaseComponent('PHASE_1', 'PLATFORM') },
         isDeleted: false,
-        ...r1Scoped(holderScope, 'Invoice', appId),
+        ...holderScoped(holderScope, 'Invoice'),
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -84,7 +83,7 @@ async function readPhase1FinancialDocuments(application, { holderScope = null } 
         applicationId: appId,
         isDeleted: false,
         notes: { contains: PHASE1_STATE_PREVIEW_TAG },
-        ...r1Scoped(holderScope, 'Quote', appId),
+        ...holderScoped(holderScope, 'Quote'),
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -93,7 +92,7 @@ async function readPhase1FinancialDocuments(application, { holderScope = null } 
         applicationId: appId,
         isDeleted: false,
         notes: { contains: PHASE1_PLATFORM_PREVIEW_TAG },
-        ...r1Scoped(holderScope, 'Quote', appId),
+        ...holderScoped(holderScope, 'Quote'),
       },
       orderBy: { createdAt: 'desc' },
     }),

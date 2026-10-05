@@ -9,8 +9,8 @@
  * with no validation, so a caller can still put any string in the column —
  * and several do:
  *
- *   - application-submission-methods.js creates every wizard submission with
- *     status 'PAYMENT_1_PENDING'
+ *   - application-submission-methods.js (deleted with /api/wizard, R2 Task 10)
+ *     created every wizard submission with status 'PAYMENT_1_PENDING'
  *   - application-payment-finalization-methods.js writes 'PAYMENT_1_PAID' /
  *     'PAYMENT_2_COMPLETED' when a phase settles
  *   - e2e-controller.js writes 'PAYMENT_2_PENDING'

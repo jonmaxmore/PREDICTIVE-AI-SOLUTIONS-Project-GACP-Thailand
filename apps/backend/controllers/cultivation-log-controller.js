@@ -8,6 +8,7 @@ const { resolveFarmAccess, listAccessibleFarmIds } = require('../services/farm-a
 // gated /planting-cycles/:id/activities surface — its mutations now carry
 // the SAME per-type permission gate (403 ENTITY_PERMISSION_DENIED).
 const { assertFarmActionPermission } = require('../services/entity-effective-permissions-service');
+const { entityPermissionDeniedBody } = require('../shared/entity-permission-denied');
 
 const logger = createLogger('cultivation-log-controller');
 
@@ -49,12 +50,7 @@ function resolveLogTypePermission(logType, { forStoredRow = false } = {}) {
 
 /** Map an ENTITY_PERMISSION_DENIED throw to the canonical 403 body. */
 function respondPermissionDenied(res, error, fallbackPermission) {
-    return res.status(403).json({
-        success: false,
-        code: 'ENTITY_PERMISSION_DENIED',
-        permission: error?.permission || fallbackPermission,
-        message: 'คุณไม่มีสิทธิ์ดำเนินการรายการนี้ในพื้นที่ทำงาน',
-    });
+    return res.status(403).json(entityPermissionDeniedBody(error?.permission || fallbackPermission));
 }
 
 /**

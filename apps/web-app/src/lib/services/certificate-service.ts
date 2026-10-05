@@ -33,6 +33,8 @@ export interface CertificateDetail {
     expiryDate: string;
     status: CertificateStatus | string;
     qrCode?: string | null;
+    /** Server truth (C5): may the caller print this certificate's QR. */
+    canPrintQr?: boolean;
     qrPayload?: string | null;
     verifyUrl?: string | null;
     farm?: {

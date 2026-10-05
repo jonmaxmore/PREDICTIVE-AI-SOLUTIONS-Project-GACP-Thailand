@@ -410,13 +410,6 @@ wizard: {
                 community: { label: "Community Enterprise", subLabel: "Farmer Group (registered with CAEW)" },
                 juristic: { label: "Juristic Person", subLabel: "Company / Partnership / Cooperative" }
             },
-            workspace: {
-                banner: "Applying as Workspace",
-                typePrefix: "Type",
-                bindNote: "This application is bound to the workspace; the certificate will be issued under its name.",
-                editLink: "Edit workspace profile",
-                switchHint: "Need to switch or add a new applicant workspace? Go to the workspace management page and select Create new workspace."
-            },
             companyTypeOptions: {
                 LIMITED_COMPANY: "Limited Company",
                 LIMITED_PARTNERSHIP: "Limited Partnership",

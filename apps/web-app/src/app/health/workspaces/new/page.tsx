@@ -20,7 +20,7 @@ import { useRouter } from 'next/navigation';
 import { Building2, Users as UsersIcon, ArrowLeft, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api/api-client';
-import { useActiveEntity } from '@/lib/services/active-entity-provider';
+import { useMyEntities } from '@/lib/services/my-entities-provider';
 import { SummaryHeader } from '@/components/feature';
 
 type WorkspaceType = 'JURISTIC' | 'COMMUNITY_ENTERPRISE';
@@ -34,7 +34,7 @@ interface CreateResponse {
 
 export default function NewWorkspacePage() {
     const router = useRouter();
-    const { refresh, setActiveEntity } = useActiveEntity();
+    const { refresh } = useMyEntities();
 
     const [type, setType] = useState<WorkspaceType>('JURISTIC');
     const [companyName, setCompanyName] = useState('');
@@ -64,17 +64,21 @@ export default function NewWorkspacePage() {
             setSubmitting(true);
             const res = await apiClient.post<CreateResponse>('/entities', { type, applicantData });
             if (!res.success || !res.data) {
-                setError(res.error || 'ไม่สามารถสร้าง workspace ได้');
+                setError(res.error || 'ไม่สามารถสร้างนิติบุคคลหรือวิสาหกิจชุมชนได้');
                 return;
             }
             await refresh();
-            await setActiveEntity(res.data.id);
-            const target = res.data.slug
-                ? `/health/workspaces/${res.data.slug}/members`
-                : '/health/workspaces';
+            // Created from step 1 of a new application (?from=application): go
+            // back there with the new entity preselected as the applicant.
+            const fromApplication = new URLSearchParams(window.location.search).get('from') === 'application';
+            const target = fromApplication
+                ? `/health/applications/new?holder=${encodeURIComponent(res.data.id)}`
+                : res.data.slug
+                    ? `/health/workspaces/${res.data.slug}/members`
+                    : '/health/workspaces';
             router.push(target);
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาดในการสร้าง workspace');
+            setError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาดในการสร้างนิติบุคคลหรือวิสาหกิจชุมชน');
         } finally {
             setSubmitting(false);
         }
@@ -94,9 +98,9 @@ export default function NewWorkspacePage() {
             </Link>
 
             <SummaryHeader
-                eyebrow="ผู้ขอรับรอง · Workspace"
-                title="สร้าง workspace ใหม่"
-                description="เลือกประเภท workspace ที่ตรงกับใบอนุญาตที่จะยื่น"
+                eyebrow="ผู้ขอรับรอง"
+                title="สร้างนิติบุคคลหรือวิสาหกิจชุมชนใหม่"
+                description="เลือกประเภทที่ตรงกับผู้ที่จะยื่นขอใบอนุญาต"
             />
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -184,7 +188,7 @@ export default function NewWorkspacePage() {
                     disabled={submitting}
                     className="rounded-lg bg-leaf-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-leaf-800 disabled:opacity-50"
                 >
-                    {submitting ? 'กำลังสร้าง…' : 'สร้าง workspace'}
+                    {submitting ? 'กำลังสร้าง…' : 'สร้าง'}
                 </button>
             </div>
         </div>

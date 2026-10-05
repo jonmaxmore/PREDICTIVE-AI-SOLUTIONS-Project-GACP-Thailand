@@ -2,7 +2,7 @@
 
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { Icons } from '@/components/ui/icons';
 import { PageContainer } from '@/components/layout/page-system';
@@ -15,18 +15,29 @@ import {
     NO_PERMISSION_TOOLTIP_TH,
     useEntityPermissions,
 } from '@/lib/services/use-entity-permissions';
+import { useMyEntities } from '@/lib/services/my-entities-provider';
+import { HolderPicker, mayUseHolder } from '@/components/holder/holder-picker';
+import { orderHolders } from '@/components/holder/holder-labels';
 import { buildFarmCreatePayload } from './farm-create-payload';
 import { computeCanCreateFarm } from './farm-create-gate';
 export default function NewEstablishmentPage() {
     const router = useRouter();
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
-    // Farm-worker Wave C chunk 3 — creating a farm INTO a workspace
-    // requires the FARM_CREATE effective permission (personal/solo context
-    // → always true; fetch errors fail OPEN; BE re-checks with 403).
-    const { has: hasWorkspacePermission, reportPermissionDenial } = useEntityPermissions();
-    // F5 — extracted, behavior-tested derivation (polarity-proof).
-    const canCreateFarm = computeCanCreateFarm(hasWorkspacePermission);
+    // The farm is registered under a holder chosen on this form (spec 2026-09-30 §3.2/§3.6),
+    // never under a default. ?holder=<id> is the user's earlier choice. The holder's
+    // FARM_CREATE right gates the buttons (UX only: the server answers 403 regardless).
+    const { entities } = useMyEntities();
+    const holderParam = useSearchParams()?.get('holder') ?? null;
+    const farmHolders = orderHolders(entities).filter((e) => mayUseHolder(e, 'farm'));
+    const impliedHolder =
+        farmHolders.find((e) => e.id === holderParam)
+        ?? (farmHolders.length === 1 ? farmHolders[0] : undefined);
+    const [pickedHolderId, setPickedHolderId] = useState<string | null>(null);
+    const holderEntityId = pickedHolderId ?? impliedHolder?.id ?? null;
+    const { has: hasWorkspacePermission, reportPermissionDenial } = useEntityPermissions(holderEntityId);
+    // F5 — extracted, behavior-tested derivation (polarity-proof). No holder, no farm.
+    const canCreateFarm = holderEntityId !== null && computeCanCreateFarm(hasWorkspacePermission);
 
     const [form, setForm] = useState({
         name: '',
@@ -44,6 +55,10 @@ export default function NewEstablishmentPage() {
         // Wave C chunk 3 — guard the submit path too (a disabled button is
         // bypassable via Enter-submit); the BE would 403
         // ENTITY_PERMISSION_DENIED regardless — this is the friendly path.
+        if (holderEntityId === null) {
+            setError('เลือกก่อนว่าจะลงทะเบียนสถานที่ปลูกในนามใคร');
+            return;
+        }
         if (!canCreateFarm) {
             setError(`${NO_PERMISSION_TOOLTIP_TH} (FARM_CREATE)`);
             return;
@@ -57,7 +72,7 @@ export default function NewEstablishmentPage() {
             // Wave A fix M4: apiClient NEVER throws on an API failure — it
             // resolves { success:false, error } (api-client.ts) — so navigation
             // must be gated on res.success or every failure silently "succeeds".
-            const res = await apiClient.post<unknown>('/farms', buildFarmCreatePayload(form));
+            const res = await apiClient.post<unknown>('/farms', buildFarmCreatePayload({ ...form, entityId: holderEntityId }));
 
             if (!res.success) {
                 // F1(b) — a live 403 ENTITY_PERMISSION_DENIED means the FE
@@ -98,6 +113,13 @@ export default function NewEstablishmentPage() {
 
                     <form onSubmit={handleSubmit}>
                         <div className="flex flex-col gap-4">
+                            <HolderPicker
+                                entities={entities}
+                                value={holderEntityId}
+                                onChange={setPickedHolderId}
+                                purpose="farm"
+                            />
+
                             <Input
                                 label="ชื่อสถานที่ / ชื่อแปลง (Farm Name)"
                                 placeholder="เช่น สวนสมุนไพรมีสุข แปลง A"
@@ -176,7 +198,7 @@ export default function NewEstablishmentPage() {
                                     color="blue" // Use blue for establishments/infrastructure to differentiate from planting
                                     loading={submitting}
                                     disabled={!canCreateFarm}
-                                    title={!canCreateFarm ? NO_PERMISSION_TOOLTIP_TH : undefined}
+                                    title={holderEntityId === null ? 'เลือกว่าจะลงทะเบียนในนามใครก่อน' : !canCreateFarm ? NO_PERMISSION_TOOLTIP_TH : undefined}
                                     size="md"
                                 >
                                     บันทึกข้อมูล

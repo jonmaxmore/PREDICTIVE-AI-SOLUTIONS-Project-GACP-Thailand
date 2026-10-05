@@ -3,9 +3,10 @@
 // symbol is no longer pulled from `deps` here.
 
 const plantingService = require('../../../services/planting-service');
-// Required lazily: holder-access loads the permission engine, which suites that
-// stub entity-service cannot load.
-const holderScopeOf = (req) => require('../../../services/holder-access').holderScope(req);
+// Required lazily: planting-cycle-service loads the permission engine, which suites
+// that stub entity-service cannot load.
+const assertFarmPermissionOf = (args) => require('../../../services/planting-cycle-service').assertFarmPermission(args);
+const plantingAttachments = require('../../../services/planting/planting-attachment-service');
 const { safeErrorMessage } = require('../../../shared/api-response');
 const { localYear } = require('../../../utils/working-days');
 
@@ -49,20 +50,43 @@ router.post('/:id/activities', ensureCycleReachable, requireCycleFarmPermission(
       return res.status(400).json({ success: false, message: 'Invalid activityType' });
     }
 
-    // Ownership: each attachmentId MUST belong to the authenticated user.
-    // Without this check a user could attach another user's documents to
-    // their own cultivation log (cross-tenant data leak).
+    // C4 + operator 2026-10-03 "แก้ได้": an activity carries attachments from the
+    // cycle's own door (POST /:id/attachments) only. Each id must be a live
+    // attachment of THIS cycle, and the caller must still hold the capability it
+    // was uploaded under (stored on the row). The application-document lookup
+    // that stood here matched ApplicationDocument.id, which no upload ever
+    // returned, so every activity with an attachment was refused.
     if (attachmentIds.length > 0) {
-      const userId = getAuthenticatedUserId(req);
-      const ownedAttachments = await plantingService.findOwnedApplicationDocuments(attachmentIds, userId, {
-        holderScope: await holderScopeOf(req),
+      const refuseAttachments = () => res.status(403).json({
+        success: false,
+        message: 'One or more attachmentIds are not live attachments of this planting cycle that you may use',
+        code: 'ATTACHMENT_OWNERSHIP_DENIED',
       });
-      if (ownedAttachments.length !== attachmentIds.length) {
-        return res.status(403).json({
-          success: false,
-          message: 'One or more attachmentIds do not belong to the authenticated user',
-          code: 'ATTACHMENT_OWNERSHIP_DENIED',
-        });
+      const uniqueIds = [...new Set(attachmentIds)];
+      const live = await plantingAttachments.findLiveCycleAttachments(cycleId, uniqueIds);
+      if (live.length !== uniqueIds.length) {
+        return refuseAttachments();
+      }
+      // The activity's own capability already passed the gate in front of this route.
+      const activityPermission = resolveActivityPermission(req);
+      const otherPermissions = [...new Set(live.map((row) => row.field))].filter((p) => p !== activityPermission);
+      for (const permission of otherPermissions) {
+        if (!permission) {
+          return refuseAttachments();
+        }
+        try {
+          await assertFarmPermissionOf({
+            farmId: req.cycleOwnership?.farmId,
+            userId: getAuthenticatedUserId(req),
+            permission,
+            req,
+          });
+        } catch (permissionError) {
+          if (permissionError?.code === 'ENTITY_PERMISSION_DENIED') {
+            return refuseAttachments();
+          }
+          throw permissionError;
+        }
       }
     }
 

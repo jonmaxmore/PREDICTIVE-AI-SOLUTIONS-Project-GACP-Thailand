@@ -6,14 +6,13 @@
  * column, the generator (shared/plot-code.js) and a partial unique index. A column nobody
  * fills is still a plot that can never carry a sign, so this file pins the minting.
  *
- * WHY AN EXTENSION AND NOT THREE CALL-SITE PATCHES: there are three runtime paths that insert
- * a Plot row —
- *   services/planting-service.js:656                                  (POST /farms/:farmId/plots)
- *   services/application-service/application-submission-methods.js:83 (wizard submission)
- *   services/certificate-service.js:796                               (ensurePlotsForFarm at issuance)
- * — and a per-site fix is one forgotten route away from being useless. The tests below drive
- * all three through their real service functions, with only Prisma's dispatcher and the
- * database faked.
+ * WHY AN EXTENSION AND NOT CALL-SITE PATCHES: the runtime paths that insert a Plot row —
+ *   services/planting-service.js        (POST /farms/:farmId/plots)
+ *   services/certificate-service.js     (ensurePlotsForFarm at issuance)
+ * (the wizard-submission path went with the /api/wizard door, R2 Task 10) — and a per-site fix
+ * is one forgotten route away from being useless. The tests below drive both through their
+ * real service functions, with only Prisma's dispatcher and the database faked; createMany is
+ * pinned on its own below.
  *
  * WHAT IS SIMULATED: `fakePlotModel()` reproduces what Prisma's $allModels query extension
  * does — call the hook for an action with `{ model, args, query }`. It is not Prisma. The last
@@ -90,44 +89,6 @@ describe('plot code is minted on every path that creates a Plot', () => {
         expect(plot.writes[0].data.plotCode).toBe(created.plotCode);
     });
 
-    test('wizard path — executeWizardSubmission gives every submitted plot its own code', async () => {
-        const plot = fakePlotModel((args) => Promise.resolve({ count: args.data.length }));
-        const tx = {
-            user: { update: jest.fn().mockResolvedValue({}) },
-            farm: { create: jest.fn().mockResolvedValue({ id: 'farm-1' }) },
-            plot,
-            application: { create: jest.fn().mockResolvedValue({ id: 'app-1' }) },
-            applicationDraft: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-        };
-        const {
-            createApplicationSubmissionMethods,
-        } = require('../../services/application-service/application-submission-methods');
-        const methods = createApplicationSubmissionMethods({
-            prisma: { $transaction: (fn) => fn(tx) },
-            feeService: {
-                calculateApplicationFees: () => ({ phase1: { total: 0 }, phase2: { total: 0 }, scopeCount: 1 }),
-            },
-            logger: { info: () => {} },
-        });
-
-        await methods.executeWizardSubmission('user-1', 'health-1', {
-            applicantData: { firstName: 'ก', lastName: 'ข' },
-            farmData: { farmName: 'ฟาร์ม', totalAreaSize: 3200, totalAreaUnit: 'sqm' },
-            plots: [
-                { name: 'แปลง 1', areaSize: 1600, areaUnit: 'sqm' },
-                { name: 'แปลง 2', areaSize: 1600, areaUnit: 'sqm' },
-            ],
-            documents: [],
-            locationType: 'outdoor',
-            cultivationMethods: ['outdoor'],
-        });
-
-        const rows = plot.writes[0].data;
-        expect(rows).toHaveLength(2);
-        rows.forEach((row) => expect(isValidPlotCode(row.plotCode)).toBe(true));
-        expect(rows[0].plotCode).not.toBe(rows[1].plotCode);
-    });
-
     test('issuance path — certificate-service.ensurePlotsForFarm mints a code for the fallback plot', async () => {
         const plot = fakePlotModel(echo);
         const certificateService = require('../../services/certificate-service');
@@ -140,6 +101,23 @@ describe('plot code is minted on every path that creates a Plot', () => {
 
         expect(plot.writes).toHaveLength(1);
         expect(isValidPlotCode(plot.writes[0].data.plotCode)).toBe(true);
+    });
+
+    // Moved from the deleted "wizard path" case (R2 Task 10): that door was the one
+    // live createMany caller. The extension still hooks createMany, so its happy path
+    // is pinned on the hook itself: every row gets its own valid code.
+    test('createMany gives every row in the batch its own valid code', async () => {
+        const plot = fakePlotModel(echo);
+        await plot.createMany({
+            data: [
+                { farmId: 'farm-1', name: 'แปลง 1', area: 1600 },
+                { farmId: 'farm-1', name: 'แปลง 2', area: 1600 },
+            ],
+        });
+        const rows = plot.writes[0].data;
+        expect(rows).toHaveLength(2);
+        rows.forEach((row) => expect(isValidPlotCode(row.plotCode)).toBe(true));
+        expect(rows[0].plotCode).not.toBe(rows[1].plotCode);
     });
 });
 

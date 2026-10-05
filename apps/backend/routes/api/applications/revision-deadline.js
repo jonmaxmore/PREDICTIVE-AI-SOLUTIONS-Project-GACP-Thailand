@@ -50,8 +50,8 @@ const {
 } = require('../../../services/application-document-requirements');
 const { auditLogger, AuditCategory, AuditSeverity, ResourceType } = require('../../../middleware/audit-logger');
 // Spec 2026-09-30 §3.1: the health branch scopes its reads by holder (called inside
-// the handler, after authentication and the active-entity middleware).
-const { holderScope, r1HolderOrLegacyWhenScoped } = require('../../../services/holder-access');
+// the handler, after authentication).
+const { holderScope, holderReadWhere } = require('../../../services/holder-access');
 function isProviderRole(role) {
     const canonical = normalizeRole(role);
     return canonical && canonical !== CANONICAL_ROLES.HEALTH;
@@ -80,7 +80,6 @@ async function logRevisionSubmitAccepted({ req, applicationId, entityId, actorId
             result: 'SUCCESS',
             metadata: {
                 onBehalfOfEntityId: entityId || null,
-                activeEntityId: req.activeEntity?.entityId || null,
                 permission: 'SUBMIT_APPLICATION',
                 applicationId,
                 // The bypass is a fact about the row, not a footnote: an
@@ -125,9 +124,8 @@ router.get('/:applicationId', authenticateAny, async (req, res) => {
             const owned = await prisma.application.findFirst({
                 where: {
                     id: applicationId,
-                    healthId: identity.healthId,
-                    // R1-legacy-pin: removed in Task 12 — the pre-R1 filer pin decides.
-                    ...r1HolderOrLegacyWhenScoped(await holderScope(req), 'Application', { healthId: identity.healthId }),
+                    // Spec 2026-09-30 §3.1: the holder scope alone (no filer pin).
+                    ...holderReadWhere(await holderScope(req), 'Application'),
                 },
                 select: { id: true },
             });
@@ -339,9 +337,8 @@ router.put('/:applicationId/submit', authenticateAny, async (req, res) => {
             const owned = await prisma.application.findFirst({
                 where: {
                     id: applicationId,
-                    healthId: identity.healthId,
-                    // R1-legacy-pin: removed in Task 12 — the pre-R1 filer pin decides.
-                    ...r1HolderOrLegacyWhenScoped(await holderScope(req), 'Application', { healthId: identity.healthId }),
+                    // Spec 2026-09-30 §3.1: the holder scope alone (no filer pin).
+                    ...holderReadWhere(await holderScope(req), 'Application'),
                 },
                 select: { id: true, entityId: true, submitterId: true, formData: true, status: true },
             });
@@ -353,22 +350,8 @@ router.put('/:applicationId/submit', authenticateAny, async (req, res) => {
             }
             applicationRow = owned;
 
-            // M1 (review M2) — heal a pre-Phase-66 null entityId from the
-            // caller's personal entity before the guard turns it into a 400.
-            if (!applicationRow.entityId) {
-                const personalEntity = await applicationService
-                    .findPersonalEntityForHealthIdentity(identity);
-                if (personalEntity?.id) {
-                    const healed = await applicationService.healDraftEntityColumns(applicationId, {
-                        entityId: personalEntity.id,
-                        submitterId: applicationRow.submitterId || identity.userId || null,
-                    });
-                    applicationRow = {
-                        ...applicationRow,
-                        entityId: healed?.entityId || personalEntity.id,
-                    };
-                }
-            }
+            // A null holder is refused by the guard below, never healed
+            // (spec 2026-09-30 §3.2 + C3: a null holder is never healed to the caller's personal entity; heal-null-holders.js places legacy rows).
 
             try {
                 await assertSubmitAllowed({
@@ -382,7 +365,6 @@ router.put('/:applicationId/submit', authenticateAny, async (req, res) => {
                         ipAddress: req.ip || null,
                         userAgent: typeof req.get === 'function' ? req.get('user-agent') : null,
                         organizationId: req.user?.organizationId || null,
-                        activeEntityId: req.activeEntity?.entityId || null,
                         route: `${req.method} ${req.baseUrl || ''}${req.path || ''}`,
                     },
                 });

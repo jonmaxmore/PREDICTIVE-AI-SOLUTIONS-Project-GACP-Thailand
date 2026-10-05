@@ -361,7 +361,8 @@ router.use('/datasets', require('./datasets/datasets'));
 // 404'd on staging+prod (e.g. /admin/users rendered an "HTTP 404" banner + an empty
 // table) even though the /admin/* FE pages and admin-service-b28 are written to call it.
 // It is the CURRENT admin console, not a legacy alias, so mount it unconditionally here
-// (still admin-only). The genuinely-legacy aliases (provider-cms, wizard) stay gated.
+// (still admin-only). The genuinely-legacy alias (provider-cms) stays gated. The
+// /wizard alias is deleted (R2 Task 10, spec 2026-09-30-remove-workspace-mode §3.2 B6).
 router.use('/admin', require('./admin'));
 
 // ─────────────────────────────────────────────────
@@ -369,7 +370,6 @@ router.use('/admin', require('./admin'));
 // ─────────────────────────────────────────────────
 if (process.env.ENABLE_PROVIDER_LEGACY_ALIAS === 'true') {
     router.use('/provider-cms', require('./system/provider-cms'));
-    router.use('/wizard', require('./applications/wizard'));
 }
 
 // ─────────────────────────────────────────────────

@@ -42,14 +42,15 @@ const PDPA_GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
  * @returns {Promise<object>}
  */
 /**
- * R1-legacy-pin: removed in Task 12 — and NOT by narrowing. A PDPA export is the
- * data SUBJECT's own data (s.30), keyed on the filer/owner columns by law, not on
- * the holder. In R1 each read keeps that key and adds the registered OR so the
- * read witness passes with the rows unchanged. Task 12 must keep the filer key
- * here (an allowlisted exception), not replace it with holderReadWhere.
+ * A PDPA export is the data SUBJECT's own data (s.30), keyed on the filer/owner
+ * columns by law, not on the holder: it is the one health read the holder scope
+ * does not decide. A health door's export registers that key for the read
+ * witness (holder-access.dataSubjectReadWhere); a caller with no holder scope
+ * (staff, jobs) reads by the same key, unregistered.
  */
-function r1ScopedOrLegacy(scope, model, legacy) {
-    return require('./holder-access').r1HolderOrLegacyWhenScoped(scope, model, legacy);
+function subjectOwnWhere(scope, model, where) {
+    if (!scope || !Array.isArray(scope.readIds)) { return where; }
+    return require('./holder-access').dataSubjectReadWhere(model, where);
 }
 
 async function assembleUserDataExport(userId, { holderScope = null } = {}) {
@@ -129,8 +130,7 @@ async function assembleUserDataExport(userId, { holderScope = null } = {}) {
         reportSubmissions,
     ] = await Promise.all([
         fkKey ? prisma.application.findMany({
-            // R1-legacy-pin: removed in Task 12 — see the PDPA note at r1ScopedOrLegacy.
-            where: { healthId: fkKey, isDeleted: false, ...r1ScopedOrLegacy(holderScope, 'Application', { healthId: fkKey }) },
+            where: { ...subjectOwnWhere(holderScope, 'Application', { healthId: fkKey }), isDeleted: false },
             select: {
                 id: true,
                 applicationNumber: true,
@@ -156,7 +156,7 @@ async function assembleUserDataExport(userId, { holderScope = null } = {}) {
             },
         }),
         prisma.farm.findMany({
-            where: { ownerId: user.id, isDeleted: false, ...r1ScopedOrLegacy(holderScope, 'Farm', { ownerId: user.id }) },
+            where: { ...subjectOwnWhere(holderScope, 'Farm', { ownerId: user.id }), isDeleted: false },
             select: {
                 id: true,
                 farmName: true,
@@ -176,7 +176,7 @@ async function assembleUserDataExport(userId, { holderScope = null } = {}) {
             },
         }),
         prisma.certificate.findMany({
-            where: { userId: user.id, isDeleted: false, ...r1ScopedOrLegacy(holderScope, 'Certificate', { userId: user.id }) },
+            where: { ...subjectOwnWhere(holderScope, 'Certificate', { userId: user.id }), isDeleted: false },
             select: {
                 id: true,
                 certificateNumber: true,
@@ -192,7 +192,7 @@ async function assembleUserDataExport(userId, { holderScope = null } = {}) {
             },
         }),
         fkKey ? prisma.invoice.findMany({
-            where: { healthId: fkKey, ...r1ScopedOrLegacy(holderScope, 'Invoice', { healthId: fkKey }) },
+            where: { ...subjectOwnWhere(holderScope, 'Invoice', { healthId: fkKey }) },
             select: {
                 id: true,
                 invoiceNumber: true,

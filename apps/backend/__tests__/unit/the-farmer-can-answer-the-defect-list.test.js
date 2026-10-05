@@ -43,9 +43,22 @@ jest.mock('../../middleware/auth-middleware', () => ({
 // ที่ถูกที่ ไม่ใช่ตรรกะของ workflow ซึ่งมีเทสของตัวเองอยู่แล้ว
 jest.mock('../../services/application-service', () => ({
     findOwnedApplicationForApplicant: jest.fn(async () => null),
-    findPersonalEntityForHealthIdentity: jest.fn(async () => null),
     healDraftEntityColumns: jest.fn(async () => null),
 }));
+
+// R2 Task 12: a refused upload is removed again (no orphan file), so the test reads
+// the stored path from the discard call instead of from what stays on disk.
+const mockDiscarded = [];
+jest.mock('../../services/upload-content-guard', () => {
+    const actual = jest.requireActual('../../services/upload-content-guard');
+    return {
+        ...actual,
+        discardRejectedUpload: async (file) => {
+            mockDiscarded.push(String(file?.path || ''));
+            return actual.discardRejectedUpload(file);
+        },
+    };
+});
 
 const BACKEND_ROOT = path.join(__dirname, '..', '..');
 const CAR_UPLOAD_DIR = path.join(BACKEND_ROOT, 'public', 'uploads', 'car');
@@ -104,10 +117,13 @@ describe('ประตูส่งเอกสารแก้ไข (CAR)', () =
         expect(String(res.text)).not.toContain('ENOENT');
         expect(fs.existsSync(CAR_UPLOAD_DIR)).toBe(true);
 
+        // multer stored it under the served folder, and the refusal removed it again.
+        const stored = mockDiscarded.filter((p) => p.startsWith(CAR_UPLOAD_DIR + path.sep));
+        expect(stored.length).toBeGreaterThan(0);
+        for (const f of stored) { expect(fs.existsSync(f)).toBe(false); }
         const after = fs.readdirSync(CAR_UPLOAD_DIR);
         const fresh = after.filter((f) => !before.has(f));
-        expect(fresh.length).toBeGreaterThan(0);
-        for (const f of fresh) { created.push(path.join(CAR_UPLOAD_DIR, f)); }
+        expect(fresh).toEqual([]);
 
         // ผ่านชั้นอัปโหลดแล้วจริง จึงไปถึงคำตอบของ handler เอง (คำขอไม่มีอยู่ = 404 JSON)
         expect(res.status).toBe(404);

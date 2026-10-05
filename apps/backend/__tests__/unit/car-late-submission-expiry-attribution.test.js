@@ -94,14 +94,9 @@ jest.mock('../../services/prisma-database', () => ({
 
 const mockFindOwned = jest.fn();
 // M1 PR-C — the CAR door runs the central submit guard before it decides
-// anything, and lazy-heals a pre-Phase-66 row's entityId first (review M2), so
-// the service stub carries those two methods now.
-const mockFindPersonalEntity = jest.fn().mockResolvedValue(null);
-const mockHealDraftEntityColumns = jest.fn();
+// anything. A null holder is refused, never healed (R2 Task 8, spec 2026-09-30 C3).
 jest.mock('../../services/application-service', () => ({
     findOwnedApplicationForApplicant: (...a) => mockFindOwned(...a),
-    findPersonalEntityForHealthIdentity: (...a) => mockFindPersonalEntity(...a),
-    healDraftEntityColumns: (...a) => mockHealDraftEntityColumns(...a),
 }));
 
 // M1 PR-C — guard dependencies, mocked with their real shapes (plan D5/D10).

@@ -49,6 +49,9 @@ const NOT_AN_ANSWER = Object.freeze({
     milestone1: 'ใบเสนอราคาและยอดเงินของงวดที่ 1 — ระบบการเงินเป็นเจ้าของ ผู้ยื่นเขียนไม่ได้ (L3) '
         + 'สโตร์ถือไว้เพื่อ "แสดง" สิ่งที่เซิร์ฟเวอร์ตอบมาเท่านั้น',
     estimatedFee: 'ค่าธรรมเนียมคำนวณจากตารางอัตราที่มีวันที่กำกับ ไม่ใช่ค่าที่ผู้ยื่นส่งมา',
+    holderEntityId: 'ตัวเลือก "ยื่นในนาม" ของขั้น 1 — ส่งเป็น entityId ตอนสร้างคำขอ (R2 Task 8) แล้วเซิร์ฟเวอร์ตัดสินผู้ถือเอง ไม่ใช่คำตอบใน formData',
+    applicantType: 'เซิร์ฟเวอร์เขียนตอนสร้างคำขอจากชนิดของผู้ถือที่เลือก (Entity.type) ผู้ยื่นเขียนเองไม่ได้ '
+        + '(R2 Task 8, spec 2026-09-30 §3.2 · form-data-ownership)',
 });
 
 /** อ่านชื่อฟิลด์จาก interface WizardState — แหล่งความจริงเดียวว่า wizard ถืออะไรอยู่ */
@@ -80,13 +83,17 @@ describe('คำตอบของ wizard ทุกข้อ มีที่ใ�
         expect(dropped).toEqual([]);
     });
 
-    test('ห้าฟิลด์ของขั้น 1 และขั้น 4 ที่ผู้ยื่นเขียนได้ เขียนลงได้จริง', () => {
+    test('สี่ฟิลด์ของขั้น 1 และขั้น 4 ที่ผู้ยื่นเขียนได้ เขียนลงได้จริง', () => {
         const answers = {
-            applicantType: 'JURISTIC', previousCertificateNumber: 'GACP-TH-2569-ABCDEF',
+            previousCertificateNumber: 'GACP-TH-2569-ABCDEF',
             varieties: [{ name: 'พันธุ์ทดสอบ' }], varietiesNote: 'หมายเหตุ',
             processing: { method: 'อบแห้ง' },
         };
         expect(pickWizardOwnedFormData(answers)).toEqual(answers);
+    });
+
+    test('applicantType ผู้ยื่นเขียนเองไม่ได้ — เป็นชนิดของผู้ถือที่เลือกตอนสร้างคำขอ', () => {
+        expect(pickWizardOwnedFormData({ applicantType: 'JURISTIC' })).toEqual({});
     });
 
     test('requestType และ certScope ผู้ยื่นเขียนเองไม่ได้ — เป็นการเลือกกฎที่จะตัดสินตัวเอง', () => {

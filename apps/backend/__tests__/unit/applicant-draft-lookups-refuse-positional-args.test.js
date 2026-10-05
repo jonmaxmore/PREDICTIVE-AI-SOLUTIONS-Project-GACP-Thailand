@@ -59,7 +59,9 @@ describe('the R1 options-object lookups refuse the pre-R1 positional call', () =
         const { prisma, service } = makeService();
         await expect(service.findApplicationByIdForHealth('app-1', { holderScope: SCOPE, filerHealthId: 'health-1' }))
             .resolves.toEqual({ id: 'app-1' });
-        await expect(service.findLatestOpenDraftForHealth({ holderScope: SCOPE, filerHealthId: 'health-1' }))
+        await expect(service.findLatestOpenDraftForHealth({
+            holderScope: SCOPE, filerHealthId: 'health-1', submitterId: 'u-1', editIds: SCOPE.editIds,
+        }))
             .resolves.toEqual({ id: 'app-1' });
         expect(prisma.application.findFirst).toHaveBeenCalledTimes(2);
     });

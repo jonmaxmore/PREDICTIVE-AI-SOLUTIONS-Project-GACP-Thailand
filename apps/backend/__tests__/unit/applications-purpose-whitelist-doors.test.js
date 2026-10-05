@@ -49,6 +49,11 @@ jest.mock('../../services/prisma-database', () => {
 jest.mock('../../services/entity-effective-permissions-service', () => ({
     assertEntityActionPermission: jest.fn(),
 }));
+// R2: reads and new drafts are scoped by membership, and a new draft names its holder.
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] })),
+}));
 jest.mock('../../middleware/audit-logger', () => {
     const actual = jest.requireActual('../../middleware/audit-logger');
     return {
@@ -156,13 +161,13 @@ describe('POST /draft', () => {
         ['empty while the wizard is incomplete', []],
     ])('accepts %s', async (_name, list) => {
         const res = await request(app).post('/api/applications/draft')
-            .send({ step: 1, certificationPurposes: list });
+            .send({ step: 1, entityId: 'ent-1', certificationPurposes: list });
         expect(res.status).toBe(200);
         expect(applicationService.updateApplicantDraftColumns).toHaveBeenCalled();
     });
 
     test('a save that says nothing about purposes still saves', async () => {
-        const res = await request(app).post('/api/applications/draft').send({ step: 1, formData: {} });
+        const res = await request(app).post('/api/applications/draft').send({ step: 1, entityId: 'ent-1', formData: {} });
         expect(res.status).toBe(200);
     });
 });

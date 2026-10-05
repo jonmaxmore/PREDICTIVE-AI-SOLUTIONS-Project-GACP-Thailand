@@ -15,7 +15,6 @@ import { ArrowLeft, UserPlus, X, AlertCircle, Check, Crown, SlidersHorizontal } 
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api/api-client';
 import { maskHealthIdCard } from '@/utils/validation';
-import { useActiveEntity } from '@/lib/services/active-entity-provider';
 import { ConfirmDialog, SummaryHeader } from '@/components/feature';
 import { notifications } from '@/lib/notifications';
 import MemberPermissionMatrix from './member-permission-matrix';
@@ -52,7 +51,6 @@ const STATUS_LABEL: Record<MemberRow['status'], string> = {
 
 export default function WorkspaceMembersPage() {
     const params = useParams();
-    const { entities, setActiveEntity } = useActiveEntity();
     const slug = String((params as Record<string, string>).slug || '');
 
     const [entity, setEntity] = useState<EntityResponse | null>(null);
@@ -86,7 +84,7 @@ export default function WorkspaceMembersPage() {
             setError(null);
             const ent = await apiClient.get<EntityResponse>(`/entities/${slug}`);
             if (!ent.success || !ent.data) {
-                setError(ent.error || 'ไม่พบ workspace นี้');
+                setError(ent.error || 'ไม่พบนิติบุคคลหรือวิสาหกิจชุมชนนี้');
                 setLoading(false);
                 return;
             }
@@ -97,13 +95,6 @@ export default function WorkspaceMembersPage() {
             setLoading(false);
         }
     };
-
-    useEffect(() => {
-        // Switch active entity to this slug so the auto-filter scopes correctly.
-        const target = entities.find(e => e.slug === slug);
-        if (target) setActiveEntity(target.id);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [slug, entities.length]);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { refresh(); }, [slug]);
@@ -194,7 +185,7 @@ export default function WorkspaceMembersPage() {
         <div className="w-full space-y-6">
             <Link href="/health/workspaces" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="h-4 w-4" />
-                workspace ทั้งหมด
+                นิติบุคคลและวิสาหกิจชุมชนทั้งหมด
             </Link>
 
             {loading && <div className="text-sm text-muted-foreground">กำลังโหลด…</div>}
@@ -213,9 +204,9 @@ export default function WorkspaceMembersPage() {
                         title={entity.displayName}
                         description={descriptionFor(personal, ROLE_LABEL[entity.role])}
                         metrics={[
-                            { label: 'สมาชิกทั้งหมด', value: members.length.toLocaleString('th-TH'), icon: '👥' },
-                            { label: 'ใช้งาน', value: members.filter(m => m.status === 'ACTIVE').length.toLocaleString('th-TH'), icon: '✅' },
-                            { label: 'รอยืนยัน', value: members.filter(m => m.status === 'PENDING').length.toLocaleString('th-TH'), icon: '⏳' },
+                            { label: 'สมาชิกทั้งหมด', value: members.length.toLocaleString('th-TH') },
+                            { label: 'ใช้งาน', value: members.filter(m => m.status === 'ACTIVE').length.toLocaleString('th-TH') },
+                            { label: 'รอยืนยัน', value: members.filter(m => m.status === 'PENDING').length.toLocaleString('th-TH') },
                         ]}
                     />
 
@@ -377,7 +368,7 @@ export default function WorkspaceMembersPage() {
                 onOpenChange={(open) => { if (!open) setPendingRevoke(null); }}
                 onConfirm={() => { if (pendingRevoke) performRevoke(pendingRevoke); }}
                 title="ถอนสิทธิ์สมาชิก?"
-                description="สมาชิกคนนี้จะถูกถอดออกจาก workspace ทันที"
+                description="สมาชิกคนนี้จะถูกถอดออกจากนิติบุคคลหรือวิสาหกิจชุมชนนี้ทันที"
                 confirmLabel="ถอนสิทธิ์"
                 variant="destructive"
             />
@@ -388,7 +379,7 @@ export default function WorkspaceMembersPage() {
                 title="โอน OWNER ?"
                 description={
                     pendingTransfer
-                        ? `โอน OWNER ไปยัง "${pendingTransfer.displayName}" บัญชีของคุณจะถูกลดเหลือ ADMIN ทันที (ทำในธุรกรรมเดียวเพื่อกัน workspace ขาด OWNER)`
+                        ? `โอน OWNER ไปยัง "${pendingTransfer.displayName}" บัญชีของคุณจะถูกลดเหลือ ADMIN ทันที (ทำในธุรกรรมเดียวเพื่อไม่ให้ขาด OWNER)`
                         : ''
                 }
                 confirmLabel="โอน OWNER"

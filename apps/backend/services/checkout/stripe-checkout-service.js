@@ -408,10 +408,10 @@ function breakdownForMilestone(application, milestone) {
  * @param {object} args
  * @param {string} args.applicationId
  * @param {'M1'|'M2'} args.milestone
- * @param {{id?: string, holderScope?: object, healthId?: string, role?: string}} args.actor —
+ * @param {{id?: string, holderScope?: object, role?: string}} args.actor —
  *   `id` is the User.id the payment-terms consent is recorded against;
- *   ownership uses `holderScope` (holder-access; required) and, in R1 only, the
- *   pre-R1 `healthId` pin; `role` is written on the price-drift audit row (NOT NULL).
+ *   the read uses `holderScope` (holder-access; required); `role` is written on
+ *   the price-drift audit row (NOT NULL).
  * @returns {Promise<{checkoutOrderId, paymentIntentId, clientSecret, milestone,
  *                    breakdown, quotationNumber: string|null,
  *                    publishableKey: string|null, invoiceId: string|null,
@@ -422,21 +422,19 @@ async function createCheckoutForApplication({ applicationId, milestone, actor })
         throw httpError(400, 'CHECKOUT_INVALID_MILESTONE', `Unknown milestone: ${milestone}`);
     }
 
-    // Ownership is part of the lookup: a non-owner gets 404, never 403 — the
-    // same collapse-avoidance the preview routes use. Spec 2026-09-30 §3.1: the
-    // read is within the payer's holder scope (actor.holderScope; none = closed,
-    // no query). R1 (operator ruling C1) keeps the pre-R1 filer pin
-    // { healthId } as the AND member; who may pay (SUBMIT_APPLICATION) is Task 9.
+    // Visibility is part of the lookup: a caller outside the holder gets 404,
+    // never 403 — the same collapse-avoidance the preview routes use. Spec
+    // 2026-09-30 §3.1: the read is within the payer's holder scope
+    // (actor.holderScope; none = closed, no query), with no filer pin, so any
+    // member the checkout door let through (SUBMIT_APPLICATION on the holder,
+    // operator Q3) reads the filing. A read filter only: nothing below changes.
     const holderScope = actor?.holderScope;
-    const filerPin = actor?.healthId ? { healthId: actor.healthId } : null;
     const hasScope = Boolean(holderScope) && typeof holderScope === 'object' && Array.isArray(holderScope.readIds);
     const application = hasScope
         ? await prisma.application.findFirst({
             where: {
                 id: applicationId,
-                // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere): the pre-R1 pin decides.
-                ...holderAccess().r1HolderOrLegacy(holderScope, 'Application', filerPin),
-                ...holderAccess().r1LegacyApplicantPin(filerPin),
+                ...holderAccess().holderReadWhere(holderScope, 'Application'),
                 isDeleted: false,
             },
         })
@@ -486,8 +484,7 @@ async function createCheckoutForApplication({ applicationId, milestone, actor })
     let order = await prisma.checkoutOrder.findFirst({
         where: {
             applicationId: application.id,
-            // R1-legacy-pin: removed in Task 12 (→ holderReadWhere): the gated application decides.
-            ...holderAccess().r1HolderOrLegacy(holderScope, 'CheckoutOrder', { applicationId: application.id }),
+            ...holderAccess().holderReadWhere(holderScope, 'CheckoutOrder'),
             milestone,
             status: 'PENDING_PAYMENT',
         },

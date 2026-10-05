@@ -160,10 +160,12 @@ d('PR3: ดรอป schema ของ DTAM remittance บน Postgres จริ�
             const user = await c.user.create({
                 data: { canonicalId: `pr3-${k}-canon-${suffix}`, password: 'x', organizationId: org.id, authType: 'EMAIL_LEGACY' },
             });
+            // R2 Task 12: checkout reads by holder membership, so the filing has a holder.
+            const holder = await c.entity.create({ data: { type: 'INDIVIDUAL', displayName: `PR3 ${k}`, organizationId: org.id } });
             const app = await c.application.create({
                 data: {
                     applicationNumber: `PR3-${k}-${suffix}`, healthId: user.canonicalId, areaType: 'OUTDOOR',
-                    organizationId: org.id, status: 'PENDING_DOC_FEE', formData: {},
+                    organizationId: org.id, entityId: holder.id, status: 'PENDING_DOC_FEE', formData: {},
                 },
             });
             ids[k] = { orgId: org.id, user, app, oldOrderId: `pr3-old-${k}-${suffix}` };
@@ -358,10 +360,10 @@ d('PR3: ดรอป schema ของ DTAM remittance บน Postgres จริ�
 
             const minted = await svc.checkout.createCheckoutForApplication({
                 applicationId: app.id, milestone: 'M1',
-                // R1 (spec 2026-09-30 §3.1, Task 4): checkout reads within the payer's holder
-                // scope, as the route passes it (holderScope(req)); the filer pin decides in R1.
+                // Spec 2026-09-30 §3.1: checkout reads within the payer's holder scope, as the
+                // route passes it (holderScope(req)); no filer pin since R2 Task 12.
                 actor: {
-                    id: user.id, healthId: user.canonicalId, role: 'health',
+                    id: user.id, role: 'health',
                     holderScope: { userId: user.id, readIds: [app.entityId].filter(Boolean), editIds: [app.entityId].filter(Boolean) },
                 },
             });

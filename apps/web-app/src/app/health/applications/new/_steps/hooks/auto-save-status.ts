@@ -1,3 +1,5 @@
+import { APPLICATION_HOLDER_REQUIRED_CODE, APPLICATION_HOLDER_REQUIRED_TH } from '@/lib/i18n/error-code-map';
+
 export type AutoSaveSyncState =
   | 'IDLE'
   | 'DIRTY_LOCAL'
@@ -106,9 +108,14 @@ export interface DraftSaveFailure {
  * lost the REPLY is retried automatically, and only a real refusal is red.
  */
 export function classifyDraftSaveFailure(
-  response: { status?: number | undefined; transportFailure?: string | undefined; error?: string | undefined },
+  response: { status?: number | undefined; transportFailure?: string | undefined; error?: string | undefined; errorCode?: string | undefined; code?: string | undefined },
   options: ClassifyAutoSaveFailureOptions = {},
 ): DraftSaveFailure {
+  // R2: the server wants a holder and there is none. A refusal: repeating the same body
+  // gets the same answer, so no retry. The one catalogue sentence, never the server's text.
+  if (response.errorCode === APPLICATION_HOLDER_REQUIRED_CODE || response.code === APPLICATION_HOLDER_REQUIRED_CODE) {
+    return { syncState: 'ERROR', errorKind: 'SERVER', retry: 'NONE', message: APPLICATION_HOLDER_REQUIRED_TH };
+  }
   const status = typeof response.status === 'number' ? response.status : undefined;
   if (options.isOnline === false) {
     return { syncState: 'OFFLINE_RETRY', errorKind: 'OFFLINE', retry: 'AUTO', message: AUTO_SAVE_COPY_TH.offline };

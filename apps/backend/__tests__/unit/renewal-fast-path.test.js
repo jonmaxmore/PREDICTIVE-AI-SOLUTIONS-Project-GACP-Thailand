@@ -35,11 +35,15 @@
 // __tests__/integration/renewal-requires-submit-capability-real-postgres.test.js.
 const mockAssertSubmitAllowed = jest.fn(async ({ application }) => ({ entityId: application.entityId }));
 jest.mock('../../services/application-submit-guard', () => ({
+        // One renewal per certificate (RENEWAL_ALREADY_IN_PROGRESS): none in flight here.
+        findInFlightSuccession: async () => null,
+        lockCertificateSuccessions: async () => {},
+        RENEWAL_ALREADY_IN_PROGRESS: 'RENEWAL_ALREADY_IN_PROGRESS',
     assertSubmitAllowed: (...a) => mockAssertSubmitAllowed(...a),
     recordSubmitDenial: async () => {},
 }));
 jest.mock('../../services/holder-access', () => ({
-    r1HolderOrLegacyWhenScoped: () => ({}),
+    holderReadWhereIfScoped: () => ({}),
 }));
 
 const mockAuditLogger = { log: jest.fn().mockResolvedValue(null) };
@@ -74,8 +78,7 @@ function makePrisma({ cert = {}, sourceApp = {} } = {}) {
         farmId: 'farm-1',
         organizationId: 'org-1',
         isDeleted: false,
-        // The holder, read through the certificate's own application relation.
-        application: { entityId: 'entity-1' },
+        application: { entityId: 'entity-1' }, // R2 Task 8 fix round 1: the holder, via the relation
         ...cert,
     };
     const appRow = {
@@ -91,6 +94,8 @@ function makePrisma({ cert = {}, sourceApp = {} } = {}) {
     };
     return {
         created,
+        // The renewal is filed by the acting user (operator ruling 2026-10-03).
+        user: { findUnique: jest.fn(async ({ where }) => ({ canonicalId: `canon-${where.id}` })) },
         certificate: { findFirst: jest.fn().mockResolvedValue(certRow) },
         application: {
             findFirst: jest.fn().mockResolvedValue(appRow),
@@ -106,6 +111,7 @@ async function createRenewal(prisma) {
     return renewalService.createRenewalApplication({
         originalCertificateId: CERT_ID,
         actorId: ACTOR_ID,
+        holderScope: { userId: ACTOR_ID, readIds: ['entity-1'], editIds: ['entity-1'] }, // R2 Task 8 fix round 1
         prisma,
     });
 }
@@ -291,9 +297,12 @@ describe('W12-2C — the fast path is reachable only for a genuine, live renewal
         expect(prisma.application.create).not.toHaveBeenCalled();
     });
 
-    test('someone who does not own the certificate is refused', async () => {
+    // Operator ruling 2026-10-03: the filer of the certificate is not asked; the submit
+    // guard (SUBMIT_APPLICATION on the holder) decides, and refuses here.
+    test('someone the submit guard refuses is refused, whoever filed the certificate', async () => {
         const prisma = makePrisma({ cert: { userId: 'someone-else' } });
-        await expect(createRenewal(prisma)).rejects.toMatchObject({ code: 'FORBIDDEN_NOT_OWNER' });
+        mockAssertSubmitAllowed.mockRejectedValueOnce(Object.assign(new Error('denied'), { statusCode: 403, code: 'ENTITY_PERMISSION_DENIED' }));
+        await expect(createRenewal(prisma)).rejects.toMatchObject({ code: 'ENTITY_PERMISSION_DENIED' });
         expect(prisma.application.create).not.toHaveBeenCalled();
     });
 

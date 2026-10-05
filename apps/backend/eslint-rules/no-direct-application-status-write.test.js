@@ -151,7 +151,7 @@ const cases = [
     },
     {
         // Bare create with status == the normal birth path (10 real call sites,
-        // incl. services/application-service/application-submission-methods.js:129).
+        // incl. the submit and draft-create paths).
         label: 'application.create with status is OK (row birth, not a transition)',
         filename: 'prisma/seed.js',
         code: "async function f() { return prisma.application.create({ data: { applicationNumber: 'X', status: 'DRAFT' } }); }",

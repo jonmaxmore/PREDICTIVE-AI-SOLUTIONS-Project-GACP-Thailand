@@ -4,6 +4,9 @@
 // reach the department, and the server — not the browser — writes the timestamp.
 // A real client sends this field, so these fixtures do too; sending `{}` was
 // testing a request no applicant can make.
+// R2 Task 9 (spec 2026-09-30 §3.2, §4 rewritten tests): no request-level
+// entity is injected anywhere in this file. The matrix is decided by the engine
+// on the APPLICATION row's holder alone, and no audit row carries activeEntityId.
 // Wave C PR-6 — POST /submit capability gate.
 // VIEWER and MANAGER cannot submit; ADMIN and OWNER can.
 //
@@ -38,9 +41,6 @@ jest.mock('../../middleware/auth-middleware', () => {
             canonicalRole: 'health',
             role: 'HEALTH_USER',
         };
-        if (globalThis.__testActiveEntity) {
-            req.activeEntity = globalThis.__testActiveEntity;
-        }
         next();
     };
     return { authenticateHealth: passUser, authenticateAny: passUser };
@@ -53,8 +53,8 @@ jest.mock('../../services/application-service', () => ({
     // methods instead of reaching into prisma.* directly.
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
+    findHolderEntity: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
     findDraftForSubmit: jest.fn(),
@@ -62,6 +62,11 @@ jest.mock('../../services/application-service', () => ({
     findUserOrganizationId: jest.fn(),
     getApplicantReadinessSnapshot: jest.fn(),
     getLatestOpenDraftForApplicant: jest.fn(),
+}));
+// R2 Task 8: the caller's holder scope (editIds) — the draft door checks it.
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['ent-juristic', 'ent-personal'], editIds: ['ent-juristic', 'ent-personal'] })),
 }));
 
 jest.mock('../../services/prisma-database', () => {
@@ -198,7 +203,6 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        globalThis.__testActiveEntity = null;
         // M1: the engine allows by default here so the ROLE gate stays the
         // subject of the four cases below; the guard's own cases override it.
         assertEntityActionPermission.mockResolvedValue({ allowed: true, via: 'ENTITY_PERMISSION' });
@@ -226,7 +230,6 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
     // VIEWER/MANAGER without a grant is unchanged — still 403 — but it is the
     // engine that refuses, so the code is the engine's ENTITY_PERMISSION_DENIED.
     it('VIEWER without a grant → 403 ENTITY_PERMISSION_DENIED (the engine refuses)', async () => {
-        globalThis.__testActiveEntity = { entityId: 'ent-juristic', role: 'VIEWER' };
         assertEntityActionPermission.mockRejectedValue(engineDenial());
         const r = await request(app).post('/api/applications/submit').send({ declarationsAccepted: true });
         expect(r.status).toBe(403);
@@ -236,7 +239,6 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
     });
 
     it('MANAGER without a grant → 403 ENTITY_PERMISSION_DENIED (the engine refuses)', async () => {
-        globalThis.__testActiveEntity = { entityId: 'ent-juristic', role: 'MANAGER' };
         assertEntityActionPermission.mockRejectedValue(engineDenial());
         const r = await request(app).post('/api/applications/submit').send({ declarationsAccepted: true });
         expect(r.status).toBe(403);
@@ -248,8 +250,7 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
     // the x-active-entity header the FE always sends. The role gate answered
     // 403 before the engine was ever asked. This case is the mutation detector
     // for that gate: put it back and this goes red.
-    it('MANAGER holding a GRANT, with the active-entity header sent → 200', async () => {
-        globalThis.__testActiveEntity = { entityId: 'ent-juristic', role: 'MANAGER' };
+    it('MANAGER holding a GRANT → 200', async () => {
         assertEntityActionPermission.mockResolvedValue({ allowed: true, via: 'GRANT' });
 
         const r = await request(app).post('/api/applications/submit').send({ declarationsAccepted: true });
@@ -261,14 +262,12 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
     });
 
     it('ADMIN can submit', async () => {
-        globalThis.__testActiveEntity = { entityId: 'ent-juristic', role: 'ADMIN' };
         const r = await request(app).post('/api/applications/submit').send({ declarationsAccepted: true });
         // 200 / 201 / similar — anything other than 403 is enough for the gate test.
         expect(r.status).not.toBe(403);
     });
 
     it('OWNER can submit', async () => {
-        globalThis.__testActiveEntity = { entityId: 'ent-juristic', role: 'OWNER' };
         const r = await request(app).post('/api/applications/submit').send({ declarationsAccepted: true });
         expect(r.status).not.toBe(403);
     });
@@ -279,8 +278,7 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
     // active-entity header, so omitting the header was a supported way past
     // it. The application row itself decides now — and a row that names no
     // entity has no legal submitter to check against.
-    it('no entityId on the application row (and nothing to heal from) → 400 VALIDATION_ERROR', async () => {
-        globalThis.__testActiveEntity = null;
+    it('no entityId on the application row → 400 VALIDATION_ERROR', async () => {
         applicationService.findDraftForSubmit.mockResolvedValue({
             id: 'app-1',
             applicationNumber: 'APP-2026-100',
@@ -291,9 +289,6 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
             formData: { steps: { '1': { plantId: 'cannabis' } }, certificationPurposes: ['EXPORT'] },
             workflowHistory: [],
         });
-        // nothing to lazy-heal from (no personal entity for this user)
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
-
         const r = await request(app).post('/api/applications/submit').send({ declarationsAccepted: true });
 
         expect(r.status).toBe(400);
@@ -309,12 +304,10 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
         }));
     });
 
-    // M2 from the senior-swe review: /submit uses findDraftForSubmit, which does
-    // NOT lazy-heal (heal lives on /draft and /prepare only). Without healing
-    // here, a pre-Phase-66 row whose owner never re-opened the wizard would be
-    // hard-400 forever.
-    it('heals a null entityId from the personal entity, then submits in its name', async () => {
-        globalThis.__testActiveEntity = null;
+    // R2 Task 8 (spec 2026-09-30 §3.2 + C3): the personal-entity heal that stood
+    // here is gone. It never checked the declared type, so it could make a person
+    // the holder of a company's filing; heal-null-holders.js places legacy rows.
+    it('a null holder is refused (400), never healed to the personal entity', async () => {
         applicationService.findDraftForSubmit.mockResolvedValue({
             id: 'app-1',
             applicationNumber: 'APP-2026-100',
@@ -325,26 +318,17 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
             formData: { steps: { '1': { plantId: 'cannabis' } }, certificationPurposes: ['EXPORT'] },
             workflowHistory: [],
         });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue({ id: 'ent-personal' });
-        applicationService.healDraftEntityColumns.mockResolvedValue({
-            id: 'app-1', entityId: 'ent-personal', submitterId: 'user-1',
-        });
 
         const r = await request(app).post('/api/applications/submit').send({ declarationsAccepted: true });
 
-        expect(r.status).not.toBe(400);
-        expect(r.status).not.toBe(403);
-        expect(applicationService.healDraftEntityColumns).toHaveBeenCalledWith('app-1',
-            expect.objectContaining({ entityId: 'ent-personal', submitterId: 'user-1' }));
-        // the healed entity is the one the permission question is asked about
-        expect(assertEntityActionPermission).toHaveBeenCalledWith(expect.objectContaining({
-            entityId: 'ent-personal', userId: 'user-1', permission: 'SUBMIT_APPLICATION',
-        }));
+        expect(r.status).toBe(400);
+        expect(r.body.code).toBe('VALIDATION_ERROR');
+        expect(applicationService.healDraftEntityColumns).not.toHaveBeenCalled();
+        expect(require('../../services/application-status-writer').writeApplicationStatus)
+            .not.toHaveBeenCalled();
     });
 
-    it('asks the engine about the APPLICATION row entity, not the x-active-entity header', async () => {
-        // Header says "acting as ent-header"; the draft belongs to ent-juristic.
-        globalThis.__testActiveEntity = { entityId: 'ent-header', role: 'OWNER' };
+    it('asks the engine about the APPLICATION row entity (no header, no request-level entity)', async () => {
 
         await request(app).post('/api/applications/submit').send({ declarationsAccepted: true });
 
@@ -354,7 +338,6 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
     });
 
     it('engine denial → 403 ENTITY_PERMISSION_DENIED + audit FAILURE naming the entity', async () => {
-        globalThis.__testActiveEntity = null;
         assertEntityActionPermission.mockRejectedValue(engineDenial());
 
         const r = await request(app).post('/api/applications/submit').send({ declarationsAccepted: true });
@@ -367,11 +350,12 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
             result: 'FAILURE',
             metadata: expect.objectContaining({ onBehalfOfEntityId: 'ent-juristic' }),
         }));
+        // R2 Task 9 (spec §3.2 Submit): the audit records the holder, never a workspace.
+        for (const row of auditCalls()) { expect(row.metadata).not.toHaveProperty('activeEntityId'); }
     });
 
     // AC3 — a successful submit records in whose name it was made.
     it('successful submit writes a SUCCESS audit row carrying onBehalfOfEntityId', async () => {
-        globalThis.__testActiveEntity = null;
 
         const r = await request(app).post('/api/applications/submit').send({ declarationsAccepted: true });
 
@@ -381,19 +365,18 @@ describe('Wave C PR-6 — POST /submit capability gate', () => {
             actorId: 'user-1',
             metadata: expect.objectContaining({ onBehalfOfEntityId: 'ent-juristic' }),
         }));
+        for (const row of auditCalls()) { expect(row.metadata).not.toHaveProperty('activeEntityId'); }
     });
 });
 
-// M1 PR-C — the create side of the same rule (plan Task C2 Step 2). A draft
-// that is born without an entity is a draft that can never be submitted; the
-// wizard would only discover it at the very end. Refuse at creation instead.
-describe('M1 — POST /draft refuses to create a draft that names no entity', () => {
+// M1 PR-C, then R2 Task 8 (spec 2026-09-30 §3.2): a draft is born naming its
+// holder. No default: neither the header nor the personal entity chooses it.
+describe('R2 Task 8 — POST /draft creates only for a holder the caller names and may edit', () => {
     let app;
     beforeAll(() => { app = makeApp(); });
 
     beforeEach(() => {
         jest.clearAllMocks();
-        globalThis.__testActiveEntity = null;
         applicationService.resolveHealthIdentity.mockResolvedValue({
             userId: 'user-1', healthId: '1100000000008',
         });
@@ -401,39 +384,63 @@ describe('M1 — POST /draft refuses to create a draft that names no entity', ()
         applicationService.findLatestOpenDraftForHealth.mockResolvedValue(null);
     });
 
-    it('no active entity and no personal entity → 400 APPLICANT_ENTITY_MISSING, no row created', async () => {
-        // W4 2026-08-22 — the code used to be a bare VALIDATION_ERROR. That is
-        // the response every wizard document upload returned for a whole class
-        // of accounts, and it named neither the cause (this account has no
-        // legal applicant) nor the fix, on a request where nothing the client
-        // sent was actually invalid. The refusal itself is UNCHANGED — still
-        // 400, still no row created; only the code now says what happened.
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
+    it('no entityId → 400 APPLICATION_HOLDER_REQUIRED with the spec copy, no row created (a personal entity changes nothing)', async () => {
 
         const r = await request(app).post('/api/applications/draft').send({ step: 1 });
 
         expect(r.status).toBe(400);
-        expect(r.body.code).toBe('APPLICANT_ENTITY_MISSING');
-        expect(r.body.messageTh).toContain('ผู้ยื่นตามกฎหมาย');
+        expect(r.body.code).toBe('APPLICATION_HOLDER_REQUIRED');
+        expect(r.body.messageTh).toBe('ยังไม่ได้เลือกว่าจะยื่นในนามใคร กรุณาเลือกที่ขั้นตอนที่ 1 หากเปิดหน้านี้ค้างไว้ ให้โหลดหน้าใหม่ก่อน');
         expect(applicationService.createDraftForHealth).not.toHaveBeenCalled();
     });
 
-    it('a personal entity exists → the draft is created in its name (unchanged path)', async () => {
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue({ id: 'ent-personal' });
+    it('an entityId outside editIds → 403 ENTITY_PERMISSION_DENIED, no row created', async () => {
+        const r = await request(app).post('/api/applications/draft').send({ step: 1, entityId: 'ent-someone-else' });
+
+        expect(r.status).toBe(403);
+        expect(r.body.code).toBe('ENTITY_PERMISSION_DENIED');
+        expect(applicationService.createDraftForHealth).not.toHaveBeenCalled();
+    });
+
+    it('a named holder in editIds → the draft is created in its name, applicantType = Entity.type', async () => {
+        applicationService.findHolderEntity.mockResolvedValue({ id: 'ent-juristic', type: 'JURISTIC' });
         applicationService.createDraftForHealth.mockResolvedValue({
             id: 'app-new', applicationNumber: 'APP-2026-101', status: 'DRAFT',
-            entityId: 'ent-personal', formData: { steps: {} }, workflowHistory: [],
+            entityId: 'ent-juristic', formData: { steps: {}, applicantType: 'JURISTIC' }, workflowHistory: [],
         });
         applicationService.updateApplicantDraftColumns.mockResolvedValue({
             id: 'app-new', applicationNumber: 'APP-2026-101', status: 'DRAFT', formData: { steps: {} },
         });
 
-        const r = await request(app).post('/api/applications/draft').send({ step: 1 });
+        const r = await request(app).post('/api/applications/draft')
+            .send({ step: 1, entityId: 'ent-juristic', formData: { applicantType: 'INDIVIDUAL' } });
 
         expect(r.status).toBe(200);
-        expect(applicationService.createDraftForHealth).toHaveBeenCalledWith(
-            expect.objectContaining({ entityId: 'ent-personal' }),
-        );
+        expect(applicationService.createDraftForHealth).toHaveBeenCalledWith(expect.objectContaining({
+            entityId: 'ent-juristic',
+            submitterId: 'user-1',
+            formData: expect.objectContaining({ applicantType: 'JURISTIC' }),
+        }));
+        // The autosave merge never lets the body's applicantType over the server's.
+        expect(applicationService.updateApplicantDraftColumns.mock.calls[0][1].formData.applicantType).toBe('JURISTIC');
+    });
+
+    it('a named holder with an own open draft → that draft is resumed, nothing created (a lost first-save reply)', async () => {
+        const open = {
+            id: 'app-open', applicationNumber: 'APP-2026-102', status: 'DRAFT', entityId: 'ent-juristic',
+            submitterId: 'user-1', formData: { steps: {} }, workflowHistory: [],
+        };
+        applicationService.findLatestOpenDraftForHealth.mockResolvedValue(open);
+        applicationService.updateApplicantDraftColumns.mockResolvedValue(open);
+
+        const r = await request(app).post('/api/applications/draft').send({ step: 1, entityId: 'ent-juristic' });
+
+        expect(r.status).toBe(200);
+        expect(r.body.data.id).toBe('app-open');
+        expect(applicationService.createDraftForHealth).not.toHaveBeenCalled();
+        expect(applicationService.findLatestOpenDraftForHealth).toHaveBeenCalledWith(expect.objectContaining({
+            submitterId: 'user-1', editIds: ['ent-juristic'],
+        }));
     });
 });
 
@@ -444,7 +451,6 @@ describe('WF-F5 — initial submit walks DRAFT → SUBMITTED → PENDING_DOC_FEE
 
     beforeEach(() => {
         jest.clearAllMocks();
-        globalThis.__testActiveEntity = null;
         // jest.clearAllMocks() clears CALLS, not implementations — the guard
         // cases above leave a rejection behind, so restate the default.
         assertEntityActionPermission.mockResolvedValue({ allowed: true, via: 'ENTITY_PERMISSION' });
@@ -537,7 +543,6 @@ describe('Bug 6.5 — /submit RESUBMIT enforces the revision deadline', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        globalThis.__testActiveEntity = null;
         assertEntityActionPermission.mockResolvedValue({ allowed: true, via: 'ENTITY_PERMISSION' });
         applicationService.resolveHealthIdentity.mockResolvedValue({
             userId: 'user-1', healthId: '1100000000008',

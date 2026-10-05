@@ -15,8 +15,10 @@
  *   PUT  /api/revision-deadline/:id/submit       owned read + assertRequiredDocumentsPresent
  *   POST /api/applications/:id/car               assertRequiredDocumentsPresent (resubmit)
  *   POST /api/planting-cycles/:id/activities     the farm permission engine's Farm read
+ *   POST /api/lots, PUT /api/lots/:id, POST /api/lots/:id/print, POST /api/lots/labels
+ *                                                the lot write gate (farm owner only; R2 Task 12 review C1)
  *
- * Actors: A (filer, OWNER of C, header C), B (MANAGER of C, header C), S (stranger).
+ * Actors: A (filer, OWNER of C), B (MANAGER of C), S (stranger); no workspace header (R2 Task 12).
  * Recorded per actor × door: status, code, and a digest of the rows the door may
  * write (application status, quote status, live quotations, bundle status, logs).
  * EXPECTED is recorded by running this file on 9616ccdf with
@@ -77,7 +79,7 @@ function completeCanonicalFormData() {
     };
 }
 
-d('Task 6 write doors: throw-mode witness clean and neutral against 9616ccdf (real Postgres, real server)', () => {
+d('Task 6 write doors: throw-mode witness clean, answers as recorded for R2 (real Postgres, real server)', () => {
     /** @type {import('@prisma/client').PrismaClient} */
     let raw;
     let app;
@@ -93,10 +95,8 @@ d('Task 6 write doors: throw-mode witness clean and neutral against 9616ccdf (re
     const ORIGINAL_MODE = process.env.HOLDER_READ_WITNESS;
 
     const ACTORS = ['A', 'B', 'S'];
-    const headersOf = (actor) => ({
-        Authorization: `Bearer ${fx.tokens[actor]}`,
-        ...(actor === 'S' ? {} : { 'x-active-entity-id': fx.entities.C }),
-    });
+    // R2 Task 12: no actor sends a workspace header; membership alone decides.
+    const headersOf = (actor) => ({ Authorization: `Bearer ${fx.tokens[actor]}` });
 
     const mkApp = async (label, status, formData = {}) => {
         const row = await raw.application.create({
@@ -197,6 +197,14 @@ d('Task 6 write doors: throw-mode witness clean and neutral against 9616ccdf (re
                 .field('notes', 'หลักฐาน').attach('carDocument', pdf));
             await call(actor, 'POST /planting-cycles/:id/activities', request(app).post(`/api/planting-cycles/${fx.more.cycle}/activities`).set(h)
                 .send({ scope: 'CYCLE', activityType: 'IRRIGATION' }));
+            // R2 Task 12 review C1: the four lot WRITE doors keep the farm-owner gate even
+            // though lot READS follow membership. A (the farm owner) writes; B and S never do.
+            await call(actor, 'POST /lots', request(app).post('/api/lots').set(h)
+                .send({ batchId: fx.more.batch, packageType: 'BAG', quantity: 1, unitWeight: 1 }));
+            await call(actor, 'PUT /lots/:id', request(app).put(`/api/lots/${fx.more.lot}`).set(h)
+                .send({ packagedAt: new Date('2026-07-01T00:00:00Z').toISOString() }));
+            await call(actor, 'POST /lots/:id/print', request(app).post(`/api/lots/${fx.more.lot}/print`).set(h).send({}));
+            await call(actor, 'POST /lots/labels', request(app).post('/api/lots/labels').set(h).send({ lotIds: [fx.more.lot] }));
         }
         warn.mockRestore();
 
@@ -219,6 +227,11 @@ d('Task 6 write doors: throw-mode witness clean and neutral against 9616ccdf (re
             };
         }
         results['cycle logs'] = { count: await raw.cultivationLog.count({ where: { cycleId: fx.more.cycle } }) };
+        const lotRow = await raw.lot.findUnique({ where: { id: fx.more.lot } });
+        results['lots'] = {
+            count: await raw.lot.count({ where: { organizationId: fx.orgId } }),
+            printed: Boolean(lotRow.printedAt),
+        };
 
         if (process.env.R1_TASK6_WRITES_RECORD) {
             fs.writeFileSync(process.env.R1_TASK6_WRITES_RECORD, `${JSON.stringify(results, null, 1)}\n`);
@@ -243,6 +256,15 @@ d('Task 6 write doors: throw-mode witness clean and neutral against 9616ccdf (re
         expect({ mode: witnessConfig.holderReadWitnessMode(), witness }).toEqual({ mode: 'throw', witness: [] });
     });
 
+    // R2 Task 12 review C1: a widened READ gate must never open a lot WRITE again.
+    test('only the farm owner A writes a lot: B (MANAGER of C) and S never get a 2xx on create, PUT, print or labels', () => {
+        const doors = ['POST /lots', 'PUT /lots/:id', 'POST /lots/:id/print', 'POST /lots/labels'];
+        for (const actor of ['B', 'S']) {
+            for (const door of doors) { expect([actor, door, results[`${actor} ${door}`].status < 300]).toEqual([actor, door, false]); }
+        }
+        expect(doors.map((door) => results[`A ${door}`].status)).toEqual([201, 200, 200, 200]);
+    });
+
     test('the filer A gets through every door it got through before (the reads ran, not just the status)', () => {
         expect(results['A POST /quotes/:id/accept'].status).toBe(200);
         expect(results['A POST /quotes/:id/reject'].status).toBe(200);
@@ -250,7 +272,7 @@ d('Task 6 write doors: throw-mode witness clean and neutral against 9616ccdf (re
         expect(results['A POST /planting-cycles/:id/activities'].status).toBe(201);
     });
 
-    test('R1 is behaviour-neutral: every actor × door and every written row as on 9616ccdf', () => {
+    test('every actor × door and every written row as recorded for R2 (Task 12 re-record; was 9616ccdf in R1)', () => {
         if (process.env.R1_TASK6_WRITES_RECORD) { return; }
         const expected = JSON.parse(fs.readFileSync(EXPECTED_FILE, 'utf8'));
         const diffs = [...new Set([...Object.keys(expected), ...Object.keys(results)])].sort()

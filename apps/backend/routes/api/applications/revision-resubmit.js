@@ -15,7 +15,9 @@
  * review queue and tells the officer.
  *
  * ── WHAT IT REFUSES, AND WHY THAT ORDER ───────────────────────────────────────
- * Wrong state first (the filing is not under revision at all), then the papers.
+ * Authority first: a resubmit is a submit (spec 2026-09-30 §3.3), so the submit
+ * guard (SUBMIT_APPLICATION on the filing's holder) runs before this door decides
+ * anything. Then wrong state (the filing is not under revision at all), then the papers.
  * An applicant on the wrong screen should hear that, not a list of documents
  * that has nothing to do with their problem.
  *
@@ -32,7 +34,9 @@ const { lookup, getMessage } = require('../../../shared/error-codes');
 const { authenticateHealth } = require('../../../middleware/auth-middleware');
 const applicationService = require('../../../services/application-service');
 const { getHealthScopeOptions } = require('../helpers/applications-helpers');
-const { holderScope, r1ApplicationHolderOrPin, r1HolderOrLegacy } = require('../../../services/holder-access');
+const { holderScope, holderReadWhere } = require('../../../services/holder-access');
+const { assertSubmitAllowed, SubmitGuardError } = require('../../../services/application-submit-guard');
+const { respondError } = require('../../../shared/api-response');
 const { writeApplicationStatus } = require('../../../services/application-status-writer');
 const { documentTypesOfSlot } = require('../../../services/application-document-sync');
 const {
@@ -113,17 +117,37 @@ router.post('/:id/revision-resubmit', authenticateHealth, async (req, res) => {
         const application = await prisma.application.findFirst({
             where: {
                 id: req.params.id,
-                // No capability gate runs before this door writes the status, so the
-                // filer pin is what keeps a co-member out (R1-legacy-pin: removed in Task 12,
-                // when Task 9's submit gate covers this door).
-                // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(scope, 'Application')).
-                // OR form: neutral also when no entity context is bound (final review C1).
-                ...r1ApplicationHolderOrPin(scope, { healthId: identity.healthId }),
+                // Spec 2026-09-30 §3.1: visible to every ACTIVE member of its holder.
+                ...holderReadWhere(scope, 'Application'),
                 isDeleted: false,
             },
         });
         if (!application) {
             return res.status(404).json({ success: false, error: 'Application not found' });
+        }
+
+        // Who may resubmit (spec §3.3): SUBMIT_APPLICATION on the filing's holder,
+        // through the same submit guard as every other submit door. A refusal is
+        // 403 ENTITY_PERMISSION_DENIED (audited by the guard) and writes nothing.
+        try {
+            await assertSubmitAllowed({
+                userId: identity.userId || req.user.id,
+                application,
+                holderScope: scope,
+                auditContext: {
+                    actorType: 'USER',
+                    actorRole: req.user?.canonicalRole || req.user?.role || null,
+                    ipAddress: req.ip || null,
+                    userAgent: typeof req.get === 'function' ? req.get('user-agent') : null,
+                    organizationId: req.user?.organizationId || null,
+                    route: `${req.method} ${req.baseUrl || ''}${req.path || ''}`,
+                },
+            });
+        } catch (guardErr) {
+            if (guardErr instanceof SubmitGuardError) {
+                return respondError(res, req, guardErr, { message: guardErr.message });
+            }
+            throw guardErr;
         }
 
         const fromStatus = String(application.status || '').toUpperCase();
@@ -151,10 +175,8 @@ router.post('/:id/revision-resubmit', authenticateHealth, async (req, res) => {
         // What the applicant has attached for those slots, newest wins.
         const documents = await prisma.applicationDocument.findMany({
             where: {
-                // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere, with the filter
-                // spread back): the gated application decides. The filter carries its own
-                // OR, so it moves into AND.
-                ...r1HolderOrLegacy(scope, 'ApplicationDocument', { applicationId: application.id }),
+                // The filter carries its own OR, so it sits in AND beside the fragment.
+                ...holderReadWhere(scope, 'ApplicationDocument'),
                 AND: [buildRequestedSlotDocumentFilter(
                     application.id,
                     requestedRows.map((r) => r.slotId),

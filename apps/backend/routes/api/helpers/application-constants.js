@@ -344,7 +344,9 @@ const WIZARD_OWNED_FORM_DATA_KEYS = Object.freeze([
     // PROCESSING carries), so an applicant able to write them would be choosing the law that
     // judges them. The wizard asks those two questions; a door that CHECKS the answer is what
     // may write them, and that door does not exist yet — see the backlog F-APPV2-02.
-    'applicantType',
+    //
+    // `applicantType` left this list on 2026-10-03 (R2 Task 8, spec 2026-09-30 §3.2): the
+    // server writes it at create from the holder's Entity.type (form-data-ownership.js).
     'previousCertificateNumber',
     'varieties',
     'varietiesNote',

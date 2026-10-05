@@ -28,6 +28,7 @@ const { prisma } = require('../services/prisma-database');
 const { resolveFarmAccess } = require('../services/farm-access');
 const { assertFarmActionPermission } = require('../services/entity-effective-permissions-service');
 const logger = require('../shared/logger');
+const { entityPermissionDeniedBody } = require('../shared/entity-permission-denied');
 
 /**
  * Creates a middleware that verifies farm access.
@@ -65,13 +66,15 @@ function requireFarmOwnership(options = {}) {
                 });
             }
 
-            // R1-legacy-pin: removed in Task 12 — the farm id decides, as pre-R1; the
-            // holder fragment rides beside it so the read witness sees a scoped read.
-            const { holderScope, r1HolderOrLegacyWhenScoped } = require('../services/holder-access');
+            // Spec 2026-09-30 §3.1: the farm is read within the caller's farm access
+            // (the membership-based fragment), so a farm the caller cannot reach is
+            // 404, never told apart from a missing one. The checks below still decide
+            // what a reachable farm allows.
+            const { holderScope, holderReadWhere } = require('../services/holder-access');
             const farm = await prisma.farm.findUnique({
                 where: {
                     id: farmId,
-                    ...r1HolderOrLegacyWhenScoped(await holderScope(req), 'Farm', { id: farmId }),
+                    ...holderReadWhere(await holderScope(req), 'Farm'),
                 },
                 // Farm ownership FK is `ownerId` (-> User.id); there is no `userId`
                 // column. Selecting `userId` raised a PrismaClientValidationError in
@@ -110,12 +113,7 @@ function requireFarmOwnership(options = {}) {
                         logger.warn(
                             `[farmOwnership] User ${userId} lacks ${permission} on farm ${farmId}`,
                         );
-                        return res.status(403).json({
-                            success: false,
-                            code: 'ENTITY_PERMISSION_DENIED',
-                            permission: permError.permission || permission,
-                            error: 'คุณไม่มีสิทธิ์ดำเนินการรายการนี้ในพื้นที่ทำงาน',
-                        });
+                        return res.status(403).json(entityPermissionDeniedBody(permError.permission || permission));
                     }
                     throw permError;
                 }

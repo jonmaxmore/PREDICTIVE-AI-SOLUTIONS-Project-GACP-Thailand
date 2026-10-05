@@ -124,14 +124,6 @@ function errorHandler(err, req, res) {
     return res.status(400).json(error);
   }
 
-  if (err.name === 'MongoError' || err.name === 'MongooseError') {
-    error.error = {
-      message: 'Database operation failed',
-      code: 'DATABASE_ERROR',
-    };
-    return res.status(500).json(error);
-  }
-
   if (err.name === 'JsonWebTokenError') {
     error.error = {
       message: 'Invalid token',

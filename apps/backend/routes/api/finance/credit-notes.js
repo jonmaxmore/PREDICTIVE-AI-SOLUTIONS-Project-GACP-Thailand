@@ -113,7 +113,7 @@ router.get('/', authenticateAny, async (req, res) => {
                 originalInvoiceId,
                 {
                     actor: req.user,
-                    // Spec 2026-09-30 §3.1 (R1): the applicant's invoice read carries the holder scope.
+                    // Spec 2026-09-30 §3.1: the applicant's invoice read carries the holder scope.
                     holderScope: await require('../../../services/holder-access').holderScope(req),
                 },
             );

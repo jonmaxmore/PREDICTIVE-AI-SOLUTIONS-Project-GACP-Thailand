@@ -72,8 +72,8 @@ const REFUSALS: Array<[string, { success: false; error: string; status: number; 
         /ไม่มีสิทธิ์ยื่นคำขอในนามกิจการนี้.*เจ้าของกิจการ/,
     ],
     [
-        'APPLICANT_ENTITY_MISSING',
-        { success: false, error: 'ข้อมูลไม่ถูกต้อง', status: 400, code: 'APPLICANT_ENTITY_MISSING' },
+        'APPLICATION_HOLDER_REQUIRED',
+        { success: false, error: 'ข้อมูลไม่ถูกต้อง', status: 400, code: 'APPLICATION_HOLDER_REQUIRED' },
         /ยังไม่ได้ผูกกับผู้ถือใบรับรอง.*ผู้ดูแลระบบ/,
     ],
 ];

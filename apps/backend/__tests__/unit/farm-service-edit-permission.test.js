@@ -25,9 +25,6 @@ jest.mock('../../services/prisma-database', () => ({
 jest.mock('../../services/cache-service', () => ({
     invalidateAnalyticsCache: jest.fn().mockResolvedValue(undefined),
 }));
-jest.mock('../../services/entity-context', () => ({
-    getEntityContext: jest.fn(() => null),
-}));
 jest.mock('../../services/farm-access', () => ({
     farmAccessWhere: jest.fn().mockResolvedValue({ ownerId: 'caller-1' }),
     listAccessibleFarmIds: jest.fn().mockResolvedValue([]),

@@ -20,6 +20,7 @@ import {
 } from '@/lib/health-dashboard-stage';
 import { AuthService } from '@/lib/services/auth-service';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { HolderFilterChips, HolderLine, useHolderFilter } from '@/components/holder/holder-list';
 
 interface Application {
   /** round 3: from GET /applications/my — names a renewal's charge as the renewal. */
@@ -32,6 +33,8 @@ interface Application {
   phase2Status?: string;
   dashboardStage?: string;
   hasCertificate?: boolean;
+  /** The holder entity the application is filed for. */
+  entityId?: string | null;
   createdAt: string;
   plantType?: string;
   plantName?: string;
@@ -180,7 +183,7 @@ export default function ApplicationsPage() {
   // control localizes alongside the rest of the page.
   const filterOptions = useMemo<Array<{ key: FilterKey; label: string }>>(() => [
     { key: 'ALL', label: dict.common.all },
-    { key: 'ACTION_REQUIRED', label: `⚡ ${dict.filters.actionRequired}` },
+    { key: 'ACTION_REQUIRED', label: dict.filters.actionRequired },
     { key: 'IN_PROGRESS', label: dict.filters.inProgress },
     { key: 'COMPLETED', label: dict.filters.completed },
   ], [dict]);
@@ -190,6 +193,8 @@ export default function ApplicationsPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FilterKey>('ALL');
+  const holder = useHolderFilter();
+  const holderSelectedId = holder.selectedId;
   const [sortBy, setSortBy] = useState<'newest' | 'oldest'>('newest');
   // Wave E.3-C follow-up: ConfirmDialog state for "cancel draft".
   // Stores the draft id awaiting confirmation; null when no dialog is open.
@@ -287,6 +292,7 @@ export default function ApplicationsPage() {
   const filteredApplications = useMemo(() => {
     return applications
       .filter((app) => stageMatchesFilter(stageMap.get(app.id)!, statusFilter))
+      .filter((app) => holderSelectedId === null || app.entityId === holderSelectedId)
       .filter((app) => {
         const query = searchQuery.trim().toLowerCase();
         if (!query) return true;
@@ -297,7 +303,7 @@ export default function ApplicationsPage() {
         if (sortBy === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [applications, searchQuery, sortBy, stageMap, statusFilter]);
+  }, [applications, searchQuery, sortBy, stageMap, statusFilter, holderSelectedId]);
 
   const listRows = filteredApplications.map((app) => {
     const stage = stageMap.get(app.id)!;
@@ -317,6 +323,7 @@ export default function ApplicationsPage() {
       id: app.id,
       code: app.applicationNumber || `APP-${app.id.slice(-6).toUpperCase()}`,
       farmName: app.farmName || '-',
+      holderName: holder.holderOf(app),
       stage,
       stageLabel: stageLabelFor(stage, { isRenewal: app.isRenewal }),
       dateLabel: `${dict.common.submitDate} ${formatThaiDate(app.createdAt, dateLocale)}`,
@@ -356,6 +363,8 @@ export default function ApplicationsPage() {
           </Button>
         }
       />
+
+      <HolderFilterChips entities={holder.entities} selectedId={holder.selectedId} onSelect={holder.setSelectedId} />
 
       <FilterBar
         query={searchQuery}
@@ -467,6 +476,7 @@ export default function ApplicationsPage() {
                           </span>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">{row.farmName} · {row.dateLabel}</p>
+                        <HolderLine name={row.holderName} />
                       </div>
                     </div>
                     {/* CTA. Pending-fee → a SEPARATE pay Link (pointer-events
@@ -511,7 +521,7 @@ export default function ApplicationsPage() {
                   {/* Description overlay for action-required items */}
                   {isActionRequired && (
                     <div className="mt-2 rounded-xl bg-amber-50 px-3 py-1.5 text-[11px] text-amber-700">
-                      ⚡ {stageDescriptionFor(row.stage, { isRenewal: row.isRenewal })}
+                      {stageDescriptionFor(row.stage, { isRenewal: row.isRenewal })}
                     </div>
                   )}
 
@@ -528,7 +538,7 @@ export default function ApplicationsPage() {
                           : 'bg-amber-50 text-amber-700'
                       }`}
                     >
-                      ⏰ {deadline.label}{' '}
+                      {deadline.label}{' '}
                       {deadline.urgency === 'critical'
                         ? (row.isCarPending ? dict.deadline.carUrgent : dict.deadline.revisionUrgent)
                         : (row.isCarPending ? dict.deadline.beforeCarDeadline : dict.deadline.beforeRevisionDeadline)}

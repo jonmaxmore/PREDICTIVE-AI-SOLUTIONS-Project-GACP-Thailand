@@ -17,7 +17,8 @@
  *   survey submitResponse          per-answer create (public farmer path).
  *   survey createTemplate          per-question create.
  *   quote → invoice conversion     per-line-item create.
- *   wizard submission              per-plot create.
+ *   (wizard submission, per-plot create, went with the /api/wizard door in
+ *    R2 Task 10; the live submit door creates no plots.)
  *
  * The tenant-prisma-extension maps organizationId over createMany row arrays
  * (tenant-prisma-extension.js `createMany` hook), so the loop→createMany swaps
@@ -183,51 +184,6 @@ describe('quote → invoice conversion — line items land in one createMany', (
         // amount recomputed from qty × price when absent.
         expect(rows[1]).toMatchObject({
             lineNumber: 2, code: 'ITEM_2', description: 'ส่วนลด', amount: -20, isTaxable: false,
-        });
-    });
-});
-
-describe('wizard submission — plots land in one createMany', () => {
-    const { createApplicationSubmissionMethods } =
-        require('../../services/application-service/application-submission-methods');
-
-    test('N plots cost one insert inside the submission transaction', async () => {
-        const tx = {
-            user: { update: jest.fn(async () => ({})) },
-            farm: { create: jest.fn(async ({ data }) => ({ id: 'farm1', ...data })) },
-            plot: {
-                create: jest.fn(),
-                createMany: jest.fn(async ({ data }) => ({ count: data.length })),
-            },
-            application: { create: jest.fn(async ({ data }) => ({ id: 'app1', ...data })) },
-            applicationDraft: { deleteMany: jest.fn(async () => ({ count: 0 })) },
-        };
-        const prisma = { $transaction: jest.fn(async (cb) => cb(tx)) };
-        const feeService = {
-            calculateApplicationFees: jest.fn(() => ({
-                phase1: { total: 5000 }, phase2: { total: 25000 }, scopeCount: 1,
-            })),
-        };
-
-        const methods = createApplicationSubmissionMethods({ prisma, feeService, logger: console });
-        await methods.executeWizardSubmission('u1', 'HID1', {
-            applicantData: { firstName: 'ก', lastName: 'ข', address: 'x', province: 'y' },
-            farmData: { farmName: 'ฟาร์ม', totalAreaSize: 400, totalAreaUnit: 'SQM' },
-            plots: [
-                { name: 'แปลง 1', areaSize: 100, areaUnit: 'SQM' },
-                { name: 'แปลง 2', areaSize: 150, areaUnit: 'SQM' },
-                { name: 'แปลง 3', areaSize: 150, areaUnit: 'SQM' },
-            ],
-            documents: [],
-            cultivationMethods: ['outdoor'],
-        });
-
-        expect(tx.plot.create).not.toHaveBeenCalled();
-        expect(tx.plot.createMany).toHaveBeenCalledTimes(1);
-        const rows = tx.plot.createMany.mock.calls[0][0].data;
-        expect(rows).toHaveLength(3);
-        expect(rows[0]).toMatchObject({
-            farmId: 'farm1', name: 'แปลง 1', area: 100, solarSystem: 'OUTDOOR',
         });
     });
 });

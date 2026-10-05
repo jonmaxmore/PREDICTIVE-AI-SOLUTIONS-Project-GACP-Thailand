@@ -17,22 +17,20 @@
  *
  * Task 5 (2026-09-30-remove-workspace-mode): the list and both owner doors read
  * Invoice through the holder fragment (invoiceService.listForHolders,
- * invoice-helpers.findHealthInvoice). R1 (operator ruling C1) keeps the pre-R1
- * rows exactly: the 9616ccdf where of each door is the registered legacy OR
- * branch and the AND pin (R1-legacy-pin, removed in Task 12).
+ * invoice-helpers.findHealthInvoice). R2 Task 12: the fragment alone decides
+ * (no filer pin, no workspace); an invoice outside it is 404, never 403.
  *
  * Route-level unit: the service is stubbed, canonical-rbac is real, holderScope
  * is stubbed. The same doors run on a real Postgres with the real middlewares and
  * the witness in throw mode in
  * __tests__/integration/applicant-billing-holder-real-postgres.test.js, and the
- * R1 neutrality matrix in r1-billing-doors-neutral-real-postgres.test.js.
+ * R1→R2 matrix in r1-billing-doors-neutral-real-postgres.test.js.
  */
 
 const mockActor = { current: null };
 jest.mock('../../middleware/auth-middleware', () => {
     const attach = (req, _res, next) => {
         req.user = { ...mockActor.current.user };
-        if (mockActor.current.activeEntity) { req.activeEntity = { ...mockActor.current.activeEntity }; }
         return next();
     };
     return { authenticateProvider: attach, authenticateHealth: attach, authenticateAny: attach };
@@ -77,61 +75,40 @@ function binaryParser(res, callback) {
     res.on('end', () => callback(null, Buffer.concat(chunks)));
 }
 
-describe('GET /api/invoices/my reads by holder (P6, review I-1; Task 5)', () => {
+describe('GET /api/invoices/my reads by holder (P6, review I-1; Task 5, R2 Task 12)', () => {
     afterEach(() => jest.restoreAllMocks());
 
-    it('hands the service the request\'s holder scope, plus the pre-R1 identity and workspace (R1-legacy-pin)', async () => {
-        const activeEntity = { entityId: 'entity-personal', role: 'OWNER', personal: true };
-        mockActor.current = { user: OWNER, activeEntity };
+    it('hands the service the request\'s holder scope and nothing else (no workspace, no filer)', async () => {
+        mockActor.current = { user: OWNER };
         const list = jest.spyOn(invoiceService, 'listForHolders').mockResolvedValue([]);
         mockHolderScope.mockClear();
 
         const res = await request(buildApp()).get('/api/invoices/my');
 
         expect(res.status).toBe(200);
-        expect(list).toHaveBeenCalledWith({
-            scope: SCOPE, status: undefined, r1Legacy: { healthId: OWNER.canonicalId, activeEntity },
-        });
+        expect(list).toHaveBeenCalledWith({ scope: SCOPE, status: undefined });
         expect(mockHolderScope).toHaveBeenCalledTimes(1);
-    });
-
-    it('no active workspace: the pre-R1 workspace is null, never a broad question', async () => {
-        mockActor.current = { user: OWNER };
-        const list = jest.spyOn(invoiceService, 'listForHolders').mockResolvedValue([]);
-
-        await request(buildApp()).get('/api/invoices/my');
-
-        expect(list).toHaveBeenCalledWith({
-            scope: SCOPE, status: undefined, r1Legacy: { healthId: OWNER.canonicalId, activeEntity: null },
-        });
     });
 });
 
-// The pre-R1 (9616ccdf) wheres, verbatim: R1 keeps each as the registered legacy
-// OR branch and as the AND pin, so the rows stay exactly the pre-R1 rows.
-const OWN_NULL_ENTITY = {
-    healthId: 'canon-owner',
-    OR: [{ applicationId: null }, { application: { is: { entityId: null } } }],
-};
 const FRAGMENT = { application: { entityId: { in: ['entity-personal', 'entity-company'] } } };
 
 // Values only: the HOLDER_SCOPED marker is a symbol key, checked on its own below.
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-function expectHolderShape(where, legacy) {
+function expectHolderShape(where) {
     const { hasHolderMarker } = require('../../services/holder-marker');
-    // The holder fragment and the legacy branch sit in one top-level OR, both marked
-    // (and registered); the pin is the AND member.
-    expect(plain(where.OR)).toEqual([FRAGMENT, legacy]);
-    expect(hasHolderMarker({ OR: where.OR })).toBe(true);
-    expect(plain(where.AND)).toEqual([legacy]);
-    // No filer key and no relation key at the top level: nothing outside OR/AND decides the rows.
+    // R2 Task 12: the holder fragment alone, spread at the top level; no OR legacy
+    // branch, no AND pin, no filer key.
+    expect(plain(where.application)).toEqual(FRAGMENT.application);
+    expect(hasHolderMarker(where)).toBe(true);
+    expect(where).not.toHaveProperty('OR');
+    expect(where).not.toHaveProperty('AND');
     expect(where).not.toHaveProperty('healthId');
-    expect(where).not.toHaveProperty('application');
     expect(where.isDeleted).toBe(false);
 }
 
-describe('invoice-service.listForHolders — the holder fragment, with the pre-R1 rows kept (Task 5)', () => {
+describe('invoice-service.listForHolders — the holder fragment alone (Task 5, R2 Task 12)', () => {
     let findMany;
     beforeEach(() => {
         const { prisma } = require('../../services/prisma-database');
@@ -139,53 +116,24 @@ describe('invoice-service.listForHolders — the holder fragment, with the pre-R
     });
     afterEach(() => jest.restoreAllMocks());
 
-    it('company workspace: the pre-R1 entity where (no filer pin) beside the fragment', async () => {
-        await invoiceService.listForHolders({
-            scope: SCOPE, r1Legacy: { healthId: 'canon-owner', activeEntity: { entityId: 'entity-company', personal: false } },
-        });
-        expectHolderShape(findMany.mock.calls[0][0].where, { application: { is: { entityId: 'entity-company' } } });
-    });
-
-    it('personal workspace: the personal entity\'s invoices plus the caller\'s own entity-less ones', async () => {
-        await invoiceService.listForHolders({
-            scope: SCOPE, r1Legacy: { healthId: 'canon-owner', activeEntity: { entityId: 'entity-personal', personal: true } },
-        });
-        expectHolderShape(findMany.mock.calls[0][0].where, {
-            OR: [{ application: { is: { entityId: 'entity-personal' } } }, OWN_NULL_ENTITY],
-        });
-    });
-
-    it('no active workspace: only the caller\'s own entity-less invoices, and a warning', async () => {
-        const logger = require('../../shared/logger');
-        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
-        await invoiceService.listForHolders({ scope: SCOPE, r1Legacy: { healthId: 'canon-owner', activeEntity: null } });
-        expectHolderShape(findMany.mock.calls[0][0].where, OWN_NULL_ENTITY);
-        expect(warn).toHaveBeenCalled();
+    it('every invoice of the caller\'s holders: the fragment, nothing else', async () => {
+        await invoiceService.listForHolders({ scope: SCOPE });
+        expectHolderShape(findMany.mock.calls[0][0].where);
     });
 
     it('the status filter is added beside the scope', async () => {
-        await invoiceService.listForHolders({
-            scope: SCOPE, status: 'pending', r1Legacy: { healthId: 'canon-owner', activeEntity: { entityId: 'entity-company' } },
-        });
+        await invoiceService.listForHolders({ scope: SCOPE, status: 'pending' });
         expect(findMany.mock.calls[0][0].where.status).toBeDefined();
-    });
-
-    it('no active workspace and no caller identity: no query at all', async () => {
-        const logger = require('../../shared/logger');
-        jest.spyOn(logger, 'warn').mockImplementation(() => {});
-        await expect(invoiceService.listForHolders({ scope: SCOPE, r1Legacy: { healthId: '', activeEntity: null } })).resolves.toEqual([]);
-        expect(findMany).not.toHaveBeenCalled();
+        expectHolderShape(findMany.mock.calls[0][0].where);
     });
 
     it.each([[undefined], [null], [{ userId: 'u' }]])('no holder scope (%p): fail closed, no query', async (scope) => {
-        await expect(invoiceService.listForHolders({
-            scope, r1Legacy: { healthId: 'canon-owner', activeEntity: { entityId: 'entity-company' } },
-        })).resolves.toEqual([]);
+        await expect(invoiceService.listForHolders({ scope })).resolves.toEqual([]);
         expect(findMany).not.toHaveBeenCalled();
     });
 });
 
-describe('findHealthInvoice — one scoped read; R1 keeps the pre-R1 membership/filer rule and 403/404 (Task 5)', () => {
+describe('findHealthInvoice — one scoped read, 404 for everything outside it (Task 5, R2 Task 12)', () => {
     let findFirst;
     beforeEach(() => {
         const { prisma } = require('../../services/prisma-database');
@@ -193,55 +141,27 @@ describe('findHealthInvoice — one scoped read; R1 keeps the pre-R1 membership/
     });
     afterEach(() => jest.restoreAllMocks());
 
-    // assertHealthOwnsInvoice (9616ccdf) as a where: an ACTIVE membership, any role,
-    // on the application's entity; or, with no entity, the filer pin.
-    const NO_ENTITY = { OR: [{ applicationId: null }, { application: { is: { entityId: null } } }] };
-    const OWNER_RULE = {
-        OR: [
-            { application: { is: { entity: { is: { members: { some: { userId: 'user-owner', status: 'ACTIVE' } } } } } } },
-            { AND: [NO_ENTITY, { OR: [{ healthId: 'canon-owner' }, { applicant: { is: { id: 'user-owner' } } }] }] },
-        ],
-    };
-    const r1Owner = { userId: 'user-owner', healthId: 'canon-owner' };
     const helpers = () => require('../../routes/api/finance/invoice-helpers');
 
     it('reads by id through the holder fragment (findFirst, never findUnique) and returns the row', async () => {
         findFirst.mockResolvedValueOnce(paidInvoice());
-        const invoice = await helpers().findHealthInvoice('inv-paid', SCOPE, { r1Owner });
+        const invoice = await helpers().findHealthInvoice('inv-paid', SCOPE);
         expect(invoice.id).toBe('inv-paid');
         expect(findFirst).toHaveBeenCalledTimes(1);
         const { where } = findFirst.mock.calls[0][0];
         expect(where.id).toBe('inv-paid');
-        expectHolderShape(where, OWNER_RULE);
+        expectHolderShape(where);
     });
 
-    it('not readable but live: 403 as pre-R1 (R2/Task 12: 404)', async () => {
-        findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'inv-paid' });
-        await expect(helpers().findHealthInvoice('inv-paid', SCOPE, { r1Owner })).rejects.toMatchObject({ statusCode: 403 });
-        const existence = findFirst.mock.calls[1][0];
-        expect(plain(existence.where)).toEqual({ id: 'inv-paid', isDeleted: false });
-        expect(require('../../services/holder-marker').hasHolderMarker(existence.where)).toBe(true);
-        expect(existence.select).toEqual({ id: true });
-    });
-
-    it('missing or soft-deleted: 404', async () => {
-        findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
-        await expect(helpers().findHealthInvoice('inv-gone', SCOPE, { r1Owner })).rejects.toMatchObject({ statusCode: 404 });
-    });
-
-    it('only the filer pin when the caller has no user id; matches nothing with no identity', async () => {
-        findFirst.mockResolvedValue(null);
-        await helpers().findHealthInvoice('inv-paid', SCOPE, { r1Owner: { healthId: 'canon-owner' } }).catch(() => {});
-        expectHolderShape(findFirst.mock.calls[0][0].where, {
-            OR: [{ AND: [NO_ENTITY, { OR: [{ healthId: 'canon-owner' }] }] }],
-        });
-        findFirst.mockClear();
-        await helpers().findHealthInvoice('inv-paid', SCOPE, { r1Owner: {} }).catch(() => {});
-        expect(plain(findFirst.mock.calls[0][0].where.AND)).toEqual([{ id: { in: [] } }]);
+    it('not readable (live or not): 404 after the one read, never a 403 existence probe', async () => {
+        findFirst.mockResolvedValueOnce(null);
+        await expect(helpers().findHealthInvoice('inv-paid', SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+        expect(findFirst).toHaveBeenCalledTimes(1);
+        expect(invoiceService.r1LiveInvoiceExists).toBeUndefined();
     });
 
     it('no holder scope: 404 with no query (fail closed)', async () => {
-        await expect(helpers().findHealthInvoice('inv-paid', undefined, { r1Owner })).rejects.toMatchObject({ statusCode: 404 });
+        await expect(helpers().findHealthInvoice('inv-paid', undefined)).rejects.toMatchObject({ statusCode: 404 });
         expect(findFirst).not.toHaveBeenCalled();
     });
 });
@@ -253,28 +173,25 @@ describe('the owner doors gate before they render, and render through the same s
     });
     afterEach(() => jest.restoreAllMocks());
 
-    const r1Owner = { userId: OWNER.id, healthId: OWNER.canonicalId };
-
-    it('the receipt door passes the scope and the pre-R1 identity to the gate and to the renderer', async () => {
+    it('the receipt door passes the scope to the gate and to the renderer', async () => {
         mockActor.current = { user: OWNER };
         const gate = jest.spyOn(invoiceService, 'getForHolder').mockResolvedValue(paidInvoice());
 
         const res = await request(buildApp()).get('/api/invoices/my/inv-paid/receipt/pdf');
 
         expect(res.status).toBe(200);
-        expect(gate).toHaveBeenCalledWith('inv-paid', { scope: SCOPE, r1Owner });
-        expect(render).toHaveBeenCalledWith('inv-paid', { scope: SCOPE, r1Owner });
+        expect(gate).toHaveBeenCalledWith('inv-paid', { scope: SCOPE });
+        expect(render).toHaveBeenCalledWith('inv-paid', { scope: SCOPE });
     });
 
-    it('the invoice PDF door: refused (403) never renders', async () => {
+    it('the invoice PDF door: outside the scope (404) never renders', async () => {
         mockActor.current = { user: STRANGER };
         jest.spyOn(invoiceService, 'getForHolder').mockResolvedValue(null);
-        jest.spyOn(invoiceService, 'r1LiveInvoiceExists').mockResolvedValue(true);
         const pdf = jest.spyOn(invoiceService, 'generatePdf').mockResolvedValue(Buffer.from('%PDF'));
 
         const res = await request(buildApp()).get('/api/invoices/inv-paid/pdf');
 
-        expect(res.status).toBe(403);
+        expect(res.status).toBe(404);
         expect(pdf).not.toHaveBeenCalled();
     });
 
@@ -286,13 +203,12 @@ describe('the owner doors gate before they render, and render through the same s
         const res = await request(buildApp()).get('/api/invoices/inv-paid/pdf');
 
         expect(res.status).toBe(200);
-        expect(pdf).toHaveBeenCalledWith('inv-paid', { scope: SCOPE, r1Owner });
+        expect(pdf).toHaveBeenCalledWith('inv-paid', { scope: SCOPE });
     });
 
     it('a soft-deleted or missing invoice is 404 on both owner doors, and nothing renders', async () => {
         mockActor.current = { user: OWNER };
         jest.spyOn(invoiceService, 'getForHolder').mockResolvedValue(null);
-        jest.spyOn(invoiceService, 'r1LiveInvoiceExists').mockResolvedValue(false);
         const pdf = jest.spyOn(invoiceService, 'generatePdf').mockResolvedValue(Buffer.from('%PDF'));
 
         expect((await request(buildApp()).get('/api/invoices/my/inv-paid/receipt/pdf')).status).toBe(404);
@@ -308,9 +224,9 @@ describe('invoice-service scoped document read (Task 5)', () => {
     it('getForDocument with a scope adds the holder where; without one (staff, worker) it keeps { id }', async () => {
         const { prisma } = require('../../services/prisma-database');
         const findFirst = jest.spyOn(prisma.invoice, 'findFirst').mockResolvedValue(null);
-        await invoiceService.getForDocument('inv-1', { scope: SCOPE, r1Owner: { userId: 'user-owner', healthId: 'canon-owner' } });
+        await invoiceService.getForDocument('inv-1', { scope: SCOPE });
         expect(findFirst.mock.calls[0][0].where.id).toBe('inv-1');
-        expect(plain(findFirst.mock.calls[0][0].where.OR[0])).toEqual(FRAGMENT);
+        expect(plain(findFirst.mock.calls[0][0].where.application)).toEqual(FRAGMENT.application);
         await invoiceService.getForDocument('inv-1');
         expect(findFirst.mock.calls[1][0].where).toEqual({ id: 'inv-1' });
     });
@@ -347,21 +263,19 @@ describe('GET /api/invoices/my/:invoiceId/receipt/pdf — the owner\'s receipt (
         expect(render).toHaveBeenCalledTimes(1);
     });
 
-    it('refuses someone else\'s invoice with 403 and never renders it', async () => {
+    it('refuses someone else\'s invoice with 404 (R2 Task 12: never told apart from a missing one) and never renders it', async () => {
         mockActor.current = { user: STRANGER };
         jest.spyOn(invoiceService, 'getForHolder').mockResolvedValue(null);
-        jest.spyOn(invoiceService, 'r1LiveInvoiceExists').mockResolvedValue(true);
 
         const res = await request(buildApp()).get('/api/invoices/my/inv-paid/receipt/pdf');
 
-        expect(res.status).toBe(403);
+        expect(res.status).toBe(404);
         expect(render).not.toHaveBeenCalled();
     });
 
     it('answers 404 for an invoice that does not exist', async () => {
         mockActor.current = { user: OWNER };
         jest.spyOn(invoiceService, 'getForHolder').mockResolvedValue(null);
-        jest.spyOn(invoiceService, 'r1LiveInvoiceExists').mockResolvedValue(false);
 
         const res = await request(buildApp()).get('/api/invoices/my/missing/receipt/pdf');
 

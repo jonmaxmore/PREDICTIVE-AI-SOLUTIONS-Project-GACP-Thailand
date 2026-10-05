@@ -223,7 +223,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 500,
     messageEn: 'Internal server error',
     messageTh: 'ข้อผิดพลาดภายในระบบ',
-    source: 'shared/errors.js:154',
+    source: 'shared/errors.js:146',
     remediation: 'Capture the requestId from the response and report to platform support.',
   },
   ROUTE_NOT_FOUND: {
@@ -231,7 +231,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 404,
     messageEn: 'Route not found',
     messageTh: 'ไม่พบเส้นทาง API นี้',
-    source: 'shared/errors.js:181',
+    source: 'shared/errors.js:173',
     remediation: 'Verify the URL against the OpenAPI spec at /api-docs; consult docs/api/openapi.json.',
   },
   METHOD_NOT_ALLOWED: {
@@ -355,21 +355,13 @@ const ERROR_CODES = Object.freeze({
     source: 'middleware/auth-middleware.js:641',
     remediation: 'Complete the identity-verification flow before retrying.',
   },
-  ACTIVE_ENTITY_MISMATCH: {
-    code: 'ACTIVE_ENTITY_MISMATCH',
-    httpStatus: 403,
-    messageEn: 'Active entity context does not match request',
-    messageTh: 'บริบทผู้ใช้ปัจจุบันไม่ตรงกับคำขอ',
-    source: 'middleware/active-entity-middleware.js:99',
-    remediation: 'Switch active entity via /api/entities/{id}/activate before issuing tenant-bound calls.',
-  },
   TENANT_CONTEXT_FAILED: {
     code: 'TENANT_CONTEXT_FAILED',
     httpStatus: 500,
     messageEn: 'Failed to resolve tenant context for request',
     messageTh: 'ไม่สามารถระบุบริบทเทแนนต์ของคำขอได้',
     source: 'middleware/tenant-context-middleware.js:95',
-    remediation: 'Verify that the user is associated with at least one active entity; re-authenticate if uncertain.',
+    remediation: 'Verify that the user belongs to at least one organization; re-authenticate if uncertain.',
   },
   // Read witness (spec 2026-09-30-remove-workspace-mode §3.1). Raised only with
   // HOLDER_READ_WITNESS=throw (tests); shadow mode counts and logs instead.
@@ -387,7 +379,7 @@ const ERROR_CODES = Object.freeze({
     messageEn: 'Cross-tenant write is forbidden',
     messageTh: 'ห้ามเขียนข้อมูลข้ามเทแนนต์',
     source: 'services/tenant-prisma-extension.js:161',
-    remediation: 'Operate only on resources owned by the current active entity.',
+    remediation: 'Operate only on resources owned by the organization of the signed-in user.',
   },
 
   // ─────────── routes/api/auth/auth-provider.js ───────────
@@ -545,7 +537,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 500,
     messageEn: 'The revision resubmit surface failed unexpectedly',
     messageTh: 'ระบบส่งคำขอกลับให้เจ้าหน้าที่ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
-    source: 'routes/api/applications/revision-resubmit.js:74',
+    source: 'routes/api/applications/revision-resubmit.js:78',
     remediation: 'The catch-all for anything this door does not model; the cause is in the [revision-resubmit] log line beside it.',
   },
   DOCUMENT_DECISION_WRONG_STATE: {
@@ -620,8 +612,16 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 403,
     messageEn: 'You do not own the attachment',
     messageTh: 'คุณไม่ใช่เจ้าของไฟล์แนบนี้',
-    source: 'routes/api/cultivation/planting-cycles-activity-harvest-routes.js:64',
-    remediation: 'Only the uploader or workspace owner may modify this attachment.',
+    source: 'routes/api/cultivation/planting-cycles-activity-harvest-routes.js:63',
+    remediation: 'An activity may carry only live attachments of the same planting cycle, uploaded through POST /api/planting-cycles/:id/attachments under a capability the caller still holds.',
+  },
+  PLANTING_ATTACHMENT_IN_USE: {
+    code: 'PLANTING_ATTACHMENT_IN_USE',
+    httpStatus: 409,
+    messageEn: 'The attachment is carried by a saved planting activity and cannot be deleted',
+    messageTh: 'ไฟล์นี้แนบอยู่กับกิจกรรมที่บันทึกแล้ว จึงลบไม่ได้ หากแนบผิดไฟล์ ให้บันทึกกิจกรรมใหม่พร้อมไฟล์ที่ถูกต้อง',
+    source: 'routes/api/cultivation/planting-cycles-attachment-routes.js:174',
+    remediation: 'Nothing to delete: the saved activity keeps its evidence. Record a new activity with the right file instead (operator 2026-10-03: refuse, never unlink).',
   },
 
   // ─────────── routes/api/admin/user-permissions.js (per-user grants) ───────────
@@ -644,10 +644,10 @@ const ERROR_CODES = Object.freeze({
   ENTITY_PERMISSION_DENIED: {
     code: 'ENTITY_PERMISSION_DENIED',
     httpStatus: 403,
-    messageEn: 'Workspace member lacks the required farm-operation permission',
-    messageTh: 'สมาชิกพื้นที่ทำงานไม่มีสิทธิ์ดำเนินการรายการนี้',
-    source: 'services/entity-effective-permissions-service.js:251',
-    remediation: 'Ask the workspace OWNER to grant the permission named in the response body (PUT /api/entities/:id/members/:userId/permissions).',
+    messageEn: 'You may not do this on behalf of this holder. Ask its owner to grant you the permission, then try again',
+    messageTh: 'คุณไม่มีสิทธิ์ทำรายการนี้ในนามของผู้ถือรายนี้ ขอให้เจ้าของมอบสิทธิ์ให้คุณก่อน แล้วลองอีกครั้ง',
+    source: 'services/entity-effective-permissions-service.js:263',
+    remediation: 'Ask the holder\'s OWNER to grant the permission named in the response body (PUT /api/entities/:id/members/:userId/permissions). Every 403 door reads this messageTh through shared/entity-permission-denied.js.',
   },
 
   // ─────────── routes/api/entities ───────────
@@ -662,16 +662,16 @@ const ERROR_CODES = Object.freeze({
   CANNOT_REVOKE_OWNER: {
     code: 'CANNOT_REVOKE_OWNER',
     httpStatus: 409,
-    messageEn: 'Cannot revoke the workspace owner',
-    messageTh: 'ห้ามถอนสิทธิ์ของเจ้าของเวิร์กสเปซ',
+    messageEn: 'Cannot revoke the owner',
+    messageTh: 'ถอนสิทธิ์ของเจ้าของไม่ได้ ให้โอนความเป็นเจ้าของก่อน',
     source: 'routes/api/entities/index.js:461',
     remediation: 'Transfer ownership to another member before revoking.',
   },
   CANNOT_DEMOTE_OWNER: {
     code: 'CANNOT_DEMOTE_OWNER',
     httpStatus: 409,
-    messageEn: 'Cannot change the workspace owner\'s role',
-    messageTh: 'ห้ามเปลี่ยนบทบาทของเจ้าของเวิร์กสเปซ',
+    messageEn: 'Cannot change the owner\'s role',
+    messageTh: 'เปลี่ยนบทบาทของเจ้าของไม่ได้ ให้โอนความเป็นเจ้าของก่อน',
     source: 'routes/api/entities/index.js:474',
     remediation: 'Transfer ownership to another member before changing this role.',
   },
@@ -720,8 +720,8 @@ const ERROR_CODES = Object.freeze({
   INVALID_WORKSPACE_TYPE: {
     code: 'INVALID_WORKSPACE_TYPE',
     httpStatus: 400,
-    messageEn: 'Workspace type is invalid',
-    messageTh: 'ประเภทเวิร์กสเปซไม่ถูกต้อง',
+    messageEn: 'Entity type is invalid',
+    messageTh: 'ประเภทไม่ถูกต้อง กรุณาเลือกนิติบุคคลหรือวิสาหกิจชุมชน',
     source: 'services/entity-service.js:1196',
     remediation: 'Verify the workspace type against the entity-type enum (INDIVIDUAL / JURISTIC / COMMUNITY_ENTERPRISE).',
   },
@@ -736,8 +736,8 @@ const ERROR_CODES = Object.freeze({
   NOT_OWNER: {
     code: 'NOT_OWNER',
     httpStatus: 403,
-    messageEn: 'Operation requires workspace ownership',
-    messageTh: 'คำสั่งนี้ต้องใช้สิทธิ์เจ้าของเวิร์กสเปซ',
+    messageEn: 'Operation requires ownership of this entity',
+    messageTh: 'คำสั่งนี้ใช้ได้เฉพาะเจ้าของ ขอให้เจ้าของเป็นผู้ทำรายการนี้',
     source: 'services/entity-service.js:606',
     remediation: 'Only the workspace owner can perform this action.',
   },
@@ -760,8 +760,8 @@ const ERROR_CODES = Object.freeze({
   TARGET_NOT_MEMBER: {
     code: 'TARGET_NOT_MEMBER',
     httpStatus: 404,
-    messageEn: 'Target user is not a workspace member',
-    messageTh: 'ผู้รับโอนยังไม่ได้เป็นสมาชิกเวิร์กสเปซ',
+    messageEn: 'Target user is not a member',
+    messageTh: 'ผู้รับโอนยังไม่ได้เป็นสมาชิก กรุณาเชิญเข้าเป็นสมาชิกก่อน',
     source: 'services/entity-service.js:619',
     remediation: 'Invite the target user to the workspace before transferring ownership.',
   },
@@ -1045,7 +1045,7 @@ const ERROR_CODES = Object.freeze({
     messageEn: 'Credit/debit note belongs to a different tenant',
     messageTh: 'ใบลดหนี้/ใบเพิ่มหนี้นี้เป็นของเทแนนต์อื่น',
     source: 'services/credit-note-service.js:159',
-    remediation: 'Switch to the correct active entity before retrying.',
+    remediation: 'Retry with a document that belongs to your own organization.',
   },
   INVOICE_NOT_FOUND: {
     code: 'INVOICE_NOT_FOUND',
@@ -1260,7 +1260,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 422,
     messageEn: 'Withholding an auditor note requires a recorded reason under PDPA s.30 para 2',
     messageTh: 'การไม่เปิดเผยบันทึกต้องระบุเหตุผลตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล มาตรา 30 วรรคสอง',
-    source: 'services/audit-notes-disclosure.js:189',
+    source: 'services/audit-notes-disclosure.js:186',
     remediation: 'Write a reason the applicant can read; a refusal nobody has to justify is not a lawful refusal.',
   },
   CHECKLIST_ITEM_NOT_FOUND: {
@@ -1268,7 +1268,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 404,
     messageEn: 'Checklist item not found',
     messageTh: 'ไม่พบรายการตรวจนี้',
-    source: 'services/audit-notes-disclosure.js:155',
+    source: 'services/audit-notes-disclosure.js:152',
     remediation: 'Verify the checklist item id belongs to the audit named in the path.',
   },
   AUDIT_NOTES_UNAVAILABLE: {
@@ -1324,16 +1324,24 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 422,
     messageEn: 'This filing claims to renew or replace a certificate held by a different holder; it was not submitted and nothing was changed',
     messageTh: 'ใบรับรองเดิมออกในนามผู้ถือรายอื่น จึงยื่นต่ออายุหรือขอใบแทนในนามนี้ไม่ได้ กรุณายื่นในนามผู้ถือใบรับรองใบนั้น',
-    source: 'services/application-submit-guard.js:193',
-    remediation: 'Operator ruling 2026-10-03: a renewal is a submission, filed under the same holder as the certificate it renews; a replacement (ขอใบแทน) follows the same rule. Switch to the certificate holder\'s workspace and file the renewal there (the actor also needs SUBMIT_APPLICATION on that holder), or file this one as a new application. The refusal is recorded as an APPLICATION_SUBMIT_DENIED audit row.',
+    source: 'services/application-submit-guard.js:289',
+    remediation: 'Operator ruling 2026-10-03: a renewal is a submission, filed under the same holder as the certificate it renews; a replacement (ขอใบแทน) follows the same rule. File the renewal under the certificate\'s holder (choose that holder at step 1) (the actor also needs SUBMIT_APPLICATION on that holder), or file this one as a new application. The refusal is recorded as an APPLICATION_SUBMIT_DENIED audit row.',
   },
-  APPLICANT_ENTITY_MISSING: {
-    code: 'APPLICANT_ENTITY_MISSING',
+  RENEWAL_ALREADY_IN_PROGRESS: {
+    code: 'RENEWAL_ALREADY_IN_PROGRESS',
+    httpStatus: 409,
+    messageEn: 'This certificate already has a renewal or replacement in progress; nothing was created or submitted',
+    messageTh: 'ใบรับรองใบนี้มีคำขอต่ออายุหรือขอใบแทนที่กำลังดำเนินการอยู่แล้ว กรุณาเปิดคำขอนั้นจากรายการคำขอของคุณ',
+    source: 'services/application-submit-guard.js:285',
+    remediation: 'One renewal or replacement per certificate at a time (operator ruling 2026-10-03 lets every member with SUBMIT_APPLICATION on the holder renew, so the platform keeps the first). Open the application already in progress from the application list; once it is terminal (REJECTED, EXPIRED, CANCEL_EXPIRED, CERTIFIED) or deleted, a new one may be filed.',
+  },
+  APPLICATION_HOLDER_REQUIRED: {
+    code: 'APPLICATION_HOLDER_REQUIRED',
     httpStatus: 400,
-    messageEn: 'No legal applicant (entity) is linked to this account, so an application cannot be created',
-    messageTh: 'บัญชีนี้ยังไม่มีผู้ยื่นตามกฎหมาย (entity) จึงสร้างคำขอไม่ได้ กรุณาออกจากระบบแล้วเข้าใหม่ หากยังไม่หาย โปรดติดต่อผู้ดูแลระบบ',
-    source: 'routes/api/applications/applications.js:279',
-    remediation: 'Have the user re-open the workspace switcher: GET /api/entities/mine self-heals the personal INDIVIDUAL entity for any HEALTH account. For a batch of accounts use scripts/backfill-entities.js. Do NOT re-run the seed as a fix — it reloads fixtures unrelated to this account.',
+    messageEn: 'No holder was chosen for this application. Choose it at step 1; if this page has been open for a while, reload it first',
+    messageTh: 'ยังไม่ได้เลือกว่าจะยื่นในนามใคร กรุณาเลือกที่ขั้นตอนที่ 1 หากเปิดหน้านี้ค้างไว้ ให้โหลดหน้าใหม่ก่อน',
+    source: 'routes/api/applications/applications.js:403',
+    remediation: 'A new draft names its holder: POST /api/applications/draft (and /prepare, /draft-documents) without applicationId must send body.entityId, one of the caller\'s GET /api/entities/mine rows with can.edit. A new farm names its holder too: POST /api/farms must send body.entityId, a /mine row with can.createFarm. There is no default holder (spec 2026-09-30-remove-workspace-mode §3.2). An old browser tab sends none: reload it.',
   },
   APPLICATION_NOT_EDITABLE: {
     code: 'APPLICATION_NOT_EDITABLE',
@@ -1348,7 +1356,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'Draft save is older than the last one applied',
     messageTh: 'มีการบันทึกร่างที่ใหม่กว่านี้แล้ว',
-    source: 'services/application-service/application-applicant-query-methods.js:256',
+    source: 'services/application-service/application-applicant-query-methods.js:218',
     remediation: 'Nothing to do: a newer save from the same wizard page already landed. The wizard treats this as superseded (no retry, no error shown).',
   },
   DRAFT_NOT_LATEST: {
@@ -1356,7 +1364,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'The stored draft is not the last save from this page',
     messageTh: 'ร่างคำขอถูกบันทึกจากหน้าอื่นหลังการบันทึกครั้งล่าสุดของหน้านี้',
-    source: 'routes/api/applications/applications.js:1016',
+    source: 'routes/api/applications/applications.js:922',
     remediation: 'The wizard saves its current answers once and submits again. Another tab saved this application after this page did.',
   },
   APPLICATION_DELETED: {
@@ -1611,7 +1619,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'Certificate issuance requires a passed audit',
     messageTh: 'การออกใบรับรองต้องผ่านการตรวจสอบก่อน',
-    source: 'services/certificate-service.js:495',
+    source: 'services/certificate-service.js:498',
     remediation: 'Complete the on-site audit (status PASSED) before requesting the certificate.',
   },
   CERT_SIGNING_UNAVAILABLE: {
@@ -1619,7 +1627,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 503,
     messageEn: 'The certificate signing key is unavailable; issuance was refused and nothing was changed',
     messageTh: 'ระบบลงลายมือชื่อดิจิทัลของใบรับรองไม่พร้อมใช้งาน จึงยังออกใบรับรองไม่ได้ ระบบไม่ได้บันทึกการเปลี่ยนแปลงใด ๆ กรุณาแจ้งผู้ดูแลระบบแล้วบันทึกผลการตรวจอีกครั้ง',
-    source: 'services/certificate-service.js:1415',
+    source: 'services/certificate-service.js:1401',
     remediation: 'Fail-closed by design (Ruling 2, 2026-08-22): a GACP certificate without its PKI signature cannot be verified by a third party. Mount the signing key read-only, confirm SIGNING_KEY_FINGERPRINT matches, restart, and re-submit the audit result. Never bypass by issuing hash-only.',
   },
   CERTIFICATE_FARM_LOCATION_MISSING: {
@@ -1627,7 +1635,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 422,
     messageEn: 'Certificate issuance was refused because the farm location is incomplete; the audit result was not saved and nothing was changed',
     messageTh: 'ไม่สามารถออกใบรับรองได้ เนื่องจากข้อมูลที่ตั้งฟาร์มไม่ครบถ้วน ระบบไม่ได้บันทึกการเปลี่ยนแปลงใด ๆ กรุณาแก้ไขข้อมูลที่ตั้งฟาร์มในคำขอให้ครบถ้วน แล้วบันทึกผลการตรวจอีกครั้ง',
-    source: 'services/certificate-service.js:271',
+    source: 'services/certificate-service.js:274',
     remediation: 'Fail-closed: a certificate is a government register, so a blank (or a retired stand-in such as Unknown, -, 00000) province/district/sub-district would be signed as fact. The refusal carries missingFields naming the blanks; the audit-result route forwards it. Complete the farm location on the application, then re-submit the audit result. The AUDIT_PASSED flip was rolled back in the same transaction.',
   },
   CYCLE_PLOT_AREA_EXCEEDED: {
@@ -1706,17 +1714,17 @@ const ERROR_CODES = Object.freeze({
   CERTIFICATE_HOLDER_MISMATCH: {
     code: 'CERTIFICATE_HOLDER_MISMATCH',
     httpStatus: 422,
-    messageEn: 'Certificate issuance was refused because the application declares a juristic or community-enterprise applicant but was filed in a person\'s own name; nothing was changed',
-    messageTh: 'ไม่สามารถออกใบรับรองได้ เนื่องจากคำขอระบุผู้ยื่นเป็นนิติบุคคลหรือวิสาหกิจชุมชน แต่ยื่นในนามบุคคล ผู้ถือใบรับรองต้องเป็นนิติบุคคลหรือวิสาหกิจชุมชนเอง กรุณาสร้างหรือสลับไปพื้นที่ทำงานนั้น แล้วยื่นคำขอในพื้นที่นั้น',
-    source: 'services/certificate-service.js:2428',
-    remediation: 'Operator ruling 2026-09-07 (F-HOLDER-01): a company or a community enterprise holds its own certificate, never the person who logged in. The filing declares its applicant type on the paper, but the identity the platform issues to is Application.entityId — and nothing forced the two to agree, so a company\'s certificate was recorded against an INDIVIDUAL with the submitter\'s name while the farm name on its face read as the company. Fail-closed rather than minting a legal identity on someone\'s behalf: create or switch to the juristic / community-enterprise workspace at /health/workspaces/new and file inside it, which makes app.entityId that entity. Certificates already issued under the old behaviour keep the holder they were signed with; correcting one is a revision decision.',
+    messageEn: 'Certificate issuance was refused because the applicant type declared on the application does not match the type of the holder bound to it. Send the application back to the applicant to correct, or tell the system administrator; nothing was changed',
+    messageTh: 'ไม่สามารถออกใบรับรองได้ เนื่องจากประเภทผู้ยื่นที่ระบุในคำขอไม่ตรงกับประเภทของผู้ถือที่ผูกกับคำขอนี้ ส่งคำขอกลับให้ผู้ยื่นแก้ไข หรือแจ้งผู้ดูแลระบบ',
+    source: 'services/certificate-service.js:2411',
+    remediation: 'Operator ruling 2026-09-07 (F-HOLDER-01): a company or a community enterprise holds its own certificate, never the person who logged in. The filing declares its applicant type on the paper, but the identity the platform issues to is Application.entityId — and nothing forced the two to agree, so a company\'s certificate was recorded against an INDIVIDUAL with the submitter\'s name while the farm name on its face read as the company. Fail-closed rather than minting a legal identity on someone\'s behalf: a filing\'s holder never changes (spec 2026-09-30-remove-workspace-mode §3.2), so staff send the application back to the applicant (who deletes the draft and files again choosing the right holder at step 1) or escalate to the system administrator. The pre-submit refusal APPLICANT_TYPE_NOT_THE_HOLDER (application-requirements-service.holderMismatchIssue) tells the applicant this before any fee is paid. Certificates already issued under the old behaviour keep the holder they were signed with; correcting one is a revision decision.',
   },
   CERTIFICATE_FARM_NAME_MISSING: {
     code: 'CERTIFICATE_FARM_NAME_MISSING',
     httpStatus: 422,
     messageEn: 'Certificate issuance was refused because the application names no farm; nothing was changed',
     messageTh: 'ไม่สามารถออกใบรับรองได้ เนื่องจากคำขอไม่ได้ระบุชื่อฟาร์ม กรุณากรอกชื่อสถานที่ปลูกในคำขอให้ครบถ้วนก่อนออกใบรับรอง',
-    source: 'services/certificate-service.js:297',
+    source: 'services/certificate-service.js:300',
     remediation: 'Fail-closed, the same rule as the farm LOCATION refusal beside it (F-G4-52: no literal stand-ins). Until 2026-09-07 a nameless filing was minted a farm called \'Certified Farm\' — an English literal that then became the farm\'s name on the certificate, on both public scan pages and on the COA, for a farm nobody had given that name. Fill the site name on the application (step 3, ชื่อสถานที่ปลูก), then issue again. A farm row already carrying the retired literal is healed on its next issuance, and scripts/repair-platform-named-farms.js pays the debt for rows already certified.',
   },
   CERTIFICATE_PLANT_UNKNOWN: {
@@ -1724,7 +1732,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 422,
     messageEn: 'Certificate issuance was refused because the application names a plant that is not in the plant master (or names none); nothing was changed',
     messageTh: 'ไม่สามารถออกใบรับรองได้ เนื่องจากชนิดพืชในคำขอไม่อยู่ในทะเบียนชนิดพืชของระบบ หรือคำขอไม่ได้ระบุชนิดพืช ระบบไม่ได้บันทึกการเปลี่ยนแปลงใด ๆ กรุณาเลือกชนิดพืชในคำขอจากรายการที่ระบบกำหนด แล้วบันทึกผลการตรวจอีกครั้ง',
-    source: 'services/certificate-service.js:339',
+    source: 'services/certificate-service.js:342',
     remediation: 'Fail-closed (F-G4-58): cropType is inside the signed canonical JSON, so it is resolved from the plant_species master (nameTH) through services/plant-species-service.js using formData.plantId (wizard slug) or a master code, never a literal. The refusal carries plantReference (the value the application held, or null). Set the plant on the application to one the master knows (config/plant-species-slugs.js lists the wizard slugs; prisma/seed-plants.js the codes), then re-submit the audit result or re-issue the revision. Both the issuance path and the revision door (preview + revise) refuse before any write.',
   },
   CERTIFICATE_ALREADY_REVOKED: {
@@ -1732,7 +1740,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'This certificate is already revoked; the revocation record (who, when, why) was not overwritten',
     messageTh: 'ใบรับรองนี้ถูกเพิกถอนไปแล้ว คุณไม่ต้องเพิกถอนซ้ำ กรุณาโหลดหน้านี้ใหม่เพื่อดูสถานะล่าสุด',
-    source: 'services/certificate-service.js:1832',
+    source: 'services/certificate-service.js:1818',
     remediation: 'The revocation record is the ISO/IEC 17065 §7.11 record of decision: revokeCertificate refuses a second press (pre-read after the org-guard, plus an atomic status notIn [revoked] write that maps Prisma P2025 to this code). The admin door POST /api/admin/certificates/:id/revoke answers 409 with this entry; reload the certificate to see the existing revokedAt/revokedBy/revokedReason.',
   },
   CERTIFICATE_NOT_REVISABLE: {
@@ -1740,7 +1748,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'Only a certificate in force (status active) can be revised; nothing was changed',
     messageTh: 'ออกฉบับแก้ไขได้เฉพาะใบรับรองที่ยังมีผลบังคับใช้เท่านั้น ใบนี้ถูกเพิกถอน ระงับ หรือหมดอายุแล้ว กรุณาตรวจสอบสถานะใบรับรองก่อน',
-    source: 'services/certificate-service.js:1938',
+    source: 'services/certificate-service.js:1934',
     remediation: 'A revision corrects the register for a live certificate; a revoked/suspended/expired one keeps its history as is.',
   },
   CERTIFICATE_REVISION_NO_CHANGE: {
@@ -1748,7 +1756,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'The farm record and the certificate already agree; there is nothing to revise',
     messageTh: 'ข้อมูลที่ตั้งบนใบรับรองตรงกับบันทึกฟาร์มอยู่แล้ว ไม่มีอะไรต้องแก้ไข หากบันทึกฟาร์มผิด กรุณาแก้ไขบันทึกฟาร์มก่อนแล้วลองใหม่',
-    source: 'services/certificate-service.js:2029',
+    source: 'services/certificate-service.js:2015',
     remediation: 'The corrected values come from the Farm row only; fix the farm first.',
   },
   CERTIFICATE_REVISION_CONFLICT: {
@@ -1756,7 +1764,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'Another revision of this certificate was recorded first; reload and review the current revision',
     messageTh: 'มีการออกฉบับแก้ไขของใบรับรองนี้ไปก่อนหน้าแล้ว กรุณาโหลดหน้านี้ใหม่เพื่อดูฉบับล่าสุดก่อนดำเนินการอีกครั้ง',
-    source: 'services/certificate-service.js:2053',
+    source: 'services/certificate-service.js:2039',
     remediation: 'The conditional update on revisionNo lost a race, or the archive row for that number already existed (unique index); nothing was written by the loser.',
   },
   REVISION_REASON_REQUIRED: {
@@ -1796,7 +1804,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 404,
     messageEn: 'Certificate not found',
     messageTh: 'ไม่พบใบรับรอง',
-    source: 'services/renewal-service.js:305',
+    source: 'services/renewal-service.js:320',
     remediation: 'Verify the certificate ID under the current tenant.',
   },
   CERT_NOT_ACTIVE: {
@@ -1804,7 +1812,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'Certificate is not active',
     messageTh: 'ใบรับรองไม่อยู่ในสถานะใช้งาน',
-    source: 'services/renewal-service.js:345',
+    source: 'services/renewal-service.js:359',
     remediation: 'Only ACTIVE certificates can be renewed; check certificate status.',
   },
   CERT_ALREADY_EXPIRED: {
@@ -1812,7 +1820,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'Certificate has already expired',
     messageTh: 'ใบรับรองหมดอายุแล้ว',
-    source: 'services/renewal-service.js:355',
+    source: 'services/renewal-service.js:369',
     remediation: 'Submit a new application instead of renewal.',
   },
   SOURCE_APP_NOT_FOUND: {
@@ -1820,16 +1828,8 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 500,
     messageEn: 'Source application for certificate not found',
     messageTh: 'ไม่พบใบสมัครต้นทางของใบรับรอง',
-    source: 'services/renewal-service.js:384',
+    source: 'services/renewal-service.js:397',
     remediation: 'Internal data integrity issue; contact platform support.',
-  },
-  FORBIDDEN_NOT_OWNER: {
-    code: 'FORBIDDEN_NOT_OWNER',
-    httpStatus: 403,
-    messageEn: 'Only the certificate owner may renew',
-    messageTh: 'เฉพาะเจ้าของใบรับรองเท่านั้นที่ขอต่ออายุได้',
-    source: 'services/renewal-service.js:311',
-    remediation: 'Ownership transfer must precede renewal.',
   },
 
   // ─────────── routes/api/finance/* — RBAC denials ───────────
@@ -2275,7 +2275,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'Lot QR label is already printed — edits are locked',
     messageTh: 'ฉลาก QR ของล็อตถูกพิมพ์แล้ว ข้อมูลถูกล็อก',
-    source: 'services/traceability-service.js:1078',
+    source: 'services/traceability-service.js:1081',
     remediation: 'A print already locked this lot; no further print or edit is permitted. Reload to see the current state.',
   },
   INVALID_ENTITY_TYPE: {
@@ -2393,7 +2393,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'Certificate is not in an active state and cannot be suspended',
     messageTh: 'ใบรับรองไม่ได้อยู่ในสถานะใช้งาน จึงไม่สามารถพักใช้ได้',
-    source: 'services/certificate-service.js:2214',
+    source: 'services/certificate-service.js:2200',
     remediation: 'Only an active certificate can be suspended; reload to see its current status (it may already be suspended, revoked, or expired).',
   },
   CERTIFICATE_NOT_REINSTATABLE: {
@@ -2401,7 +2401,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'Certificate is not suspended and cannot be reinstated',
     messageTh: 'ใบรับรองไม่ได้อยู่ในสถานะพักใช้ จึงไม่สามารถคืนสถานะได้',
-    source: 'services/certificate-service.js:2257',
+    source: 'services/certificate-service.js:2243',
     remediation: 'Only a suspended certificate can be reinstated; a revoked certificate cannot be reinstated.',
   },
 
@@ -2607,7 +2607,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'The payment already started for this instalment is in a state this page cannot continue; no second payment was created',
     messageTh: 'รายการชำระเงินของงวดนี้อยู่ในสถานะที่หน้านี้ดำเนินการต่อไม่ได้ ระบบจึงไม่สร้างรายการชำระเงินซ้ำ กรุณาติดต่อเจ้าหน้าที่พร้อมแจ้งเลขที่รายการ',
-    source: 'services/checkout/stripe-checkout-service.js:876',
+    source: 'services/checkout/stripe-checkout-service.js:873',
     remediation: 'Review I-1 (2026-09-27): an open order that already names a PaymentIntent is re-entered by retrieving that intent, never by minting a second one on the strength of an idempotency key Stripe may have pruned. requires_payment_method / requires_action / processing are reused, succeeded is handed back without a client secret, canceled gets the one replacement. Any other status (requires_confirmation, requires_capture) is not produced by this automatic-capture PromptPay flow and is refused rather than canceled-and-replaced, because the settlement handler maps payment_intent.canceled to cancelling the ORDER by metadata.checkoutOrderId. Look the intent up in the Stripe Dashboard by the order id in its metadata.',
   },
   CHECKOUT_ORDER_CHANGED: {
@@ -2615,7 +2615,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'The payment for this instalment changed while it was being prepared; nothing was recorded',
     messageTh: 'รายการชำระเงินของงวดนี้เปลี่ยนแปลงระหว่างที่ระบบกำลังเตรียมการชำระ ระบบจึงยังไม่บันทึกรายการนี้ และการกดครั้งนี้ไม่ได้เรียกเก็บเงิน กรุณากลับไปหน้ารายการชำระเงินแล้วเริ่มขั้นตอนชำระเงินใหม่',
-    source: 'services/checkout/stripe-checkout-service.js:786',
+    source: 'services/checkout/stripe-checkout-service.js:783',
     remediation: 'Fix round 3 (N-1, 2026-09-27): the write that records a newly minted PaymentIntent on its order is a compare-and-set on the order id, status PENDING_PAYMENT and the intent id read at the start of the request. It matched no row, so between the read and the write the order was cancelled (a payment_intent.canceled webhook) or moved to another intent by a concurrent press. Nothing is overwritten, no client secret is returned, and nothing is canceled: the intent just minted was never shown to a payer and lapses unused. Starting again from the payments list re-reads the order: an order still open re-enters its current intent; an order that was cancelled takes whatever path a cancelled order takes, which this refusal does not decide.',
   },
   CHECKOUT_CANCELLED_ORDER_LEGACY_TOTAL: {
@@ -2659,7 +2659,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 409,
     messageEn: 'No receipt has been issued for this invoice yet',
     messageTh: 'ยังไม่ได้ออกใบเสร็จ/ใบกำกับภาษีสำหรับใบแจ้งหนี้นี้',
-    source: 'services/invoice-service.js:760',
+    source: 'services/invoice-service.js:661',
     remediation: 'Issue the receipt for the paid invoice before requesting receipt-dependent operations.',
   },
   ONSITE_NOT_AVAILABLE: {
@@ -3469,7 +3469,7 @@ const ERROR_CODES = Object.freeze({
     httpStatus: 403,
     messageEn: 'Only the inspector assigned to this application, or a DTAM system admin, may withhold or disclose an inspector note',
     messageTh: 'เฉพาะผู้ตรวจประเมินที่ได้รับมอบหมายคำขอนี้ หรือผู้ดูแลระบบ DTAM เท่านั้นที่ตั้งค่าการเปิดเผยหรือไม่เปิดเผยบันทึกของผู้ตรวจได้',
-    source: 'services/audit-notes-disclosure.js:166',
+    source: 'services/audit-notes-disclosure.js:163',
     remediation: 'Ask the inspector assigned to the application, or a DTAM system admin, to make the decision under PDPA s.30 para 2.',
   },
 });

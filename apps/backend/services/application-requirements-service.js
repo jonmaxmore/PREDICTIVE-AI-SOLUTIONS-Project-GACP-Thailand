@@ -97,9 +97,11 @@ function holderMismatchIssue(formData, holderType) {
     if (String(holderType || '').trim().toUpperCase() === declared) { return null; }
     return {
         code: BLOCKING_APPLICANT_TYPE_NOT_THE_HOLDER,
-        messageTH: `คำขอนี้ระบุผู้ยื่นเป็น${word} แต่กำลังยื่นในนามบุคคล `
+        // spec 2026-09-30-remove-workspace-mode §3.7 (verbatim): there is no switching any
+        // more; a filing's holder cannot change, so the way out is a new draft.
+        messageTH: `คำขอนี้ระบุผู้ยื่นเป็น${word} แต่ผูกอยู่กับบุคคล `
             + `ผู้ถือใบรับรองต้องเป็น${word}เอง `
-            + `กรุณาสร้างหรือสลับไปพื้นที่ทำงาน${word} แล้วยื่นคำขอในพื้นที่นั้น`,
+            + `กรุณาลบฉบับร่างนี้ แล้วเริ่มคำขอใหม่โดยเลือกยื่นในนาม${word}`,
         detail: { declaredApplicantType: declared, holderType: holderType || null },
     };
 }

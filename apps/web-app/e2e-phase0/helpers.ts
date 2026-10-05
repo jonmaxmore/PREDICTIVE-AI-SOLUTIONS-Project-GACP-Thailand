@@ -58,7 +58,8 @@ export function psql(sql: string): string {
 //   ยอดชำระ  (payable)     = ค่าบริการ + VAT 7% ของ "ค่าบริการทั้งก้อน"
 // …charged PER CULTIVATION SCOPE (= unique formData.cultivationMethods, resolved by
 // fee-service resolveCultivationScopeCount and stamped onto applications.totalAreaTypes
-// at submit — application-submission-methods.js:142).
+// by the draft writer — application-draft-query-methods.js; the wizard submit door
+// application-submission-methods.js that also stamped it was deleted in R2 Task 10).
 //
 // The retired formula taxed the platform slice only and produced 5,535 / 27,535.
 // The figures below were read back FROM THE SERVICE, not copied from a document:

@@ -142,19 +142,16 @@ class QuoteService {
 
     /**
      * Applicant-facing list within the caller's holder scope (spec 2026-09-30
-     * §3.1). R1 (operator ruling C1): the pre-R1 filer pin
-     * `{ application: { healthId } }` decides (OR-registered beside the fragment,
-     * and AND), exactly the pre-R1 rows. No scope fails closed (no query).
+     * §3.1): the quotes of every filing whose holder the caller is an ACTIVE
+     * member of. No scope fails closed (no query).
      */
     async listForApplicant(healthId, { status, holderScope } = {}) {
         if (!healthId || !holderScope || !Array.isArray(holderScope.readIds)) {
             return [];
         }
-        const { r1HolderOrLegacy, r1LegacyApplicantPin } = require('./holder-access');
+        const { holderReadWhere } = require('./holder-access');
         const where = {
-            // R1-legacy-pin: removed in Task 12 (→ holderReadWhere); the pre-R1 pin decides
-            ...r1HolderOrLegacy(holderScope, 'Quote', { application: { healthId } }),
-            ...r1LegacyApplicantPin({ application: { healthId } }),
+            ...holderReadWhere(holderScope, 'Quote'),
             isDeleted: false,
         };
         if (status) {
@@ -191,10 +188,9 @@ class QuoteService {
         return prisma.quote.findUnique({
             where: {
                 id,
-                // R1-legacy-pin: removed in Task 12 — the applicant accept/reject doors pass
-                // their holder scope; the quote id decides the row, and the door's healthId
-                // check after it decides ownership, as pre-R1.
-                ...require('./holder-access').r1HolderOrLegacyWhenScoped(holderScope, 'Quote', { id }),
+                // The applicant accept/reject doors pass their holder scope (the row must
+                // be within it); staff and internal callers pass none and read by id.
+                ...require('./holder-access').holderReadWhereIfScoped(holderScope, 'Quote'),
             },
             // Internal callers need only these (ownership, status, invoice minting).
             include: {

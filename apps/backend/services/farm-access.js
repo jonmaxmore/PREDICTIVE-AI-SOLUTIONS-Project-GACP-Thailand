@@ -4,7 +4,7 @@
  * THE single home for "may this HEALTH user act on this farm?". Every
  * cultivation guard used to pin `farm.ownerId === req.user.id` (directly or
  * via the chain Plot/Cycle/Unit/Batch → farm). Wave A widens that one
- * predicate to the workspace dimension; Wave B fix M1 (2026-07-03) closes
+ * predicate to the holder-entity dimension; Wave B fix M1 (2026-07-03) closes
  * the fired-worker hole in the owner fast-path:
  *
  *     access = (farm.ownerId === userId AND farm.entityId == null)   (solo/legacy)
@@ -13,10 +13,10 @@
  *                                                     (creator, still employed)
  *           OR (farm.entityId != null
  *               AND EntityMembership(userId, farm.entityId).status === 'ACTIVE')
- *                                                     (workspace co-member)
+ *                                                     (holder co-member)
  *
  * Wave B fix M1 — the LEGACY_OWNER fast-path must not anoint the farm
- * CREATOR forever: farms created under a workspace stamp ownerId = the
+ * CREATOR forever: farms created under a holder entity stamp ownerId = the
  * creating WORKER, and revokeMember only flips membership status. So when
  * `farm.entityId != null` the ownerId fast-path ALSO requires an ACTIVE
  * membership on that entity (ANY role — the creator keeps full owner
@@ -34,7 +34,7 @@
  * Compat invariants (plan risk #2 — never lock out the existing solo farmer):
  *   - farm.entityId = null → owner-only, exactly today's behaviour
  *   - membership lookup failure → solo owner rows stay reachable; the
- *     workspace dimension DENIES (fail closed — an unverifiable membership
+ *     holder-entity dimension DENIES (fail closed — an unverifiable membership
  *     must not re-open the fired-worker hole); NEVER throw out of these
  *     helpers
  *
@@ -118,7 +118,7 @@ async function listActiveEntityIds(userId, options = {}) {
  *   OR { entityId: { in: branchIds } }                           — member rows
  *
  * Empty id sets drop their disjunct, so zero memberships → `{ ownerId,
- * entityId: null }` (a fired worker's ownerId no longer reaches the workspace
+ * entityId: null }` (a fired worker's ownerId no longer reaches the holder entity
  * farms they created). The result carries the HOLDER_SCOPED marker.
  * @param {string} userId
  * @param {string[]} anyRoleIds — ACTIVE memberships, any role
@@ -166,7 +166,7 @@ async function farmAccessWhere(userId, options = {}) {
  * Row-based check for already-loaded rows (plot.farm, unit.cycle.farm, …).
  * The farm projection must include `ownerId` and `entityId`.
  *
- * Wave B fix M1: the owner fast-path on a workspace farm (entityId != null)
+ * Wave B fix M1: the owner fast-path on a holder-entity farm (entityId != null)
  * requires an ACTIVE membership (any role). Non-owners need ACTIVE too, plus
  * the S2 VIEWER floor when `forMutation`.
  * @param {{ ownerId?: string, entityId?: string|null } | null | undefined} farm
@@ -194,7 +194,7 @@ async function resolveFarmAccess(farm, userId, options = {}) {
         if (options.forMutation === true && membership.role === 'VIEWER') { return false; }
         return true;
     } catch (error) {
-        logger.error('[farm-access] resolveFarmAccess membership lookup failed — denying (fail closed on the workspace dimension)', {
+        logger.error('[farm-access] resolveFarmAccess membership lookup failed — denying (fail closed on the holder-entity dimension)', {
             error: error?.message,
         });
         return false;
@@ -206,7 +206,7 @@ async function resolveFarmAccess(farm, userId, options = {}) {
  * co-member access: only the legacy owner (`ownerId === userId`, with an
  * ACTIVE membership when the farm carries an entityId — Wave B fix M1) or an
  * ACTIVE entity-role OWNER may delete. Lookup failure → deny for the
- * workspace dimension (fail-closed); NEVER throws.
+ * holder-entity dimension (fail-closed); NEVER throws.
  * @param {{ ownerId?: string, entityId?: string|null } | null | undefined} farm
  * @param {string} userId
  * @returns {Promise<boolean>}
@@ -237,7 +237,7 @@ async function resolveFarmOwnerAccess(farm, userId) {
 }
 
 /**
- * Accessible farm-id set (non-deleted). The workspace-aware replacement for
+ * Accessible farm-id set (non-deleted). The membership-aware replacement for
  * farm-service.listOwnerFarmIds at cultivation call sites.
  * @param {string} userId
  * @param {{ forMutation?: boolean }} [options]

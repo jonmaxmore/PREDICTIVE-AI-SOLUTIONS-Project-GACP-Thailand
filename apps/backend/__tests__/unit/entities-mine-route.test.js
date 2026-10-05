@@ -160,72 +160,15 @@ describe('Wave C PR C-1 — /api/entities', () => {
         });
     });
 
-    describe('POST /me/switch', () => {
-        beforeEach(() => {
-            // recordContextSwitch + getUserRoleOnEntity + listMembershipsForUser
-            // all hit prisma helpers — set up the chain.
-            prisma.entityMembership.findUnique.mockResolvedValue({ role: 'OWNER', status: 'ACTIVE' });
-            prisma.entityMembership.findMany.mockResolvedValue([
-                makeMembership({ id: 'ent-juristic', type: 'JURISTIC', displayName: 'ABC Co.' }),
-            ]);
-            prisma.entityContextSwitch.create.mockResolvedValue({ id: 'switch-1', toEntityId: 'ent-juristic' });
-        });
-
-        it('records a switch and returns 200', async () => {
+    // R2 Task 12 (spec 2026-09-30 §5): there is no active workspace to switch to;
+    // the door is gone and writes nothing.
+    describe('POST /me/switch is removed', () => {
+        it('answers 404 and records no context switch', async () => {
             const r = await request(app)
                 .post('/api/entities/me/switch')
                 .send({ fromEntityId: 'ent-personal', toEntityId: 'ent-juristic', source: 'HEADER' });
-
-            expect(r.status).toBe(200);
-            expect(r.body.success).toBe(true);
-            expect(r.body.data).toMatchObject({
-                id: 'switch-1',
-                toEntityId: 'ent-juristic',
-                role: 'OWNER',
-                recorded: true,
-            });
-            expect(prisma.entityContextSwitch.create).toHaveBeenCalledWith({
-                data: expect.objectContaining({
-                    userId: 'user-1',
-                    toEntityId: 'ent-juristic',
-                    fromEntityId: 'ent-personal',
-                    organizationId: 'org-1',
-                    source: 'HEADER',
-                }),
-            });
-        });
-
-        it('rejects with 400 when toEntityId is missing', async () => {
-            const r = await request(app).post('/api/entities/me/switch').send({});
-            expect(r.status).toBe(400);
-            expect(r.body.success).toBe(false);
-        });
-
-        it('rejects with 403 when user is not a member of toEntityId', async () => {
-            prisma.entityMembership.findUnique.mockResolvedValueOnce(null);
-            const r = await request(app)
-                .post('/api/entities/me/switch')
-                .send({ toEntityId: 'ent-not-mine' });
-            expect(r.status).toBe(403);
+            expect(r.status).toBe(404);
             expect(prisma.entityContextSwitch.create).not.toHaveBeenCalled();
-        });
-
-        it('returns recorded:false when the audit insert silently fails', async () => {
-            prisma.entityContextSwitch.create.mockRejectedValueOnce(new Error('FK violation'));
-            const r = await request(app)
-                .post('/api/entities/me/switch')
-                .send({ toEntityId: 'ent-juristic' });
-            expect(r.status).toBe(200);
-            expect(r.body.data.recorded).toBe(false);
-        });
-
-        it('coerces unknown source to HEADER', async () => {
-            await request(app)
-                .post('/api/entities/me/switch')
-                .send({ toEntityId: 'ent-juristic', source: 'GARBAGE' });
-            expect(prisma.entityContextSwitch.create).toHaveBeenCalledWith({
-                data: expect.objectContaining({ source: 'HEADER' }),
-            });
         });
     });
 });

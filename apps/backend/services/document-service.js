@@ -204,16 +204,12 @@ class DocumentService {
      * report schedule.
      */
     async listActiveCertificatesForUser(scope) {
-        // Spec 2026-09-30 §3.1: the caller's holder scope; R1 keeps the pre-R1
-        // `{ userId }` pin decisive (OR-registered beside the fragment, and AND).
+        // Spec 2026-09-30 §3.1: the certificates of the caller's holders.
         // No scope fails closed (no query).
         if (!isHolderScope(scope)) { return []; }
-        const { r1HolderOrLegacy, r1LegacyApplicantPin } = holderAccess();
         return prisma.certificate.findMany({
             where: {
-                // R1-legacy-pin: removed in Task 12 (→ holderReadWhere); the pre-R1 pin decides
-                ...r1HolderOrLegacy(scope, 'Certificate', { userId: scope.userId }),
-                ...r1LegacyApplicantPin({ userId: scope.userId }),
+                ...holderAccess().holderReadWhere(scope, 'Certificate'),
                 status: 'active',
                 isDeleted: false,
             },
@@ -298,15 +294,14 @@ class DocumentService {
      */
     async findCertificateForUser(certificateId, scope) {
         if (!certificateId || !isHolderScope(scope)) { return null; }
-        const { r1HolderOrLegacy, r1LegacyApplicantPin } = holderAccess();
         return prisma.certificate.findFirst({
             where: {
                 id: certificateId,
-                // R1-legacy-pin: removed in Task 12 (→ holderReadWhere); the pre-R1 pin decides
-                ...r1HolderOrLegacy(scope, 'Certificate', { userId: scope.userId }),
-                ...r1LegacyApplicantPin({ userId: scope.userId }),
+                ...holderAccess().holderReadWhere(scope, 'Certificate'),
                 isDeleted: false,
             },
+            // The holder, so the report door can ask whether the caller may act for it.
+            include: { application: { select: { entityId: true } } },
         });
     }
 
@@ -414,12 +409,15 @@ class DocumentService {
         if (!ownershipWhere) {
             return [];
         }
+        // A health door passes its holder scope: the filings of the caller's holders
+        // (spec 2026-09-30 §3.1). A caller with none keeps the ownership where.
+        const holderScope = scope && scope.holderScope;
+        const rowsWhere = holderScope && Array.isArray(holderScope.readIds)
+            ? require('./holder-access').holderReadWhere(holderScope, 'Application')
+            : ownershipWhere;
         return prisma.application.findMany({
             where: {
-                ...ownershipWhere,
-                // R1-legacy-pin: removed in Task 12 — a health door passes its holder
-                // scope; the pre-R1 ownership where decides the rows.
-                ...require('./holder-access').r1HolderOrLegacyWhenScoped(scope && scope.holderScope, 'Application', ownershipWhere),
+                ...rowsWhere,
                 isDeleted: false,
             },
             select: {

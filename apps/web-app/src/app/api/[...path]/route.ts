@@ -44,21 +44,6 @@ async function proxyRequest(request: NextRequest, path: string, method: string) 
             headers['X-User-ID'] = testUserId;
         }
 
-        // 3.5. Forward the active-entity (workspace) header — Wave C
-        // workspace switcher. apps/web-app/src/lib/api/api-client.ts reads
-        // localStorage `gacp.activeEntityId` and sends this on every
-        // authenticated request so apps/backend/middleware/active-entity-
-        // middleware.js can scope entity-owned reads/writes to the
-        // workspace the user picked. This proxy used to build its outbound
-        // headers from an empty map and never copied this one, so every
-        // request silently ran as the user's default (personal) entity no
-        // matter which workspace was selected client-side (design-cleanup-
-        // 2026-08-21 audit, B1).
-        const activeEntityId = request.headers.get('x-active-entity-id');
-        if (activeEntityId) {
-            headers['x-active-entity-id'] = activeEntityId;
-        }
-
         const queryString = request.nextUrl.searchParams.toString();
         const backendUrl = `${BACKEND_URL}/api/${path}${queryString ? `?${queryString}` : ''}`;
 

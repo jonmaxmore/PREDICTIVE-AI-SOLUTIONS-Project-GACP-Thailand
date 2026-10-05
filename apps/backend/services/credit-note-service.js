@@ -725,18 +725,24 @@ async function listCreditNotesForInvoice(originalInvoiceId, { actor, holderScope
         // plaintext-only compare 403'd every real owner (walkthrough 2026-07-10:
         // 2x console 403 on /health/payments). Compare the token first; keep the
         // plaintext term for legacy pre-token rows.
+        //
+        // R2 Task 12 (spec 2026-09-30 §3.1, operator: co-members see the company's
+        // finance documents): a health door passes its holder scope, and the invoice
+        // being within it is the ownership answer. A caller with no scope keeps the
+        // healthId compare.
+        const scoped = Boolean(holderScope) && Array.isArray(holderScope.readIds);
         const invoice = await prisma.invoice.findUnique({
             where: {
                 id: String(originalInvoiceId),
-                // R1-legacy-pin: removed in Task 12 — a health caller passes its holder
-                // scope; the invoice id decides the row and the healthId compare below
-                // decides ownership, as pre-R1.
-                ...require('./holder-access').r1HolderOrLegacyWhenScoped(holderScope, 'Invoice', { id: String(originalInvoiceId) }),
+                ...require('./holder-access').holderReadWhereIfScoped(holderScope, 'Invoice'),
             },
             select: { healthId: true },
         });
         const ownerKeys = [actor?.canonicalId, actor?.healthId].filter(Boolean);
-        if (!invoice || ownerKeys.length === 0 || !ownerKeys.includes(invoice.healthId)) {
+        const owns = scoped
+            ? Boolean(invoice)
+            : Boolean(invoice) && ownerKeys.length > 0 && ownerKeys.includes(invoice.healthId);
+        if (!owns) {
             throw makeError(
                 'FORBIDDEN_ROLE',
                 'A finance or admin role (or the invoice owner) is required to read credit notes',

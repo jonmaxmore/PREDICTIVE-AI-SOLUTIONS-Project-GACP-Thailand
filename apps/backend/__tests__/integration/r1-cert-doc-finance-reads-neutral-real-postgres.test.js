@@ -1,21 +1,20 @@
 'use strict';
 
 /**
- * R1 is behaviour-neutral for the certificate, document, pre-check and finance
- * health doors (operator ruling C1; Task 4 of 2026-09-30-remove-workspace-mode):
- * for every actor, workspace header and door below, the R1 code answers with
- * exactly the status and row set the pre-R1 code (e46ceba0) answered with.
+ * The certificate, document, pre-check and finance health doors, actor × context
+ * × door, on a real Postgres. Built in R1 to prove behaviour-neutrality against
+ * e46ceba0 (Task 4); since R2 Task 12 EXPECTED holds the R2 answers: no
+ * workspace header, no filer pin; reads follow membership of the holder, and the
+ * writes ask the holder (quotation accept and checkout: SUBMIT_APPLICATION;
+ * report filing: RECORDS_MANAGE; submit: the submit guard; bundles: spec §3.3).
+ * Re-recorded 2026-10-03; every row is checked against those rules in
+ * evidence/remove-workspace-mode/task-12/green.txt.
  *
- * EXPECTED was captured by running this same file against e46ceba0's
- * implementation files (a separate worktree at e46ceba0, same schema, same
- * fixture), with R1_NEUTRAL_RECORD set; row ids are mapped to fixture labels so
- * the table is stable across runs. See evidence/remove-workspace-mode/task-4/.
- *
- * Real Postgres, the real prisma-database client, the real tenant-context and
- * active-entity middlewares; only authentication is attached by hand, the
- * consent gate on submit passes, the pre-check queue records, and the two PDF
- * renderers return a fixed buffer (the bytes are not under test; the reads in
- * front of them are). The witness runs in its default (shadow) mode here.
+ * Real Postgres, the real prisma-database client and the real tenant-context
+ * middleware; only authentication is attached by hand, the consent gate on
+ * submit passes, the pre-check queue records, and the two PDF renderers return
+ * a fixed buffer (the bytes are not under test; the reads in front of them
+ * are). The witness runs in its default (shadow) mode here.
  *
  * Fixture (one organisation):
  *   A — OWNER of personal P and of company C.
@@ -73,12 +72,10 @@ const mockActor = { current: null };
 jest.mock('../../middleware/auth-middleware', () => {
     const actual = jest.requireActual('../../middleware/auth-middleware');
     const { tenantContextMiddleware } = jest.requireActual('../../middleware/tenant-context-middleware');
-    const { activeEntityMiddleware } = jest.requireActual('../../middleware/active-entity-middleware');
     const bindTenant = tenantContextMiddleware();
-    const bindEntity = activeEntityMiddleware();
     const attach = (req, res, next) => {
         req.user = { ...mockActor.current };
-        return bindTenant(req, res, () => bindEntity(req, res, next));
+        return bindTenant(req, res, next);
     };
     return { ...actual, authenticateAny: attach, authenticateHealth: attach, authenticateProvider: attach, authenticateToken: attach };
 });
@@ -106,10 +103,10 @@ const HEADERS = ['none', 'P', 'C'];
 const FILINGS = ['aC', 'aP', 'wP', 'mC', 'fC', 'gP', 'aN', 'nN'];
 const DRAFTS = ['dC', 'dP', 'dW', 'dM', 'dF', 'dG', 'dN'];
 
-// Captured from e46ceba0 (pre-R1) — see the header.
+// R2 answers since Task 12 — see the header.
 const EXPECTED = require('../fixtures/r1-cert-doc-finance-reads-neutral.expected.json');
 
-d('R1 certificate / document / pre-check / finance health doors answer exactly as pre-R1 (real Postgres)', () => {
+d('certificate / document / pre-check / finance health doors answer by holder membership (R2) (real Postgres)', () => {
     /** @type {import('@prisma/client').PrismaClient} */
     let raw;
     let app;
@@ -160,7 +157,9 @@ d('R1 certificate / document / pre-check / finance health doors answer exactly a
         const u = fx.users[name];
         mockActor.current = { id: u.id, canonicalId: u.canonicalId, healthId: u.canonicalId, role: 'health', canonicalRole: 'health', organizationId: fx.org };
     };
-    const headerFor = (h) => (h === 'none' ? {} : { 'x-active-entity-id': fx.entities[h] });
+    // R2 Task 12: no request sends the workspace header. The context label stays in each
+    // row key so the re-recorded table shows that every context now answers alike.
+    const headerFor = () => ({});
     const labelOf = (id) => label.get(id) || 'NEW';
     const labels = (rows, key = 'id') => (Array.isArray(rows) ? rows.map((r) => labelOf(r[key])).sort().join(',') : '-');
 
@@ -373,6 +372,9 @@ d('R1 certificate / document / pre-check / finance health doors answer exactly a
                     record(`${actor}|${h}|POST /:id/quotations/PLATFORM/accept|${target}`, `${acc.status}`);
                     const pay = await request(app).post('/api/payments/checkout').set(hdr).send({ applicationId: fx.apps[target], milestone: 'M1' });
                     record(`${actor}|${h}|POST /payments/checkout|${target}`, `${pay.status} ${pay.body?.error || ''}`.trim());
+                    // C4 round 2 (operator 2026-10-03 "แก้ได้"): an activity carries only the cycle's own
+                    // attachments, so an application-document id is refused for every actor. The 11 rows
+                    // that were 201 under R1 (A and M on their own documents) are 403 since then.
                     const act = await request(app).post(`/api/planting-cycles/${fx.cycle}/activities`).set(hdr)
                         .send({ scope: 'CYCLE', activityType: 'IRRIGATION', attachmentIds: [fx.docs[target]] });
                     record(`${actor}|${h}|POST /planting-cycles/:id/activities|${target}`, `${act.status}`);
@@ -396,7 +398,7 @@ d('R1 certificate / document / pre-check / finance health doors answer exactly a
         expect(pick(/\|POST /)).toEqual(pickExpected(/\|POST /));
     });
 
-    test('the doors allocate exactly as many QT-PRD quotation numbers as pre-R1 did', async () => {
+    test('the doors allocate exactly as many QT-PRD quotation numbers as recorded (no read burns numbers)', async () => {
         // A self-heal that cannot see a live quotation issues another one and burns
         // numbers (reviewer, Task 4 fix round 1). The suite runs -i, so nothing else
         // allocates from this counter in between.

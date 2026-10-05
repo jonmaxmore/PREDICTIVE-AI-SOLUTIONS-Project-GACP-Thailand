@@ -136,8 +136,6 @@ module.exports = [
   ]},
   {key:'H02',name:'Application Submission',icon:'📝',cat:'Health User',steps:[
     {login:'health',name:'Login as health user'},
-    {name:'Create draft',method:'POST',path:'/wizard/draft',token:'health',body:{stepData:{applicantType:'INDIVIDUAL'},currentStep:1}},
-    {name:'Update draft',method:'POST',path:'/wizard/draft',token:'health',body:{stepData:{applicantType:'INDIVIDUAL',farmName:'Test'},currentStep:2}},
     {name:'Pre-submit check',method:'POST',path:'/validation/pre-submission',body:{applicantType:'INDIVIDUAL',farmName:'test',cultivationMethod:'outdoor',plantCount:100}},
     {name:'My applications',path:'/applications/my',token:'health'},
     {name:'Document slots',path:'/config/document-slots'},

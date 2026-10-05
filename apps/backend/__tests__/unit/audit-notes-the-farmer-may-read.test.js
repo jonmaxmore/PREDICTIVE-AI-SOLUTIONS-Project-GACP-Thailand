@@ -63,7 +63,7 @@ function prismaWith(items, { application = { id: APP, healthId: HEALTH } } = {})
 describe('the farmer reads what was written about them', () => {
     test('a disclosed note comes through in full', async () => {
         const prisma = prismaWith([itemRow()]);
-        const out = await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE, healthId: HEALTH });
+        const out = await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE });
 
         expect(out.items).toHaveLength(1);
         expect(out.items[0]).toMatchObject({
@@ -86,14 +86,13 @@ describe('the farmer reads what was written about them', () => {
 
     test('the query asks the database for THIS applicant\'s holders, not for everything', async () => {
         const prisma = prismaWith([itemRow()]);
-        await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE, healthId: HEALTH });
+        await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE });
         expect(prisma.application.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-            // R1: OR [holder fragment, the pre-R1 healthId pin] and the pin as the AND member
-            // (r1ApplicationHolderOrPin, final review C1). Task 12: the fragment alone.
+            // R2 Task 12: the holder fragment alone (no filer pin).
             where: expect.objectContaining({
                 id: APP,
-                OR: [expect.objectContaining({ entityId: { in: SCOPE.readIds } }), expect.objectContaining({ healthId: HEALTH })],
-                AND: [{ healthId: HEALTH }],
+                entityId: { in: SCOPE.readIds },
+                isDeleted: false,
             }),
         }));
     });
@@ -107,7 +106,7 @@ describe('a withheld note is declared, not hidden', () => {
 
     test('the row still appears, and says it was withheld', async () => {
         const prisma = prismaWith([withheld]);
-        const out = await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE, healthId: HEALTH });
+        const out = await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE });
 
         expect(out.items).toHaveLength(1);
         expect(out.items[0].withheld).toBe(true);
@@ -119,7 +118,7 @@ describe('a withheld note is declared, not hidden', () => {
 
     test('the free text does not travel, and no field smuggles it out', async () => {
         const prisma = prismaWith([withheld]);
-        const out = await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE, healthId: HEALTH });
+        const out = await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE });
 
         expect(out.items[0].notes).toBeNull();
         expect(JSON.stringify(out)).not.toContain('ผู้ปฏิบัติงานผ่านการอบรม');
@@ -127,13 +126,13 @@ describe('a withheld note is declared, not hidden', () => {
 
     test('the applicant is told WHY, because ม.30 วรรคสอง has to be justifiable', async () => {
         const prisma = prismaWith([withheld]);
-        const out = await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE, healthId: HEALTH });
+        const out = await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE });
         expect(out.items[0].withholdReason).toBe('บันทึกนี้อ้างถึงบุคคลที่สามซึ่งไม่ได้ยินยอมให้เปิดเผย');
     });
 
     test('the summary counts what was withheld so the total is never quietly short', async () => {
         const prisma = prismaWith([itemRow(), withheld, itemRow({ id: 'item-3' })]);
-        const out = await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE, healthId: HEALTH });
+        const out = await listAuditNotesForApplicant({ prisma, applicationId: APP, holderScope: SCOPE });
         expect(out.total).toBe(3);
         expect(out.withheldCount).toBe(1);
     });

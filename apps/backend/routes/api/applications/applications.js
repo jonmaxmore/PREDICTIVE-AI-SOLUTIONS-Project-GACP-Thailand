@@ -23,12 +23,9 @@ const express = require('express');
 const { respondError } = require('../../../shared/api-response');
 const router = express.Router();
 const crypto = require('crypto');
-const path = require('path');
-// B3 — the draft-document DELETE removes the uploaded bytes, not just the rows.
-const fsPromises = require('fs/promises');
 const applicationService = require('../../../services/application-service');
 // Spec 2026-09-30 §3.1: applicant reads carry the holder fragment. holderScope
-// is called inside each handler, after authentication and the active-entity middleware.
+// is called inside each handler, after authentication.
 const { holderScope } = require('../../../services/holder-access');
 const { authenticateHealth: _authenticateHealthOnly, authenticateProvider: _authenticateProvider, authenticateAny: authenticateHealth } = require('../../../middleware/auth-middleware');
 // Batch 11 (2026-05-16) — direct `prisma.X.method(...)` calls were
@@ -44,7 +41,15 @@ const storageService = require('../../../services/storage-service');
 // file; the rules it applies live in @gacp/validation/upload-rules, which the
 // browser wizard imports as well so the two can never disagree.
 const uploadContentGuard = require('../../../services/upload-content-guard');
-const { MAX_UPLOAD_BYTES, tooLargeRefusal } = require('@gacp/validation/upload-rules');
+const { ENTITY_PERMISSION_DENIED_EN } = require('../../../shared/entity-permission-denied');
+// The draft-document storage (uploader, multer refusals, served URL, byte
+// removal) is shared with the planting-attachment door (C4), so both doors write
+// and remove files through one pipeline.
+const {
+    receiveDraftDocument,
+    toUploadedFileUrl,
+    unlinkStoredUpload,
+} = require('../../../middleware/draft-document-upload');
 const applicationDocumentSync = require('../../../services/application-document-sync');
 // Document pre-check (2026-09-27) — queued after an upload is stored; warn-only.
 const documentPrecheck = require('../../../services/document-precheck/service');
@@ -77,9 +82,9 @@ const { normalizeRole, isProviderRole, CANONICAL_ROLES } = require('../../../sha
 const { requireConsent } = require('../../../middleware/consent-manager');
 // M1 (2026-08-15) — the certificate belongs to the farm, so the submit door
 // asks whose farm this is. One guard for all four submit doors; it keys off the
-// APPLICATION ROW's entityId (never the x-active-entity header) and writes its
+// APPLICATION ROW's entityId (never a request header) and writes its
 // own AuditLog FAILURE row on every refusal (plan D5/D7/D10).
-const { assertSubmitAllowed, SubmitGuardError } = require('../../../services/application-submit-guard');
+const { assertSubmitAllowed, SubmitGuardError, lockAndAssertNoSuccessionInFlight } = require('../../../services/application-submit-guard');
 // M2a (2026-08-15) — the mandatory-document law is DATA (operator ruling G2).
 // This door asks it after the authority question and before any write: rights
 // first, completeness second.
@@ -167,7 +172,7 @@ const {
     pickWizardOwnedFormData,
 } = require('../helpers/application-constants');
 // F-APPV2-02 — the checked channel for the two law dimensions the allowlist may not carry.
-const { resolveLawDimensions, rejudgeClaimForHolder } = require('../../../services/application-law-dimensions');
+const { resolveLawDimensions } = require('../../../services/application-law-dimensions');
 
 const {
     _buildApplicationDetailPayload,
@@ -236,49 +241,6 @@ const {
     stepPrerequisiteMessage,
     LAST_FLOW_STEP,
 } = require('../../../validation/wizard-step-prerequisites');
-
-const draftDocumentUpload = storageService.createUploader(
-    'application-drafts',
-    ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
-    // The ceiling is one number shared with the browser (F-G4-08 layer 3) —
-    // multer aborts the write here, upload-content-guard refuses the same size
-    // afterwards, and the wizard tells the farmer before either happens.
-    MAX_UPLOAD_BYTES / (1024 * 1024),
-);
-
-/**
- * Receive the multipart body, and answer multer's own refusals properly.
- *
- * Multer aborts an oversize upload mid-write and calls next(err). This route
- * mounts the uploader as inline middleware with no 4-arg error handler between
- * it and Express's default one, so a farmer who picked a 25 MB scan of a land
- * title got HTTP 500 and the English words "File too large" (measured
- * 2026-08-26). That is layer 3 of F-G4-08 announcing itself as a server crash.
- *
- * The size limit is a rule a farmer can act on, so it is answered in Thai,
- * naming the cause and the next action — with 413 FILE_TOO_LARGE, the status and
- * code every multer size refusal gets (middleware/request-limit-errors.js, which
- * also answers the other LIMIT_* refusals passed on below). Multer reports
- * neither the original filename nor the real size for an aborted write, which is
- * why the shared module has a builder that needs neither.
- */
-function receiveDraftDocument(req, res, next) {
-    draftDocumentUpload.single('file')(req, res, (err) => {
-        if (!err) {
-            return next();
-        }
-        if (err.code === 'LIMIT_FILE_SIZE') {
-            const refusal = tooLargeRefusal();
-            return res.status(413).json({
-                success: false,
-                error: refusal.message,
-                code: refusal.code,
-                message: refusal.message,
-            });
-        }
-        return next(err);
-    });
-}
 
 // F-G4-11 — Wizard step-prerequisite helpers
 //
@@ -350,16 +312,6 @@ function respondStepPrerequisiteUnmet(res, { requestedStep, allowedStep }) {
 
 // Shared DB Helpers
 
-// Wave B Phase 68 — every health user has a personal INDIVIDUAL Entity
-// (created at registration in Phase 67, or backfilled in Phase 62/66 for
-// existing users). Find it once at draft-creation/find time so the new
-// `entityId` and `submitterId` columns added in Phase 66 stay populated.
-// Batch 11 (2026-05-16) — moved into application-service so the route no
-// longer reaches into prisma.entity directly.
-async function findUserPersonalEntity(healthIdentity) {
-    return applicationService.findPersonalEntityForHealthIdentity(healthIdentity);
-}
-
 // Bug 2.3 — only these statuses may have their formData overwritten by the
 // applicant-facing /prepare, /draft (autosave), and draft-document routes.
 // findApplicationByIdForHealth carries NO status filter, so an owner could POST
@@ -386,102 +338,91 @@ function submitClockFrom(payload) {
     return draftSaveClockFrom({ saveSession: payload.saveSession, saveSeq: payload.lastAppliedSeq });
 }
 
-async function findOrCreateApplicationForHealth(healthIdentity, reqUser, options = {}, activeEntity = null, scope = null) {
+/** The request error idiom (statusCode + machine-readable code → respondError maps it). */
+function holderDoorError(statusCode, code, message) {
+    const err = new Error(message);
+    err.statusCode = statusCode;
+    err.code = code;
+    return err;
+}
+
+/**
+ * The draft every applicant write door works on (spec 2026-09-30 §3.2).
+ *
+ *  - With an id: the caller's application, loaded within its holder scope
+ *    (none → 404, never a fallback to another row; Review Focus 3: a membership
+ *    revoked mid-draft), and its holder must be in `scope.editIds` (a holder the
+ *    caller only reads → 403 ENTITY_PERMISSION_DENIED, R2 Task 9).
+ *  - Without an id: the caller names the holder in `entityId`. Missing → 400
+ *    APPLICATION_HOLDER_REQUIRED; not in `editIds` → 403
+ *    ENTITY_PERMISSION_DENIED. There is no default holder. The caller's own open
+ *    DRAFT on that holder is resumed (a first save whose reply was lost and is
+ *    retried with no id must not mint a second draft); else a new one is created
+ *    with `formData.applicantType = Entity.type`.
+ *
+ * `entityId` is never written after create (no re-homing, B11).
+ * @param {{ userId: string, healthId: string }} healthIdentity
+ * @param {object} reqUser
+ * @param {object} options — the request payload (applicationId|draftId, entityId, serviceType, areaType, formData)
+ * @param {{ readIds: string[], editIds: string[] }} scope — holderScope(req)
+ */
+async function findOrCreateApplicationForHealth(healthIdentity, reqUser, options, scope) {
+    if (!scope || !Array.isArray(scope.editIds)) {
+        throw new TypeError('findOrCreateApplicationForHealth: scope must be holderScope(req)');
+    }
     const opts = asObject(options);
     const requestedId = String(opts.applicationId || opts.draftId || '').trim();
     const serviceType = String(opts.serviceType || 'new_application').trim() || 'new_application';
     // ไม่เติม 'OUTDOOR' ให้เองอีกแล้ว — ดู areaTypeFromTicks (operator 2026-09-11)
     const areaType = areaTypeFromTicks(asObject(opts.formData) || opts, String(opts.areaType || '').trim().toUpperCase() || AREA_TYPE_UNDECLARED);
 
-    let application = null;
     if (requestedId) {
-        application = await applicationService.findApplicationByIdForHealth(requestedId, {
-            holderScope: scope,
-            filerHealthId: healthIdentity.healthId, // R1-legacy-pin: removed in Task 12 (Task 8: editIds)
-        });
-        // Bug 2.3 guard: when the caller pinned an EXPLICIT id and that row
-        // resolved, refuse to edit it unless it's in an applicant-editable
-        // status. Do NOT fall through to findLatestOpenDraftForHealth (which
-        // would silently redirect the write to a different row) and do NOT let
-        // the caller overwrite the non-editable row's formData.
-        if (application && !isApplicantEditable(application.status)) {
-            const err = new Error(
-                `Application ${application.applicationNumber || requestedId} is not editable in status ${application.status}`,
-            );
-            err.statusCode = 409;
-            err.code = 'APPLICATION_NOT_EDITABLE';
-            throw err;
-        }
+        const application = await applicationService.findApplicationByIdForHealth(requestedId, { holderScope: scope });
         // Round 5 (staging-walk-0930): an explicit id that does not resolve FOR THIS
-        // USER (another user's row, a soft-deleted one, or none at all) used to fall
-        // through to the latest DRAFT below, or mint one, and answer 200: the caller
-        // named application X and the write landed on another row. Refuse instead,
-        // before anything is written. The id-less path (a first save) is unchanged.
+        // USER (a row outside the caller's holders, a soft-deleted one, none at all)
+        // is refused before anything is written.
         if (!application) {
-            const err = new Error('Application not found');
-            err.statusCode = 404;
-            err.code = 'APPLICATION_NOT_FOUND';
-            throw err;
+            throw holderDoorError(404, 'APPLICATION_NOT_FOUND', 'Application not found');
         }
-    }
-
-    if (!application) {
-        application = await applicationService.findLatestOpenDraftForHealth({
-            holderScope: scope,
-            filerHealthId: healthIdentity.healthId, // R1-legacy-pin: removed in Task 12 (Task 8: submitterId)
-        });
-    }
-
-    // Auto-heal: a row that pre-dates Phase 66 (or somehow slipped through
-    // the backfill) gets `entityId`/`submitterId` populated lazily on the
-    // first read after this code lands. Cheap (one indexed lookup), and
-    // the alternative is forever-null columns.
-    if (application && (!application.entityId || !application.submitterId)) {
-        const personalEntity = await findUserPersonalEntity(healthIdentity);
-        if (personalEntity) {
-            application = await applicationService.healDraftEntityColumns(application.id, {
-                entityId: application.entityId || personalEntity.id,
-                submitterId: application.submitterId || healthIdentity.userId,
-            });
+        // R2 Task 9 (spec §3.2 draft edits, §4 case 3): a holder the caller may read
+        // but not edit (a VIEWER) is a refusal the caller can see, not a missing row.
+        if (!scope.editIds.includes(application.entityId)) {
+            throw holderDoorError(403, 'ENTITY_PERMISSION_DENIED', ENTITY_PERMISSION_DENIED_EN);
         }
-    }
-
-    if (application) {
+        // Bug 2.3 guard: an explicit id in a non-applicant-editable status is
+        // refused; the caller's formData must not overwrite reviewer-facing data.
+        if (!isApplicantEditable(application.status)) {
+            throw holderDoorError(409, 'APPLICATION_NOT_EDITABLE',
+                `Application ${application.applicationNumber || requestedId} is not editable in status ${application.status}`);
+        }
         return application;
     }
 
-    // New draft — wire entityId + submitterId from the start. Wave C PR-5:
-    // prefer the active-entity context (set by the workspace switcher) so
-    // a draft created while "acting as ABC Co. Ltd." gets ABC Co. as its
-    // entityId from second one. Falls back to the personal INDIVIDUAL
-    // entity for clients that haven't shipped the picker yet.
-    const personalEntity = await findUserPersonalEntity(healthIdentity);
-    const seedEntityId = activeEntity?.entityId || personalEntity?.id || null;
-    // M1 (2026-08-15) — a draft with no entity is a draft nobody can submit:
-    // the submit guard would refuse it at the end of the wizard, after the
-    // applicant filled nine steps. Refuse at creation, where it is cheap and
-    // the cause is still visible. Same error idiom as the not-editable guard
-    // above (statusCode + machine-readable code → respondError maps it).
-    //
-    // W4 2026-08-22 — the code was a bare VALIDATION_ERROR, and respondError's
-    // explicit-4xx branch keeps the CALLER's generic fallback message
-    // ("Failed to upload draft document") while safeErrorMessage scrubs the
-    // Thai one above (its allowlist is English-only). The whole wire response
-    // was therefore `400 VALIDATION_ERROR / ข้อมูลไม่ถูกต้อง` — a message that
-    // names neither the cause nor the fix, on a route where nothing the client
-    // sent was actually invalid. That is what turned a one-line data defect
-    // into a full Playwright walk. The CODE is the one field respondError
-    // passes through untouched, so it is where the cause has to live.
-    if (!seedEntityId) {
-        const err = new Error('ไม่พบผู้ยื่นตามกฎหมาย (entity) ของบัญชีนี้ จึงสร้างคำขอไม่ได้');
-        err.statusCode = 400;
-        err.code = 'APPLICANT_ENTITY_MISSING';
-        throw err;
+    const entityId = String(opts.entityId || '').trim();
+    if (!entityId) {
+        throw holderDoorError(400, 'APPLICATION_HOLDER_REQUIRED', 'The holder (entityId) of a new application is required');
+    }
+    if (!scope.editIds.includes(entityId)) {
+        throw holderDoorError(403, 'ENTITY_PERMISSION_DENIED', ENTITY_PERMISSION_DENIED_EN);
+    }
+
+    const resumed = await applicationService.findLatestOpenDraftForHealth({
+        holderScope: scope,
+        submitterId: healthIdentity.userId,
+        editIds: [entityId],
+    });
+    if (resumed) {
+        return resumed;
+    }
+
+    const holder = await applicationService.findHolderEntity(entityId);
+    if (!holder) {
+        throw holderDoorError(403, 'ENTITY_PERMISSION_DENIED', ENTITY_PERMISSION_DENIED_EN);
     }
     return applicationService.createDraftForHealth({
         applicationNumber: ensureApplicationNumber('APP'),
         healthId: healthIdentity.healthId,
-        entityId: seedEntityId,
+        entityId,
         submitterId: healthIdentity.userId || null,
         serviceType,
         areaType,
@@ -489,6 +430,9 @@ async function findOrCreateApplicationForHealth(healthIdentity, reqUser, options
         formData: {
             steps: {},
             workflowState: 'DRAFT',
+            // Server-owned (form-data-ownership): the declared type IS the holder's type,
+            // so the paper and the holder can never disagree on a new filing.
+            applicantType: holder.type,
         },
         workflowHistory: [
             buildWorkflowEvent({
@@ -502,10 +446,24 @@ async function findOrCreateApplicationForHealth(healthIdentity, reqUser, options
     });
 }
 
-// M1 — the context the submit guard stamps onto its audit rows. `activeEntityId`
-// is recorded ALONGSIDE the entity actually checked: when the two differ, the
-// row shows a caller who claimed to act for one workspace while submitting
-// another's application, which is precisely the attempt the guard exists to stop.
+/**
+ * Reads never create (spec 2026-09-30 §3.2): GET /draft-documents and DELETE
+ * /draft-documents/:id name their draft. No `applicationId` → 400; a draft the
+ * caller cannot edit, or none at all → 404 (findOrCreateApplicationForHealth's
+ * id path, which never creates).
+ */
+async function loadNamedDraftForHealth(healthIdentity, reqUser, query, scope) {
+    const q = asObject(query);
+    const requestedId = String(q.applicationId || q.draftId || '').trim();
+    if (!requestedId) {
+        throw holderDoorError(400, 'VALIDATION_ERROR', 'applicationId is required');
+    }
+    return findOrCreateApplicationForHealth(healthIdentity, reqUser, { applicationId: requestedId }, scope);
+}
+
+// M1 — the context the submit guard stamps onto its audit rows. The entity the
+// row names is the application's holder (onBehalfOfEntityId), never a workspace
+// (spec 2026-09-30 §3.2 Submit: the workspace id field was dropped in R2 Task 9).
 function buildSubmitAuditContext(req) {
     return {
         actorType: 'USER',
@@ -513,30 +471,7 @@ function buildSubmitAuditContext(req) {
         ipAddress: req.ip || null,
         userAgent: typeof req.get === 'function' ? req.get('user-agent') : null,
         organizationId: req.user?.organizationId || null,
-        activeEntityId: req.activeEntity?.entityId || null,
         route: `${req.method} ${req.baseUrl || ''}${req.path || ''}`,
-    };
-}
-
-// M1 (review M2) — /submit resolves its row through `findDraftForSubmit`, which
-// has NO lazy-heal; the heal above lives only on /draft and /prepare. A row that
-// pre-dates Phase 66 whose owner never re-opened the wizard would therefore be
-// hard-400 forever once the guard starts requiring an entityId. Heal first with
-// the SAME mechanism, then let the guard decide.
-async function healApplicationEntityId(application, healthIdentity) {
-    if (!application || application.entityId) { return application; }
-    const personalEntity = await findUserPersonalEntity(healthIdentity);
-    if (!personalEntity?.id) { return application; }
-    const healed = await applicationService.healDraftEntityColumns(application.id, {
-        entityId: personalEntity.id,
-        submitterId: application.submitterId || healthIdentity?.userId || null,
-    });
-    // Merge rather than replace: the healer's projection is narrower than the
-    // row the caller is holding (formData / workflowHistory must survive).
-    return {
-        ...application,
-        entityId: healed?.entityId || personalEntity.id,
-        submitterId: healed?.submitterId || application.submitterId || healthIdentity?.userId || null,
     };
 }
 
@@ -570,7 +505,6 @@ async function logSubmitAccepted({ req, applicationId, entityId, actorId, action
             result: 'SUCCESS',
             metadata: {
                 onBehalfOfEntityId: entityId || null,
-                activeEntityId: ctx.activeEntityId,
                 permission: 'SUBMIT_APPLICATION',
                 applicationId,
                 route: ctx.route,
@@ -580,13 +514,6 @@ async function logSubmitAccepted({ req, applicationId, entityId, actorId, action
     } catch (auditErr) {
         logger.warn(`[Applications Submit] accepted-audit write failed (non-fatal): ${auditErr?.message}`);
     }
-}
-
-function toUploadedFileUrl(file) {
-    if (!file) { return null; }
-    const fullPath = String(file.path || '').trim();
-    if (!fullPath) { return null; }
-    return `/uploads/application-drafts/${path.basename(fullPath)}`;
 }
 
 /**
@@ -601,32 +528,10 @@ function toUploadedFileUrl(file) {
  * or already-unlinked file must not turn a successful delete into a 500.
  */
 async function unlinkStoredDraftDocument(doc, applicationId, documentId) {
-    const fileUrl = String(doc?.fileUrl || '').trim();
-    if (!fileUrl.startsWith('/uploads/')) {
-        if (fileUrl) {
-            logger.warn(
-                `[Applications Draft Documents Delete] Not an /uploads path — refusing to unlink `
-                + `(application=${applicationId}, documentId=${documentId}).`,
-            );
-        }
-        return;
-    }
-    const candidate = path.join(storageService.BASE_UPLOAD_DIR, fileUrl.slice('/uploads/'.length));
-    const safePath = storageService.resolveWithinUploads(candidate);
-    if (!safePath) {
-        logger.warn(
-            `[Applications Draft Documents Delete] Refusing to unlink a path outside the uploads root `
-            + `(application=${applicationId}, documentId=${documentId}).`,
-        );
-        return;
-    }
-    try {
-        await fsPromises.unlink(safePath);
-    } catch (err) {
-        if (err?.code !== 'ENOENT') {
-            logger.warn(`[Applications Draft Documents Delete] unlink failed (non-fatal): ${err?.message}`);
-        }
-    }
+    await unlinkStoredUpload(doc?.fileUrl, {
+        logPrefix: '[Applications Draft Documents Delete]',
+        context: `application=${applicationId}, documentId=${documentId}`,
+    });
 }
 
 // READINESS & CONFIG
@@ -751,7 +656,8 @@ router.post('/draft', authenticateHealth, async (req, res) => {
         const saveClock = draftSaveClockFrom(payload);
         const serviceType = String(payload.serviceType || 'new_application').trim() || 'new_application';
         const areaType = areaTypeFromTicks(payload, String(payload.areaType || '').trim().toUpperCase() || AREA_TYPE_UNDECLARED);
-        let application = await findOrCreateApplicationForHealth(healthIdentity, req.user, { ...payload, serviceType, areaType }, req.activeEntity, await holderScope(req));
+        const draftScope = await holderScope(req);
+        let application = await findOrCreateApplicationForHealth(healthIdentity, req.user, { ...payload, serviceType, areaType }, draftScope);
 
         // Fix round 2 (autosave-lost-reply): the merge is computed FROM the row it is written
         // over. With a save clock (every current wizard save) the row is re-read under its
@@ -893,7 +799,7 @@ router.post('/draft', authenticateHealth, async (req, res) => {
         };
         let built;
         if (saveClock) {
-            const saved = await applicationService.saveApplicantDraftInOrder(application.id, saveClock, computeDraftWrite);
+            const saved = await applicationService.saveApplicantDraftInOrder(application.id, saveClock, computeDraftWrite, { editIds: draftScope.editIds });
             built = saved.built;
             if (saved.row) { application = { ...application, ...saved.row }; }
         } else {
@@ -993,11 +899,11 @@ router.post('/submit', authenticateHealth, requireConsent, async (req, res) => {
         const requestedId = String(payload.applicationId || payload.draftId || '').trim();
 
         // Spec 2026-09-30 §3.1: every applicant read this door makes carries the
-        // caller's holder scope; the lookup keeps the pre-R1 healthId pin in R1.
+        // caller's holder scope.
         const submitScope = await holderScope(req);
-        let draft = await applicationService.findDraftForSubmit({
+        const draft = await applicationService.findDraftForSubmit({
             applicationId: requestedId || null,
-            healthId: healthIdentity.healthId, // R1-legacy-pin: removed in Task 12
+            healthId: healthIdentity.healthId,
             holderScope: submitScope,
         });
         if (!draft) { return res.status(404).json({ success: false, error: 'Application draft not found' }); }
@@ -1021,10 +927,11 @@ router.post('/submit', authenticateHealth, requireConsent, async (req, res) => {
 
         // M1.5 H4 — one door, one judge (spec 2026-08-15-m1.5-hardening-design.md
         // §H4). The role-in-the-header gate that used to stand here is deleted:
-        // it could not see GRANT rows, so it refused real grant holders. Heal a
-        // pre-Phase-66 null entityId first (review M2), then let the effective-
-        // permission engine decide alone.
-        draft = await healApplicationEntityId(draft, healthIdentity);
+        // it could not see GRANT rows, so it refused real grant holders. The
+        // effective-permission engine decides alone. A null holder is refused by
+        // the guard; it is never healed to the caller's personal entity
+        // (spec 2026-09-30 §3.2 + C3: that heal could make a person the holder
+        // of a company's filing — heal-null-holders.js places legacy rows).
         let onBehalfOfEntityId = null;
         try {
             ({ entityId: onBehalfOfEntityId } = await assertSubmitAllowed({
@@ -1288,6 +1195,13 @@ router.post('/submit', authenticateHealth, requireConsent, async (req, res) => {
             // hops are atomic with each other and with this write.
             let materializedFarmId = null;
             await prisma.$transaction(async (tx) => {
+                // FIRST statement of the transaction: a RENEWAL/REPLACEMENT claim takes the
+                // per-certificate advisory lock the renewal door takes, then refuses when
+                // another filing of that certificate is in flight (409, nothing written).
+                await lockAndAssertNoSuccessionInFlight(tx, {
+                    application: draft, userId: healthIdentity.userId, holderScope: submitScope,
+                    auditContext: buildSubmitAuditContext(req),
+                });
                 // The farm this filing is about. Only for filings the six-step กทล.๑
                 // wizard wrote — a boundary, not a migration (the W14 lesson, one flow
                 // over): a legacy-shaped filing states its site in the PREVIOUS
@@ -1299,8 +1213,8 @@ router.post('/submit', authenticateHealth, requireConsent, async (req, res) => {
                         client: tx,
                         formData: currentFormData,
                         ownerId: healthIdentity.userId,
-                        // The application's own dimensions — healApplicationEntityId has
-                        // already run, and organizationId is NOT NULL on the row.
+                        // The application's own dimensions — the submit guard has
+                        // already refused a null holder, and organizationId is NOT NULL on the row.
                         entityId: draft.entityId ?? null,
                         organizationId: draft.organizationId,
                     }));
@@ -1621,6 +1535,9 @@ router.post('/submit', authenticateHealth, requireConsent, async (req, res) => {
                 messageTh: error.messageTh,
             });
         }
+        if (error instanceof SubmitGuardError) {
+            return respondError(res, req, error, { message: error.message });
+        }
         logger.error('[Applications Submit] Error:', error);
         return respondError(res, req, error, { message: 'Failed to submit application' });
     }
@@ -1631,11 +1548,13 @@ router.post('/prepare', authenticateHealth, async (req, res) => {
         // V1-D D2: HEALTH-role gate — provider tokens denied.
         if (rejectIfNotHealthRole(req, res)) { return; }
         const healthIdentity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
-        const payload = asObject(req.body);
+        // B11: a body `entityId` never re-homes a draft, and never lands in formData.
+        const { entityId: holderChoice, ...payload } = asObject(req.body);
         // same shared vocabulary check as POST /draft (fix round 4) — before anything is created
         const refusedPreparePurpose = refusedDraftPurposeClaim(payload);
         if (refusedPreparePurpose) { return respondPurposeInvalid(res, refusedPreparePurpose); }
-        const application = await findOrCreateApplicationForHealth(healthIdentity, req.user, payload, req.activeEntity, await holderScope(req));
+        const application = await findOrCreateApplicationForHealth(healthIdentity, req.user,
+            { ...payload, entityId: holderChoice }, await holderScope(req));
         const existingFormData = asObject(application.formData);
         const mergedSteps = mergeMasterSteps(existingFormData, payload);
 
@@ -1666,42 +1585,16 @@ router.post('/prepare', authenticateHealth, async (req, res) => {
         const nowIso = new Date().toISOString();
         const workflowHistory = asArray(application.workflowHistory);
 
-        // Wave C PR-5 — primary source of truth for Application.entityId is
-        // the active-entity context (set by the picker via x-active-entity-id
-        // header → middleware → req.activeEntity). The wizard no longer
-        // re-types company info on every submission; it derives applicantType
-        // from the active workspace.
-        //
-        // M1.5 H1 — the legacy materialise fallback that stood here is GONE.
-        // It rebuilt an org Entity out of whatever registration number
-        // the request body carried and made the caller its OWNER, and by
-        // construction it only fired when req.activeEntity was absent, i.e. when
-        // the active-entity middleware had fail-opened. Workspaces are created
-        // through POST /api/entities only. Spec §H1.
-        //
-        // Remaining fallback: pre-Phase-66 rows whose entityId is still null —
-        // keep the existing application's value as last-resort default.
-        const nextEntityId = req.activeEntity?.entityId || application.entityId;
+        // spec 2026-09-30 §3.2 (B11): /prepare never re-homes. `entityId` is chosen
+        // at create and never written again; the body's `entityId` was taken out of
+        // the payload above. (M1.5 H1: no Entity is ever materialised from the body.)
 
-        // Review round 2 (operator ruling 2026-10-03): a RENEWAL or REPLACEMENT is judged
-        // for one holder. When this door moves the draft to another holder, the stored
-        // claim is judged again against the new one (same holder + SUBMIT_APPLICATION);
-        // a claim that fails becomes NEW with its links cleared. Never carried across.
-        // Under R1 the entity dimension only lets a draft be found under its own holder,
-        // so this fires once Task 12 removes that intersection, or on a null holder.
-        const holderChanged = String(nextEntityId || '') !== String(application.entityId || '');
-        const law = holderChanged
-            ? await rejudgeClaimForHolder({
-                prisma,
-                actorUserId: healthIdentity.userId,
-                formData: existingFormData,
-                toEntityId: nextEntityId,
-                holderScope: await holderScope(req),
-            })
-            : { dimensions: {}, notice: null };
+        // Review round 2 on main (operator ruling 2026-10-03) re-judged a RENEWAL or
+        // REPLACEMENT claim when this door moved a draft to another holder. Under B11 it
+        // never moves one, so a claim stays with the holder it was judged for, and the
+        // submit guard re-checks it on every submit door (application-submit-guard).
 
         const updated = await applicationService.updateApplicantDraftColumns(application.id, {
-            entityId: nextEntityId,
             // stripServerOwnedKeys: formData is one blob shared by the wizard and
             // by staff/server writers, so spreading the raw body let an applicant
             // write the audit outcome, their own auditor assignment, their own CAR
@@ -1710,15 +1603,14 @@ router.post('/prepare', authenticateHealth, async (req, res) => {
             // of a passing audit, so that pair in particular was a forgeable gate.
             // Stripping at the edge means existingFormData's server-owned values
             // survive the spread untouched.
-            // law.dimensions last but one: nothing the client sent may shadow the re-judged claim.
-            formData: { ...existingFormData, ...stripServerOwnedKeys(payload), steps: mergedSteps, lastPreparedAt: nowIso, ...law.dimensions, workflowState: existingFormData.workflowState || application.status || 'DRAFT' },
+            formData: { ...existingFormData, ...stripServerOwnedKeys(payload), steps: mergedSteps, lastPreparedAt: nowIso, workflowState: existingFormData.workflowState || application.status || 'DRAFT' },
             workflowHistory: [...workflowHistory, buildWorkflowEvent({ action: 'APPLICATION_PREPARED', actorId: healthIdentity.userId, actorRole: req.user.canonicalRole || req.user.role || 'health' })],
             updatedBy: healthIdentity.userId,
         }, {
             select: { id: true, applicationNumber: true, status: true },
         });
 
-        return res.json({ success: true, data: { ...updated, lawNotice: law.notice } });
+        return res.json({ success: true, data: updated });
     } catch (error) {
         logger.error('[Applications Prepare] Error:', error);
         return respondError(res, req, error, { message: 'Failed to prepare application' });
@@ -1765,7 +1657,15 @@ router.post('/draft-documents', authenticateHealth, receiveDraftDocument, async 
         }
 
         const healthIdentity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
-        const application = await findOrCreateApplicationForHealth(healthIdentity, req.user, payload, req.activeEntity, await holderScope(req));
+        let application;
+        try {
+            application = await findOrCreateApplicationForHealth(healthIdentity, req.user, payload, await holderScope(req));
+        } catch (holderErr) {
+            // A refused draft (no holder named, a holder the caller may not edit, an
+            // id that is not theirs) keeps no bytes: the stored file points at nothing.
+            await uploadContentGuard.discardRejectedUpload(uploadedFile);
+            throw holderErr;
+        }
 
         const fileUrl = toUploadedFileUrl(uploadedFile);
         // multer decodes multipart filenames as latin1 → Thai filenames arrive
@@ -1863,7 +1763,7 @@ router.post('/draft-documents', authenticateHealth, receiveDraftDocument, async 
 router.get('/draft-documents', authenticateHealth, async (req, res) => {
     try {
         const healthIdentity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
-        const application = await findOrCreateApplicationForHealth(healthIdentity, req.user, asObject(req.query), req.activeEntity, await holderScope(req));
+        const application = await loadNamedDraftForHealth(healthIdentity, req.user, req.query, await holderScope(req));
         const formData = asObject(application.formData);
         return res.json({ success: true, data: { applicationId: application.id, documents: asArray(formData.draftDocuments) } });
     } catch (error) {
@@ -1875,7 +1775,7 @@ router.get('/draft-documents', authenticateHealth, async (req, res) => {
 router.delete('/draft-documents/:documentId', authenticateHealth, async (req, res) => {
     try {
         const healthIdentity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
-        const application = await findOrCreateApplicationForHealth(healthIdentity, req.user, asObject(req.query), req.activeEntity, await holderScope(req));
+        const application = await loadNamedDraftForHealth(healthIdentity, req.user, req.query, await holderScope(req));
         const formData = asObject(application.formData);
         const existingDocs = asArray(formData.draftDocuments);
         const documentId = String(req.params.documentId || '').trim();
@@ -1936,8 +1836,7 @@ router.delete('/draft-documents/:documentId', authenticateHealth, async (req, re
         // left was readable by any logged-in user. The gate now fails closed
         // (middleware/uploads-access.js), but an applicant who presses delete on
         // a mis-attached ID-card scan is asking for the file to be gone, so
-        // delete it. Same confinement as the wizard delete
-        // (controllers/wizard-controller.js): the path is derived from the
+        // delete it. The path is derived from the
         // stored fileUrl and proved to live under the uploads root first, so a
         // poisoned record cannot turn this into an arbitrary file delete.
         await Promise.all(removedDocs.map((doc) => unlinkStoredDraftDocument(doc, application.id, documentId)));
@@ -1994,14 +1893,18 @@ router.delete('/draft-documents/:documentId', authenticateHealth, async (req, re
 router.get('/draft', authenticateHealth, async (req, res) => {
     try {
         const healthIdentity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
+        // Resume without an id (spec 2026-09-30 §3.2): the caller's OWN latest open
+        // draft (submitterId = me) on a holder the caller may edit.
+        const resumeScope = await holderScope(req);
         const draft = await applicationService.getLatestOpenDraftForApplicant({
-            holderScope: await holderScope(req),
-            filerHealthId: healthIdentity.healthId, // R1-legacy-pin: removed in Task 12
+            holderScope: resumeScope,
+            submitterId: healthIdentity.userId,
+            editIds: resumeScope.editIds,
         });
         if (!draft) { return res.json({ success: true, data: null }); }
 
         const formData = asObject(draft.formData);
-        res.json({ success: true, data: { id: draft.id, draftId: draft.id, applicationNumber: draft.applicationNumber, areaType: draft.areaType, serviceType: draft.serviceType, formData, steps: asObject(formData.steps), status: draft.status, createdAt: draft.createdAt, updatedAt: draft.updatedAt } });
+        res.json({ success: true, data: { id: draft.id, draftId: draft.id, applicationNumber: draft.applicationNumber, areaType: draft.areaType, serviceType: draft.serviceType, entityId: draft.entityId ?? null, formData, steps: asObject(formData.steps), status: draft.status, createdAt: draft.createdAt, updatedAt: draft.updatedAt } });
     } catch (error) {
         logger.error('[Applications Draft GET] Error:', error);
         return respondError(res, req, error, { message: 'Failed to fetch draft' });

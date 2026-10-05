@@ -344,9 +344,10 @@ describe('negative controls — everything else is handled as before', () => {
 
 describe('route-level multer handlers answer the same way', () => {
     /**
-     * Three doors catch LIMIT_FILE_SIZE themselves so their refusal can quote the
+     * Three handlers catch LIMIT_FILE_SIZE themselves so their refusal can quote the
      * door's own ceiling. Each is pinned to 413 FILE_TOO_LARGE by its own wire test:
-     *   applications.js  → draft-document-upload-content-guard.test.js
+     *   middleware/draft-document-upload.js (the draft-documents door and, since C4
+     *     2026-09-30, the planting attachment door) → draft-document-upload-content-guard.test.js
      *   onsite.js        → audit-onsite-photo-content-guard.test.js
      *   harvest-batches  → coa-upload-door-wire.test.js
      * A fourth door that grows its own handler must be added there too.
@@ -363,12 +364,12 @@ describe('route-level multer handlers answer the same way', () => {
                 }
             }
         };
-        for (const top of ['routes', 'controllers', 'modules']) {
+        for (const top of ['routes', 'controllers', 'modules', 'middleware']) {
             const dir = path.join(BACKEND, top);
             if (fs.existsSync(dir)) { walk(dir); }
         }
         expect(found.sort()).toEqual([
-            'routes/api/applications/applications.js',
+            'middleware/draft-document-upload.js',
             'routes/api/audit/onsite.js',
             'routes/api/cultivation/harvest-batches.js',
         ]);

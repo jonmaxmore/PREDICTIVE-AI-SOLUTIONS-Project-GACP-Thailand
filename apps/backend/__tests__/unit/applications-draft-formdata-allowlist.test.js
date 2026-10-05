@@ -33,7 +33,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -42,6 +41,11 @@ jest.mock('../../services/application-service', () => ({
     findUserOrganizationId: jest.fn(),
     getApplicantReadinessSnapshot: jest.fn(),
     getLatestOpenDraftForApplicant: jest.fn(),
+}));
+// R2 Task 8: the caller's holder scope (editIds) — the draft door checks it.
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['entity-1'], editIds: ['entity-1'] })),
 }));
 
 jest.mock('../../services/prisma-database', () => ({ prisma: {} }));
@@ -78,6 +82,10 @@ jest.mock('../../routes/api/applications/application-workflow-handlers', () => r
 
 const applicationService = require('../../services/application-service');
 const applicationsRouter = require('../../routes/api/applications/applications');
+
+// R2 Task 8 (spec 2026-09-30 §3.2): a draft write without an id names its holder;
+// the caller edits for entity-1 (the resume path finds the mocked draft).
+const named = (body) => ({ entityId: 'entity-1', ...body });
 const {
     WIZARD_OWNED_FORM_DATA_KEYS,
     pickWizardOwnedFormData,
@@ -141,7 +149,6 @@ describe('F-G4-14 — POST /draft writes the wizard store the autosave sends', (
     beforeEach(() => {
         jest.clearAllMocks();
         applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
         applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
         const draft = makeDraft();
         applicationService.findLatestOpenDraftForHealth.mockResolvedValue(draft);
@@ -153,7 +160,7 @@ describe('F-G4-14 — POST /draft writes the wizard store the autosave sends', (
 
         const saveResponse = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 3, formData: sent });
+            .send(named({ step: 3, formData: sent }));
 
         expect(saveResponse.status).toBe(200);
         const stored = savedPayload().formData;
@@ -184,7 +191,7 @@ describe('F-G4-14 — POST /draft writes the wizard store the autosave sends', (
 
         await request(app)
             .post('/api/applications/draft')
-            .send({ step: 2, formData: autosaveFormData({ plots: [] }) });
+            .send(named({ step: 2, formData: autosaveFormData({ plots: [] }) }));
 
         expect(savedPayload().formData.plots).toEqual([]);
     });
@@ -195,7 +202,7 @@ describe('F-G4-14 — POST /draft writes the wizard store the autosave sends', (
 
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ serviceType: 'new_application', areaType: 'OUTDOOR', step: 1, steps: { 1: { plantId: 'cannabis' } } });
+            .send(named({ serviceType: 'new_application', areaType: 'OUTDOOR', step: 1, steps: { 1: { plantId: 'cannabis' } } }));
 
         expect(response.status).toBe(200);
         const saved = savedPayload().formData;
@@ -216,7 +223,7 @@ describe('F-G4-14 — POST /draft writes the wizard store the autosave sends', (
 
         await request(app)
             .post('/api/applications/draft')
-            .send({ step: 2, formData: autosaveFormData({ certificationPurposes: [] }) });
+            .send(named({ step: 2, formData: autosaveFormData({ certificationPurposes: [] }) }));
 
         expect(savedPayload().certificationPurposes).toEqual(['EXPORT']);
         expect(savedPayload().formData.certificationPurposes).toEqual(['EXPORT']);
@@ -254,7 +261,6 @@ describe('F-G4-14 — POST /draft refuses the server-owned half of the same blob
     beforeEach(() => {
         jest.clearAllMocks();
         applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
         applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
         const draft = makeDraft({ formData: { steps: {}, ...serverFacts } });
         applicationService.findLatestOpenDraftForHealth.mockResolvedValue(draft);
@@ -281,7 +287,7 @@ describe('F-G4-14 — POST /draft refuses the server-owned half of the same blob
 
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 3, formData: forged });
+            .send(named({ step: 3, formData: forged }));
 
         expect(response.status).toBe(200);
         const saved = savedPayload().formData;
@@ -293,6 +299,26 @@ describe('F-G4-14 — POST /draft refuses the server-owned half of the same blob
         expect(saved.farmData).toEqual(forged.farmData);
     });
 
+    // Moved from wizard-draft-document-path-confinement.test.js (R2 Task 10: the
+    // /api/wizard door is deleted). The record whose filePath reaches fs.unlink()
+    // stays the server's on the one live draft door too.
+    it('does not let an autosave author the uploadedDocuments record (filePath reaches unlink)', async () => {
+        const stored = [{ documentId: 'real', filePath: '/uploads/application-drafts/real.pdf' }];
+        const draft = makeDraft({ formData: { steps: {}, ...serverFacts, uploadedDocuments: stored } });
+        applicationService.findLatestOpenDraftForHealth.mockResolvedValue(draft);
+        applicationService.updateApplicantDraftColumns.mockResolvedValue(draft);
+        const forged = autosaveFormData({ uploadedDocuments: [{ documentId: 'evil', filePath: '/etc/passwd' }] });
+
+        const response = await request(app)
+            .post('/api/applications/draft')
+            .send(named({ step: 3, formData: forged }));
+
+        expect(response.status).toBe(200);
+        const saved = savedPayload().formData;
+        expect(saved.uploadedDocuments).toEqual(stored);
+        expect(saved.farmData).toEqual(forged.farmData);
+    });
+
     it('does not let an autosave price its own application', async () => {
         // Fees are recomputed by modules/billing from the applicant's declared
         // cultivation methods; no amount is stored in formData. A money-shaped
@@ -300,7 +326,7 @@ describe('F-G4-14 — POST /draft refuses the server-owned half of the same blob
         // the allowlist fails CLOSED, so it never has to be enumerated.
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({
+            .send(named({
                 step: 3,
                 formData: autosaveFormData({
                     estimatedFee: 1,
@@ -310,7 +336,7 @@ describe('F-G4-14 — POST /draft refuses the server-owned half of the same blob
                     feeOverride: { total: 0 },
                     quotation: { total: 0 },
                 }),
-            });
+            }));
 
         expect(response.status).toBe(200);
         const saved = savedPayload().formData;
@@ -326,7 +352,7 @@ describe('F-G4-14 — POST /draft refuses the server-owned half of the same blob
         // `steps` map, it would be a second, ungated way to write the same thing.
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 2, formData: autosaveFormData({ steps: { 9: { internal_audit_date: '2026-08-26' } } }) });
+            .send(named({ step: 2, formData: autosaveFormData({ steps: { 9: { internal_audit_date: '2026-08-26' } } }) }));
 
         expect(response.status).toBe(200);
         expect(savedPayload().formData.steps).not.toHaveProperty('9');
@@ -345,7 +371,6 @@ describe('F-G4-14 — the step-claim door is unchanged', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
         applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
         const draft = makeDraft();
         applicationService.findLatestOpenDraftForHealth.mockResolvedValue(draft);
@@ -355,7 +380,7 @@ describe('F-G4-14 — the step-claim door is unchanged', () => {
     it('still clamps a step an empty wizard has not earned', async () => {
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 9, formData: {} });
+            .send(named({ step: 9, formData: {} }));
 
         expect(response.status).toBe(200);
         expect(response.body.data.savedStep).toBe(2);
@@ -366,7 +391,7 @@ describe('F-G4-14 — the step-claim door is unchanged', () => {
     it('still refuses step-scoped legacy data for an unearned step, writing nothing', async () => {
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 8, steps: { 8: { files: [{ name: 'x.pdf' }] } }, formData: {} });
+            .send(named({ step: 8, steps: { 8: { files: [{ name: 'x.pdf' }] } }, formData: {} }));
 
         expect(response.status).toBe(422);
         expect(response.body.error).toBe('STEP_PREREQUISITE_UNMET');
@@ -376,7 +401,7 @@ describe('F-G4-14 — the step-claim door is unchanged', () => {
     it('a saved wizard store does not let the NEXT save claim a step it has not earned', async () => {
         // The data written by an autosave is judged on the next request exactly
         // as the caller's own blob is: writing it must not hand out progress.
-        await request(app).post('/api/applications/draft').send({ step: 2, formData: autosaveFormData({ harvestData: {}, productionData: {} }) });
+        await request(app).post('/api/applications/draft').send(named({ step: 2, formData: autosaveFormData({ harvestData: {}, productionData: {} }) }));
 
         const stored = savedPayload().formData;
         jest.clearAllMocks();
@@ -385,7 +410,7 @@ describe('F-G4-14 — the step-claim door is unchanged', () => {
         applicationService.findLatestOpenDraftForHealth.mockResolvedValue(makeDraft({ formData: stored }));
         applicationService.updateApplicantDraftColumns.mockResolvedValue(makeDraft({ formData: stored }));
 
-        const response = await request(app).post('/api/applications/draft').send({ step: 9 });
+        const response = await request(app).post('/api/applications/draft').send(named({ step: 9 }));
 
         expect(response.status).toBe(200);
         expect(response.body.data.stepClamped).toBe(true);

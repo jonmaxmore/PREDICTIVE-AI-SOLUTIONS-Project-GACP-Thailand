@@ -12,6 +12,7 @@ async function getPlantingCycleById({
         select: {
           id: true,
           farmName: true,
+          entityId: true,
           province: true,
           district: true,
         },

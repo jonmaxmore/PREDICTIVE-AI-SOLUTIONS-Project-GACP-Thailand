@@ -31,6 +31,22 @@
   "status": 201,
   "code": null
  },
+ "A POST /lots": {
+  "status": 201,
+  "code": null
+ },
+ "A PUT /lots/:id": {
+  "status": 200,
+  "code": null
+ },
+ "A POST /lots/:id/print": {
+  "status": 200,
+  "code": null
+ },
+ "A POST /lots/labels": {
+  "status": 200,
+  "code": null
+ },
  "B POST /quotes/:id/accept": {
   "status": 403,
   "code": null
@@ -40,7 +56,7 @@
   "code": null
  },
  "B GET /applications/:id/quotations (lapsed)": {
-  "status": 404,
+  "status": 200,
   "code": null
  },
  "B POST /applications/bundles/:id/submit": {
@@ -48,27 +64,43 @@
   "code": null
  },
  "B PUT /applications/:id/revision": {
-  "status": 404,
-  "code": null
+  "status": 403,
+  "code": "ENTITY_PERMISSION_DENIED"
  },
  "B PUT /revision-deadline/:id/submit": {
-  "status": 404,
-  "code": null
+  "status": 403,
+  "code": "ENTITY_PERMISSION_DENIED"
  },
  "B POST /applications/:id/car": {
-  "status": 404,
-  "code": null
+  "status": 403,
+  "code": "ENTITY_PERMISSION_DENIED"
  },
  "B POST /planting-cycles/:id/activities": {
   "status": 201,
   "code": null
  },
- "S POST /quotes/:id/accept": {
+ "B POST /lots": {
   "status": 403,
   "code": null
  },
+ "B PUT /lots/:id": {
+  "status": 404,
+  "code": null
+ },
+ "B POST /lots/:id/print": {
+  "status": 404,
+  "code": null
+ },
+ "B POST /lots/labels": {
+  "status": 404,
+  "code": null
+ },
+ "S POST /quotes/:id/accept": {
+  "status": 404,
+  "code": null
+ },
  "S POST /quotes/:id/reject": {
-  "status": 403,
+  "status": 404,
   "code": null
  },
  "S GET /applications/:id/quotations (lapsed)": {
@@ -95,6 +127,22 @@
   "status": 404,
   "code": null
  },
+ "S POST /lots": {
+  "status": 403,
+  "code": null
+ },
+ "S PUT /lots/:id": {
+  "status": 404,
+  "code": null
+ },
+ "S POST /lots/:id/print": {
+  "status": 404,
+  "code": null
+ },
+ "S POST /lots/labels": {
+  "status": 404,
+  "code": null
+ },
  "A rows": {
   "acceptQuote": "invoiced",
   "rejectQuote": "rejected",
@@ -111,7 +159,7 @@
   "acceptQuote": "sent",
   "rejectQuote": "sent",
   "lapsedLiveQuotations": [
-   "PENDING"
+   "PENDING reissued"
   ],
   "bundle": "DRAFT",
   "bundleApp": "DRAFT",
@@ -133,5 +181,9 @@
  },
  "cycle logs": {
   "count": 3
+ },
+ "lots": {
+  "count": 2,
+  "printed": true
  }
 }

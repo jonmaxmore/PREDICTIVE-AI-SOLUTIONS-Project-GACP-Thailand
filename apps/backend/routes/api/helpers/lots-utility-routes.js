@@ -32,8 +32,13 @@ function registerLotUtilityRoutes({
     qrcodeService,
     authenticateHealth,
     getUserFarmIds,
+    // The lot WRITE gate (the farms the caller owns, pre-R2); reads use getUserFarmIds.
+    getUserWritableFarmIds,
     logger,
 }) {
+    if (typeof getUserWritableFarmIds !== 'function') {
+        throw new Error('lot routes: getUserWritableFarmIds(userId, req) is required for the write doors');
+    }
     if (typeof authenticateHealth !== 'function') {
         throw new Error(
             'registerLotUtilityRoutes: authenticateHealth middleware is required '
@@ -69,7 +74,7 @@ function registerLotUtilityRoutes({
                     message: 'Lot not found',
                 });
             }
-            const farmIds = await getUserFarmIds(userId, req);
+            const farmIds = await getUserWritableFarmIds(userId, req);
             if (!farmIds.includes(lot.batch?.farmId)) {
                 // 404 not 403 — anti-enumeration (T-014 / PR-02).
                 return res.status(404).json({

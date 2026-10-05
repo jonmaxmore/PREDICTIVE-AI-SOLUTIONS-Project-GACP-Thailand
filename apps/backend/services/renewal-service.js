@@ -77,10 +77,9 @@ try {
 }
 
 const certificateService = require('./certificate-service');
-// Lazy, as quotation-service does: holder-access loads farm-access and the
-// permission engine, which this module does not need at load time.
-const _holderAccess = () => require('./holder-access');
 const { localYear, getZonedParts, startOfLocalCalendarDay } = require('../utils/working-days');
+// R2 Task 8 fix round 1: the renewal's reads carry the caller's holder scope (spec 2026-09-30 §3.1).
+const { holderReadWhereIfScoped } = require('./holder-access');
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -200,10 +199,12 @@ function _buildCarryForwardFormData(sourceFormData) {
  *   - originalCertificateId exists and is not soft-deleted
  *   - certificate is ACTIVE (not expired / revoked / renewed/superseded)
  *   - certificate has NOT already passed expiryDate
- *   - the actor is the owner of the certificate (userId match)
+ *   - the certificate is within the actor's holder scope (404 otherwise)
  *   - the actor holds SUBMIT_APPLICATION on the certificate's holder entity
+ *     (operator ruling 2026-10-03: any such member may renew, not only the
+ *     original filer; the renewal is filed under the source holder by the actor)
  *     (operator ruling 2026-10-03: a renewal is a submission); a certificate
- *     with no holder is refused APPLICANT_ENTITY_MISSING
+ *     with no holder is refused APPLICATION_HOLDER_REQUIRED
  *
  * Creates:
  *   - A new Application (DRAFT) with:
@@ -218,7 +219,7 @@ function _buildCarryForwardFormData(sourceFormData) {
  * @param {object} args
  * @param {string} args.originalCertificateId  — Certificate.id
  * @param {string} args.actorId                — HEALTH user.id (must own cert)
- * @param {object} [args.holderScope]          — the renewals door's holder scope (R1 reads)
+ * @param {object} [args.holderScope]          — the renewals door's holder scope
  * @param {object} [args.prisma]               — injected prisma (tests)
  * @returns {Promise<{ applicationId: string, renewalOf: string, draftedAt: string }>}
  */
@@ -260,14 +261,35 @@ const RENEWAL_SKIPPED_STATES = Object.freeze([
 /** Cites the ruling that authorises the skip, so the row explains itself. */
 const RENEWAL_SKIP_REASON = 'RENEWAL_FAST_PATH_OPERATOR_RULING_2026_08_22';
 
-async function createRenewalApplication({
-    originalCertificateId, actorId, actorRole, holderScope = null, prisma: injectedPrisma,
-} = {}) {
+/**
+ * Create the renewal of an ACTIVE certificate the actor filed, for a holder the actor may file for.
+ *
+ * R2 Task 8 fix round 1 (spec 2026-09-30 §3.2 + C3): the renewal is filed for the
+ * SOURCE application's holder, and that is decided before anything is written —
+ * no application, no quotation, no audit row:
+ *   - the source names no holder → 400 APPLICATION_HOLDER_REQUIRED (never healed
+ *     to the actor's personal entity; heal-null-holders.js places legacy rows);
+ *   - the actor lacks SUBMIT_APPLICATION on the holder → 403 ENTITY_PERMISSION_DENIED
+ *     (operator ruling 2026-10-03: a renewal is a submission; was `editIds` in R2 Task 8).
+ * Both refusals write the APPLICATION_SUBMIT_DENIED audit row (application-submit-guard).
+ * The holder is read through the certificate's own relation, so no read filter
+ * on Application can hide a null-holder source and turn the refusal into a 500.
+ *
+ * R2 Task 12: the certificate is read within the actor's holder scope (spec
+ * 2026-09-30 §3.1), so a certificate outside it (or with no holder) is 404
+ * CERT_NOT_FOUND; the filer check and SUBMIT_APPLICATION then both apply.
+ * @param {object} args
+ * @param {{ readIds: string[], editIds: string[] }} args.holderScope — holderScope(req); required
+ */
+async function createRenewalApplication({ originalCertificateId, actorId, actorRole, holderScope, prisma: injectedPrisma } = {}) {
     if (!originalCertificateId) {
         throw makeError('VALIDATION_ERROR', 'originalCertificateId is required');
     }
     if (!actorId) {
         throw makeError('VALIDATION_ERROR', 'actorId is required');
+    }
+    if (!holderScope || !Array.isArray(holderScope.editIds)) {
+        throw new TypeError('createRenewalApplication: holderScope (holderScope(req)) is required');
     }
 
     const prisma = resolvePrisma(injectedPrisma);
@@ -275,15 +297,11 @@ async function createRenewalApplication({
         throw makeError('DB_UNAVAILABLE', 'Prisma client unavailable', 503);
     }
 
-    // R1-legacy-pin: removed in Task 12. The renewals door passes its holder
-    // scope; the legacy branch is the certificate id itself, so the rows stay the
-    // pre-R1 rows and the holder filter cannot hide the certificate from the
-    // gate below. Callers without a scope (jobs, unit stubs) keep the old where.
     const cert = await prisma.certificate.findFirst({
         where: {
             id: originalCertificateId,
             isDeleted: false,
-            ..._holderAccess().r1HolderOrLegacyWhenScoped(holderScope, 'Certificate', { id: originalCertificateId }),
+            ...holderReadWhereIfScoped(holderScope, 'Certificate'),
         },
         select: {
             id: true,
@@ -294,9 +312,7 @@ async function createRenewalApplication({
             certificateNumber: true,
             farmId: true,
             organizationId: true,
-            // The holder is the entity on the application the certificate was
-            // issued from. A nested relation select: neither the read witness
-            // nor the entity dimension rewrites it.
+            // The holder, through the relation (see the docblock).
             application: { select: { entityId: true } },
         },
     });
@@ -307,16 +323,13 @@ async function createRenewalApplication({
         });
     }
 
-    if (cert.userId !== actorId) {
-        throw makeError('FORBIDDEN_NOT_OWNER', 'Only the certificate owner may initiate renewal', 403);
-    }
-
-    // A renewal is a submission (operator ruling 2026-10-03): the actor needs
-    // SUBMIT_APPLICATION on the certificate's holder, checked before any row is
-    // written. Being the original filer is not enough on its own: a filer who is
-    // now a VIEWER, or a MANAGER without the grant, may not file for the holder.
-    // Refusals write the same APPLICATION_SUBMIT_DENIED audit row as the submit doors,
-    // against the source application (no renewal row exists yet).
+    // The holder decides before anything is written (R2 Task 8 fix round 1), and a
+    // renewal is a submission (operator ruling 2026-10-03): the actor needs
+    // SUBMIT_APPLICATION on the certificate's holder. Being the original filer, or
+    // merely being able to edit for the holder, is not enough: a VIEWER, or a MANAGER
+    // without the grant, may not file for the holder. Refusals write the same
+    // APPLICATION_SUBMIT_DENIED audit row as the submit doors, against the source
+    // application (no renewal row exists yet).
     const holderEntityId = cert.application?.entityId || null;
     const submitGuard = require('./application-submit-guard');
     const auditContext = {
@@ -328,15 +341,16 @@ async function createRenewalApplication({
     if (!holderEntityId) {
         await submitGuard.recordSubmitDenial({
             userId: actorId, application: sourceRef, entityId: null, auditContext,
-            status: 400, code: 'APPLICANT_ENTITY_MISSING', reason: 'renewal of a certificate with no holder',
+            status: 400, code: 'APPLICATION_HOLDER_REQUIRED', reason: 'renewal of a certificate with no holder',
         });
         throw makeError(
-            'APPLICANT_ENTITY_MISSING',
-            'ใบรับรองนี้ไม่ได้ผูกกับผู้ยื่นตามกฎหมาย จึงยื่นต่ออายุไม่ได้ โปรดติดต่อผู้ดูแลระบบ',
+            'APPLICATION_HOLDER_REQUIRED',
+            'ใบรับรองนี้ยังไม่ระบุผู้ถือ จึงต่ออายุไม่ได้ กรุณาติดต่อเจ้าหน้าที่เพื่อแก้ข้อมูลผู้ถือก่อน',
             400,
         );
     }
-    // 403 ENTITY_PERMISSION_DENIED (SubmitGuardError carries statusCode + code).
+    // 403 ENTITY_PERMISSION_DENIED (SubmitGuardError, catalogue English message; the
+    // renewals door answers with the single entityPermissionDeniedBody).
     await submitGuard.assertSubmitAllowed({ userId: actorId, application: sourceRef, auditContext });
 
     const status = String(cert.status || '').toLowerCase();
@@ -365,8 +379,7 @@ async function createRenewalApplication({
         where: {
             id: cert.applicationId,
             isDeleted: false,
-            // R1-legacy-pin: removed in Task 12 — the id the gate above resolved decides.
-            ..._holderAccess().r1HolderOrLegacyWhenScoped(holderScope, 'Application', { id: cert.applicationId }),
+            ...holderReadWhereIfScoped(holderScope, 'Application'),
         },
         select: {
             id: true,
@@ -420,11 +433,11 @@ async function createRenewalApplication({
     // F-G4-64 — how many cultivation scopes this renewal is billed for, resolved
     // from the SAME formData every other money surface resolves it from.
     //
-    // Until this line the renewal row carried no scope count at all. The submit
-    // door stamps it for a new application (application-submission-methods.js
-    // :156) before issuance fires at applications.js:1211; a renewal passes
-    // through neither door, so the column stayed NULL and `totalAreaTypes` took
-    // its schema default of 1 (prisma/schema/application.prisma:80).
+    // Until this line the renewal row carried no scope count at all. The legacy
+    // wizard submit door stamped it for a new application (application-submission-
+    // methods.js, deleted with /api/wizard in R2 Task 10); a renewal never passed
+    // through it, so the column stayed NULL and `totalAreaTypes` took its schema
+    // default of 1 (prisma/schema/application.prisma:80).
     //
     // That silence was not neutral, because the two ends of the renewal read it
     // differently:
@@ -443,8 +456,18 @@ async function createRenewalApplication({
     // buildPhaseFee are untouched, and a single-method renewal still resolves 1.
     const renewalScopeCount = resolveCultivationScopeCount(renewalFormData);
 
+    // Operator ruling 2026-10-03: the renewal is filed by the member who renews it
+    // (their own lists, notifications and payments), under the source holder.
+    // Application.healthId is the FK to User.canonicalId.
+    const actorUser = await prisma.user.findUnique({ where: { id: actorId }, select: { canonicalId: true } });
+    const actorFilerKey = String(actorUser?.canonicalId || '').trim();
+    if (!actorFilerKey) {
+        throw makeError('VALIDATION_ERROR', 'The renewing account has no health identity', 400);
+    }
+
     const createPayload = {
-        healthId: sourceApp.healthId,
+        healthId: actorFilerKey,
+        submitterId: actorId,
         organizationId: sourceApp.organizationId,
         status: RENEWAL_ENTRY_STATE,
         applicationNumber: placeholderNumber,
@@ -452,8 +475,8 @@ async function createRenewalApplication({
         formData: renewalFormData,
         cultivationScopeCount: renewalScopeCount,
         // `totalAreaTypes` is the retired name for the same number, written in
-        // step by every other writer (application-submission-methods.js:161,
-        // application-draft-query-methods.js:76) so a process still serving the
+        // step by every other writer (application-draft-query-methods.js; the
+        // deleted application-submission-methods.js did too) so a process still serving the
         // previous image prices correctly. storedCultivationScopeCount falls
         // back to it (shared/application-scope.js:29); the contract migration
         // drops it.
@@ -461,11 +484,32 @@ async function createRenewalApplication({
         createdBy: actorId,
         updatedBy: actorId,
     };
-    if (sourceApp.entityId) {
-        createPayload.entityId = sourceApp.entityId;
-    }
+    // The holder checked above (the source's own, never a default).
+    createPayload.entityId = holderEntityId;
 
-    const newApp = await prisma.application.create({ data: createPayload });
+    // One renewal or replacement per certificate at a time (RENEWAL_ALREADY_IN_PROGRESS).
+    // The check and the create run in one transaction behind a per-certificate advisory
+    // lock, so two concurrent requests cannot both pass the check.
+    const createOnce = async (tx) => {
+        // The same key and order as every submit of a succession claim (submit guard).
+        await submitGuard.lockCertificateSuccessions(tx, [cert.id]);
+        const other = await submitGuard.findInFlightSuccession({ db: tx, certificateIds: [cert.id], holderScope });
+        if (other) { return { inFlight: other }; }
+        return { created: await tx.application.create({ data: createPayload }) };
+    };
+    const outcome = typeof prisma.$transaction === 'function'
+        ? await prisma.$transaction(createOnce)
+        : await createOnce(prisma);
+    if (outcome.inFlight) {
+        await submitGuard.recordSubmitDenial({
+            userId: actorId, application: sourceRef, entityId: holderEntityId, auditContext,
+            status: 409, code: submitGuard.RENEWAL_ALREADY_IN_PROGRESS,
+            reason: `renewal while application ${outcome.inFlight.id} of the same certificate is in flight`,
+        });
+        const refusal = submitGuard.renewalInProgressError();
+        throw makeError(refusal.code, refusal.message, 409);
+    }
+    const newApp = outcome.created;
 
     logger.info('[renewal-service] Renewal application created', {
         renewalApplicationId: newApp.id,
@@ -509,9 +553,8 @@ async function createRenewalApplication({
         // fallback the fast-path audit row below uses.
         actorRole: actorRole || 'HEALTH',
         tx: prisma,
-        // The renewals door's holder scope, so issuance reads the way it does
-        // for the submit door. None from other callers: their reads are unchanged.
-        ...(holderScope ? { holderScope } : {}),
+        // The caller's holder scope, as the two submit doors pass it (spec §3.1).
+        holderScope,
     });
 
     // W12 - the skip is a compliance event, so it goes in the audit trail, not

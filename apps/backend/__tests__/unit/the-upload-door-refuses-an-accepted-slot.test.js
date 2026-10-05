@@ -33,7 +33,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -42,6 +41,11 @@ jest.mock('../../services/application-service', () => ({
     findUserOrganizationId: jest.fn(),
     getApplicantReadinessSnapshot: jest.fn(),
     getLatestOpenDraftForApplicant: jest.fn(),
+}));
+// R2 Task 8: every draft write names its draft, and the caller edits for its holder.
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] })),
 }));
 
 jest.mock('../../services/entity-service', () => ({
@@ -148,6 +152,7 @@ let draftDocuments = [];
 function uploadTo(slotId, filename = 'paper.pdf') {
     return request(buildApp())
         .post('/api/applications/draft-documents')
+        .field('applicationId', 'app-1')
         .field('slotId', slotId)
         .field('stepKey', 'documents')
         .attach('file', realisticPdf(), { filename, contentType: 'application/pdf' });
@@ -158,8 +163,7 @@ beforeEach(() => {
     draftDocuments = [];
     mockFindReviews = jest.fn(async () => []);
     applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-    applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
-    applicationService.findLatestOpenDraftForHealth.mockImplementation(async () => ({
+    applicationService.findApplicationByIdForHealth.mockImplementation(async () => ({
         id: 'app-1',
         applicationNumber: 'APP-2026-000001',
         // คำขอที่ถูกตีกลับ — สถานะนี้เปิดให้แก้ทั้งใบ ซึ่งคือเหตุผลที่ต้องมีด่านรายช่อง
@@ -249,7 +253,7 @@ describe('DELETE /draft-documents/:id — ลบก็คือแก้', () =>
             { slotId: 'controlled_herb_license', verdict: 'ACCEPTED', round: 1 },
         ]);
 
-        const res = await request(buildApp()).delete('/api/applications/draft-documents/doc-1');
+        const res = await request(buildApp()).delete('/api/applications/draft-documents/doc-1?applicationId=app-1');
 
         expect(res.status).toBe(409);
         expect(res.body.code).toBe('DOCUMENT_SLOT_ALREADY_ACCEPTED');
@@ -262,7 +266,7 @@ describe('DELETE /draft-documents/:id — ลบก็คือแก้', () =>
             { slotId: 'water_test', verdict: 'MORE_REQUESTED', round: 1 },
         ]);
 
-        const res = await request(buildApp()).delete('/api/applications/draft-documents/doc-2');
+        const res = await request(buildApp()).delete('/api/applications/draft-documents/doc-2?applicationId=app-1');
         expect(res.status).toBe(200);
     });
 });

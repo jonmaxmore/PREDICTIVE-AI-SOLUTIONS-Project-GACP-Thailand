@@ -18,12 +18,12 @@
 'use strict';
 
 const mockFarmFindUnique = jest.fn();
-// Task 6: the code under test now passes a holder scope beside its pre-R1 where
+// Task 6 / R2 Task 12: the code under test reads the farm within the holder scope
 // (spec 2026-09-30 §3.1). The scope's own reads are not this suite's subject; the
 // real-Postgres walk (health-door-walk-real-postgres.test.js) proves them.
 jest.mock('../../services/holder-access', () => ({
     holderScope: async (req) => ({ userId: String(req?.user?.id || ''), readIds: [], editIds: [] }),
-    r1HolderOrLegacyWhenScoped: () => ({}),
+    holderReadWhere: () => ({}),
 }));
 jest.mock('../../services/prisma-database', () => ({
     prisma: { farm: { findUnique: (...a) => mockFarmFindUnique(...a) } },

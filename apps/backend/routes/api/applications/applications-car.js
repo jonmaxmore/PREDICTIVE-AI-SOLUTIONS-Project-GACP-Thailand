@@ -30,6 +30,7 @@ const { writeApplicationStatus } = require('../../../services/application-status
 const { snapshotCorrectionSubmission } = require('../../../services/correction-submission-version-service');
 const applicationService = require('../../../services/application-service');
 const { holderScope } = require('../../../services/holder-access');
+const { discardRejectedUpload } = require('../../../services/upload-content-guard');
 const { listActiveProviders } = require('../../../services/provider-user-service');
 const logger = require('../../../shared/logger');
 // M1 (2026-08-15) — the fourth submit door (plan D4). Ownership ("is this my
@@ -101,24 +102,12 @@ const upload = multer({
   },
 });
 
-// M1 — heal a pre-Phase-66 null entityId from the caller's personal entity
-// before the guard refuses the row (review M2), then record the accepted act
-// and the entity it was made for (AC3). `auditLogger.log()` opens its own
-// transaction and takes its own advisory lock (audit-logger.js:479,505-506), so
-// it is called outside every business transaction, and it is best-effort by
-// design (log() swallows its own errors, :526-541).
-async function healCarApplicationEntityId(application, req) {
-    if (!application || application.entityId) { return application; }
-    const identity = { userId: req.user?.id || null, healthId: req.user?.canonicalId || req.user?.healthId || null };
-    const personalEntity = await applicationService.findPersonalEntityForHealthIdentity(identity);
-    if (!personalEntity?.id) { return application; }
-    const healed = await applicationService.healDraftEntityColumns(application.id, {
-        entityId: personalEntity.id,
-        submitterId: application.submitterId || identity.userId,
-    });
-    return { ...application, entityId: healed?.entityId || personalEntity.id };
-}
-
+// M1 AC3 — record the accepted act and the entity it was made for. A null
+// holder is refused by the submit guard, never healed (spec 2026-09-30 §3.2 + C3: a null holder is never healed to the caller's personal entity; heal-null-holders.js places legacy rows).
+// `auditLogger.log()` opens its own transaction and takes its own advisory lock
+// (audit-logger.js:479,505-506), so it is called outside every business
+// transaction, and it is best-effort by design (log() swallows its own errors,
+// :526-541).
 async function logCarSubmitAccepted({ req, applicationId, entityId }) {
     try {
         await auditLogger.log({
@@ -136,7 +125,6 @@ async function logCarSubmitAccepted({ req, applicationId, entityId }) {
             result: 'SUCCESS',
             metadata: {
                 onBehalfOfEntityId: entityId || null,
-                activeEntityId: req.activeEntity?.entityId || null,
                 permission: 'SUBMIT_APPLICATION',
                 applicationId,
                 route: `${req.method} ${req.baseUrl || ''}${req.path || ''}`,
@@ -145,6 +133,18 @@ async function logCarSubmitAccepted({ req, applicationId, entityId }) {
     } catch (auditErr) {
         logger.warn(`[CAR Upload] accepted-audit write failed (non-fatal): ${auditErr?.message}`);
     }
+}
+
+/**
+ * multer stores the evidence before this door decides anything, so every refusal
+ * removes what it stored (confined to the uploads root by discardRejectedUpload);
+ * only an accepted resubmit keeps its files.
+ * @param {Array<{ path?: string }>|undefined} files
+ */
+async function discardCarUploads(files) {
+  for (const file of Array.isArray(files) ? files : []) {
+    await discardRejectedUpload(file);
+  }
 }
 
 router.post('/:id/car', authenticateHealth, upload.array('carDocument', 10), async (req, res) => {
@@ -158,22 +158,21 @@ router.post('/:id/car', authenticateHealth, upload.array('carDocument', 10), asy
     }
 
     // The filing is read within the caller's holder scope (spec 2026-09-30
-    // §3.1, holderScope/holderReadWhere) AND, in R1, the pre-R1 filer pin
-    // (applicant.id = req.user.id). Whether the caller may act for its holder
-    // is the submit guard's question, asked right below.
-    let application = await applicationService.findOwnedApplicationForApplicant(id, {
+    // §3.1, holderScope/holderReadWhere), with no filer pin. Whether the caller
+    // may act for its holder is the submit guard's question, asked right below
+    // (a CAR resubmit is a submit, §3.3).
+    const application = await applicationService.findOwnedApplicationForApplicant(id, {
         holderScope: await holderScope(req),
-        filerUserId: req.user.id, // R1-legacy-pin: removed in Task 12
     });
 
     if (!application) {
+      await discardCarUploads(files);
       return res.status(404).json({ success: false, error: 'Application not found' });
     }
 
     // M1 submit gate — asked BEFORE any decision this route makes, including
     // the deadline expiry below: an expiry written by a caller who may not act
     // for this entity is still a write in that entity's name.
-    application = await healCarApplicationEntityId(application, req);
     let onBehalfOfEntityId = null;
     try {
       ({ entityId: onBehalfOfEntityId } = await assertSubmitAllowed({
@@ -187,12 +186,12 @@ router.post('/:id/car', authenticateHealth, upload.array('carDocument', 10), asy
           ipAddress: req.ip || null,
           userAgent: typeof req.get === 'function' ? req.get('user-agent') : null,
           organizationId: req.user?.organizationId || null,
-          activeEntityId: req.activeEntity?.entityId || null,
           route: `${req.method} ${req.baseUrl || ''}${req.path || ''}`,
         },
       }));
     } catch (guardErr) {
       if (guardErr instanceof SubmitGuardError) {
+        await discardCarUploads(files);
         return respondError(res, req, guardErr, { message: guardErr.message });
       }
       throw guardErr;
@@ -210,6 +209,7 @@ router.post('/:id/car', authenticateHealth, upload.array('carDocument', 10), asy
     const currentWorkflowHistory = Array.isArray(application.workflowHistory) ? application.workflowHistory : [];
     const currentState = workflowTransitionService.resolveStateFromApplication(application);
     if (currentState !== 'CAR_PENDING') {
+      await discardCarUploads(files);
       return res.status(400).json({
         success: false,
         error: `Cannot submit CAR evidence in ${currentState} state`,
@@ -280,6 +280,7 @@ router.post('/:id/car', authenticateHealth, upload.array('carDocument', 10), asy
         });
       });
 
+      await discardCarUploads(files);
       return res.status(400).json({
         success: false,
         error: 'CAR deadline exceeded. Application has been cancelled.',
@@ -295,6 +296,7 @@ router.post('/:id/car', authenticateHealth, upload.array('carDocument', 10), asy
       await assertRequiredDocumentsPresent({ application, mode: MODE_RESUBMIT, holderScope: await holderScope(req) });
     } catch (docErr) {
       if (isSubmitGateRefusal(docErr)) {
+                await discardCarUploads(files);
                 return respondSubmitGateRefusal(res, docErr);
             }
       throw docErr;
@@ -377,6 +379,8 @@ router.post('/:id/car', authenticateHealth, upload.array('carDocument', 10), asy
     });
   } catch (error) {
     logger.error('[CAR Upload] Error:', error);
+    // Not discarded here: an error after the resubmit wrote may leave rows that
+    // name these files.
     res.status(500).json({ success: false, error: safeErrorMessage(error) });
   }
 });

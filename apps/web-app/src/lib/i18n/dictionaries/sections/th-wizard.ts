@@ -412,13 +412,6 @@ wizard: {
                 community: { label: "วิสาหกิจชุมชน", subLabel: "กลุ่มเกษตรกร จดทะเบียน สกท." },
                 juristic: { label: "นิติบุคคล", subLabel: "บริษัท/ห้างหุ้นส่วน/สหกรณ์" }
             },
-            workspace: {
-                banner: "ยื่นในนามของ Workspace",
-                typePrefix: "ประเภท",
-                bindNote: "ใบสมัครจะถูกผูกกับ workspace นี้ ใบรับรองจะออกในนามนี้",
-                editLink: "แก้ไขโปรไฟล์ workspace",
-                switchHint: "ต้องการสลับหรือเพิ่มผู้ยื่นคำขอใหม่ ไปที่หน้าจัดการ workspace แล้วกดสร้าง workspace ใหม่"
-            },
             companyTypeOptions: {
                 LIMITED_COMPANY: "บริษัทจำกัด",
                 LIMITED_PARTNERSHIP: "ห้างหุ้นส่วนจำกัด",

@@ -177,7 +177,7 @@ checkGrep(
     'No direct req.user._id usage (use req.user.id)',
     'req\\.user\\._id',
     'apps/backend/',
-    'Prisma uses .id, not MongoDB ._id. Safe fallback "id || _id" is allowed.',
+    'Prisma uses .id, not ._id. Safe fallback "id || _id" is allowed.',
     { matcher: m => !m.includes('|| req.user._id') && !m.includes('req.user.id || req.user._id') }
 );
 

@@ -15,9 +15,10 @@
  * FARM, not formData — so the last gate on the production line refused a filing that had
  * satisfied every gate before it.
  *
- * The v1 wizard door has always minted the farm inside its submit transaction
- * (application-submission-methods.executeWizardSubmission). The v2 door
- * (routes/api/applications/applications.js POST /submit) never did.
+ * The v1 wizard door minted the farm inside its submit transaction
+ * (executeWizardSubmission, deleted with /api/wizard in R2 Task 10). The v2 door
+ * (routes/api/applications/applications.js POST /submit) never did; it is now the
+ * only door, and this suite pins that it does.
  *
  * WHAT THIS SUITE PINS
  *   1. the site the farmer typed becomes a Farm row, mapped column by column
@@ -123,7 +124,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),

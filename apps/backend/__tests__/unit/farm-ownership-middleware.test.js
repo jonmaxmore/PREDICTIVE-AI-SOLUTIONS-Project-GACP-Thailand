@@ -11,7 +11,7 @@ const { requireFarmOwnership } = require('../../middleware/farm-ownership');
 // real-Postgres walk (health-door-walk-real-postgres.test.js) proves them.
 jest.mock('../../services/holder-access', () => ({
     holderScope: async (req) => ({ userId: String(req?.user?.id || ''), readIds: [], editIds: [] }),
-    r1HolderOrLegacyWhenScoped: () => ({}),
+    holderReadWhere: () => ({}),
 }));
 jest.mock('../../services/prisma-database', () => ({
     prisma: {

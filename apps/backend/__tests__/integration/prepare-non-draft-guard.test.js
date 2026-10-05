@@ -43,7 +43,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -151,7 +150,6 @@ describe('Bug 2.3 — /prepare + /draft cannot overwrite a non-editable owned ap
     beforeEach(() => {
         jest.clearAllMocks();
         applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
     });
 
     describe('non-editable status → 409, no write', () => {
@@ -230,13 +228,13 @@ describe('Bug 2.3 — /prepare + /draft cannot overwrite a non-editable owned ap
         });
     });
 
-    // Spec 2026-09-30 §3.1 (Task 3, R1): the explicit id and the resume fallback are
-    // loaded within the caller's holders AND, in R1, with the pre-R1 filer healthId
-    // pin (operator ruling C1) — so another member's draft is never loaded here.
-    describe('holder scope + R1 filer pin on the draft lookups', () => {
+    // Spec 2026-09-30 §3.1/§3.2: the explicit id is loaded within the caller's
+    // holders. R2 Task 9: the R1 filer healthId pin is gone from this lookup (a
+    // co-member who may edit the holder edits its drafts); editIds decides.
+    describe('holder scope on the draft lookups', () => {
         const SCOPE = { userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] };
 
-        it('the explicit-id lookup takes the caller\'s holder scope and the filer healthId', async () => {
+        it('the explicit-id lookup takes the caller\'s holder scope alone', async () => {
             applicationService.findApplicationByIdForHealth.mockResolvedValue(makeApp('DRAFT'));
             applicationService.updateApplicantDraftColumns.mockResolvedValue({ id: 'app-1', status: 'DRAFT' });
 
@@ -244,11 +242,10 @@ describe('Bug 2.3 — /prepare + /draft cannot overwrite a non-editable owned ap
 
             expect(applicationService.findApplicationByIdForHealth).toHaveBeenCalledWith('app-1', {
                 holderScope: SCOPE,
-                filerHealthId: 'health-1',
             });
         });
 
-        it('an id the filer lookup does not find is refused with 404, never written and never redirected to another draft', async () => {
+        it('an id the holder lookup does not find is refused with 404, never written and never redirected to another draft', async () => {
             // main (staging-walk-0930 round 5): an explicit id that does not resolve for
             // this user is APPLICATION_NOT_FOUND before anything is written; it no longer
             // falls through to the caller's latest draft.
@@ -262,7 +259,6 @@ describe('Bug 2.3 — /prepare + /draft cannot overwrite a non-editable owned ap
             expect(res.status).toBe(404);
             expect(applicationService.findApplicationByIdForHealth).toHaveBeenCalledWith('app-someone-else', {
                 holderScope: SCOPE,
-                filerHealthId: 'health-1',
             });
             expect(applicationService.findLatestOpenDraftForHealth).not.toHaveBeenCalled();
             expect(applicationService.updateApplicantDraftColumns).not.toHaveBeenCalled();

@@ -356,6 +356,7 @@ d('document-precheck flow (real Postgres + real extract + real tesseract)', () =
         try {
             res = await request(app)
                 .post('/api/applications/draft-documents')
+                .field('applicationId', fx.applicationId) // R2 Task 8: every draft write names its draft
                 .field('slotId', 'land_deed')
                 .field('stepKey', 'documents')
                 .attach('file', fs.readFileSync(deedPdf.absPath), { filename: 'deed.pdf', contentType: 'application/pdf' });
@@ -435,6 +436,7 @@ d('document-precheck flow (real Postgres + real extract + real tesseract)', () =
         async function uploadThroughTheDoor(app, slotId, file) {
             const res = await request(app)
                 .post('/api/applications/draft-documents')
+                .field('applicationId', fx.applicationId) // R2 Task 8: every draft write names its draft
                 .field('slotId', slotId)
                 .field('stepKey', 'documents')
                 .attach('file', fs.readFileSync(file.absPath), { filename: path.basename(file.absPath), contentType: file.mimeType });
@@ -463,7 +465,7 @@ d('document-precheck flow (real Postgres + real extract + real tesseract)', () =
             expect(done.flags.some((f) => f.evidenceSnippet !== null)).toBe(true);
             expect(await landRightsPrecheck(app)).toMatchObject({ id: done.id, status: 'DONE' });
 
-            const del = await request(app).delete(`/api/applications/draft-documents/${documentId}`);
+            const del = await request(app).delete(`/api/applications/draft-documents/${documentId}?applicationId=${fx.applicationId}`);
             expect(del.status).toBe(200);
             expect(del.body).toEqual({ success: true, data: { applicationId: fx.applicationId, documentId, deleted: true } });
 
@@ -480,7 +482,7 @@ d('document-precheck flow (real Postgres + real extract + real tesseract)', () =
             const { documentId, job } = await uploadThroughTheDoor(app, 'land_deed', deedPdf);
             expect((await raw.documentPrecheck.findUnique({ where: { documentId } })).status).toBe('PENDING');
 
-            const del = await request(app).delete(`/api/applications/draft-documents/${documentId}`);
+            const del = await request(app).delete(`/api/applications/draft-documents/${documentId}?applicationId=${fx.applicationId}`);
             expect(del.status).toBe(200);
             await processPrecheckJob({ ...job, data: { ...job.data, absPath: deedPdf.absPath } });
 

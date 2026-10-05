@@ -26,9 +26,13 @@ export interface EstablishmentFormState {
     /** Free-text area in rai, e.g. "2.5" */
     areaSize: string;
     licenseNumber: string;
+    /** The holder entity the farm is registered under (spec 2026-09-30 §3.2). */
+    entityId: string | null;
 }
 
 export interface FarmCreatePayload {
+    /** Required by POST /farms: no default holder (400 APPLICATION_HOLDER_REQUIRED-class refusal). */
+    entityId: string;
     farmName: string;
     farmType: string;
     address: string;
@@ -48,6 +52,7 @@ export function buildFarmCreatePayload(form: EstablishmentFormState): FarmCreate
     const licenseNumber = form.licenseNumber.trim();
 
     return {
+        entityId: String(form.entityId ?? '').trim(),
         farmName: form.name.trim(),
         farmType: 'CULTIVATION',
         address: form.address.trim(),

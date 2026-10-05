@@ -124,6 +124,8 @@ describe('isEntityPermissionDeniedResult — apiClient RESULT envelope (F1(b) ev
 describe('shared constants', () => {
     it('exports the canonical code and the generic Thai fallback', () => {
         expect(ENTITY_PERMISSION_DENIED_CODE).toBe('ENTITY_PERMISSION_DENIED');
-        expect(ENTITY_PERMISSION_DENIED_FALLBACK_TH).toBe('ไม่มีสิทธิ์ดำเนินการนี้ ติดต่อเจ้าของ workspace');
+        // R2 Task 10 round 3: the backend catalogue sentence (ERROR_CODES.ENTITY_PERMISSION_DENIED.messageTh).
+        expect(ENTITY_PERMISSION_DENIED_FALLBACK_TH).toBe('คุณไม่มีสิทธิ์ทำรายการนี้ในนามของผู้ถือรายนี้ ขอให้เจ้าของมอบสิทธิ์ให้คุณก่อน แล้วลองอีกครั้ง');
+        expect(ENTITY_PERMISSION_DENIED_FALLBACK_TH).not.toMatch(/workspace|พื้นที่ทำงาน/i);
     });
 });

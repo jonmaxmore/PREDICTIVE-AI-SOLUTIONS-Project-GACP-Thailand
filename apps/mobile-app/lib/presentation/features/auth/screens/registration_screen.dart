@@ -143,7 +143,7 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
     {
       'type': 'INDIVIDUAL',
       'label': 'บุคคลธรรมดา',
-      'subtitle': 'สมัครด้วยเลขบัตรประชาชน (นิติบุคคล/วิสาหกิจชุมชน สร้าง workspace ภายหลัง)',
+      'subtitle': 'สมัครด้วยเลขบัตรประชาชน (นิติบุคคล/วิสาหกิจชุมชน เพิ่มภายหลัง)',
       'icon': Icons.person,
       'color': AppTheme.accountIndividual,
       'idLabel': 'เลขบัตรประชาชน 13 หลัก',

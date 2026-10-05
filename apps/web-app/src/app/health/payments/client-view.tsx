@@ -33,10 +33,10 @@ import { Button } from '@/components/ui/primitives/button';
 import { SummaryHeader } from '@/components/feature';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { readPaymentsApplicationParam, resolvePaymentsApplicationId } from './payments-application-id';
-import { useActiveEntity } from '@/lib/services/active-entity-provider';
 import { checkoutEntryOwes, invoicedPhasesOf } from './checkout-entry-owes';
 import { phaseDueState, PHASE_DUE_ORDER, type PhaseKey } from './phase-due-state';
 import TwoCardPaymentSection from '@/components/payments/TwoCardPaymentSection';
+import { HolderFilterChips, HolderLine, useHolderFilter } from '@/components/holder/holder-list';
 import RefundVisibilitySection from '@/components/payments/RefundVisibilitySection';
 import QuotationReviewSection from '@/components/payments/QuotationReviewSection';
 
@@ -121,20 +121,7 @@ export default function HealthPaymentsPage() {
   // ?applicationId= or the older ?app= (see payments-application-id.ts).
   const appFilter = readPaymentsApplicationParam(searchParams);
 
-  // P6 (staging walk 2026-09-29): every read on this page answers for the ACTIVE
-  // workspace — api-client sends x-active-entity-id, and the backend narrows
-  // /invoices/my, /applications/my and the quotation door to it. Switching
-  // workspace while the page is open must therefore drop what the old workspace
-  // answered and ask again; otherwise the company's invoice stays on screen in the
-  // personal workspace and the page asks for its quotation there (404).
-  // The first workspace the provider reports is hydration, not a switch: the
-  // first reads already went out under it (or under the same personal default).
-  const { activeEntity } = useActiveEntity();
-  const workspaceId = activeEntity?.id ?? null;
-  const seenWorkspaceRef = useRef<string | null>(null);
-  const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
-  // Answers that arrive after a switch belong to the old workspace; each read
-  // keeps only the latest request's answer.
+  // Each read keeps only the latest request's answer.
   const paymentsRequestRef = useRef(0);
   const quotationsRequestRef = useRef(0);
 
@@ -176,7 +163,7 @@ export default function HealthPaymentsPage() {
       return;
     }
     void loadPayments();
-  }, [router, workspaceEpoch]);
+  }, [router]);
 
   // a11y — close detail-invoice modal on Escape (WCAG 2.1.2 No Keyboard Trap).
   useEffect(() => {
@@ -215,9 +202,44 @@ export default function HealthPaymentsPage() {
     }
   }
 
+  // Deep QA 2026-09-06 — a farmer with a PENDING quotation and zero invoices opened this
+  // page from the nav menu and met "ไม่พบรายการชำระเงิน". Under the checkout rail no
+  // invoice exists until the quotation is accepted HERE, so deriving the application from
+  // invoice rows alone waits for a row only this page can cause. The applicant's own
+  // application list is the third rung; the rule lives in payments-application-id.ts
+  // where it is tested as a pure function.
+  const [myApplications, setMyApplications] = useState<Array<{ id: string; status?: string | null; applicationNumber?: string | null; entityId?: string | null }>>([]);
+  useEffect(() => {
+    // Fetched even when ?app= names the application: the checkout entry's due-ness rule
+    // reads this filing's STATUS from the same list, and the submit hand-over — the main
+    // way farmers arrive here — always carries ?app=.
+    let cancelled = false;
+    void (async () => {
+      // Through PaymentService — the boundary this page's tests already stub. Optional
+      // call: an older stub without the method simply skips the third rung.
+      const list = await PaymentService.getMyApplications?.().catch(() => []);
+      if (!cancelled && Array.isArray(list)) setMyApplications(list);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Whom each invoice is for: the holder of its application (the invoice read does not
+  // carry it). Display and filter only; nothing here touches an amount or a status.
+  const holder = useHolderFilter();
+  const holderSelectedId = holder.selectedId;
+  const holderRowOf = useCallback(
+    (item: { applicationId?: string | null }) => ({
+      entityId: item.applicationId ? (myApplications.find((a) => a.id === item.applicationId)?.entityId ?? null) : null,
+    }),
+    [myApplications],
+  );
+
   const shownPayments = useMemo(() => {
     return payments.filter((item) => {
       if (appFilter && item.applicationId !== appFilter) {
+        return false;
+      }
+      if (holderSelectedId !== null && holderRowOf(item).entityId !== holderSelectedId) {
         return false;
       }
       if (filter === 'ALL') return true;
@@ -225,7 +247,7 @@ export default function HealthPaymentsPage() {
       // รอชำระ: unpaid AND still owed. A cancelled invoice is not owed.
       return !item.isPaid && !item.isCancelled;
     });
-  }, [appFilter, filter, payments]);
+  }, [appFilter, filter, payments, holderSelectedId, holderRowOf]);
 
   const grouped = useMemo(() => {
     const groups: { PHASE_1: PaymentRecord[]; PHASE_2: PaymentRecord[]; UNKNOWN: PaymentRecord[]; CANCELLED: PaymentRecord[]; [key: string]: PaymentRecord[] } = {
@@ -252,43 +274,6 @@ export default function HealthPaymentsPage() {
     }
     return groups;
   }, [shownPayments]);
-
-  // Deep QA 2026-09-06 — a farmer with a PENDING quotation and zero invoices opened this
-  // page from the nav menu and met "ไม่พบรายการชำระเงิน". Under the checkout rail no
-  // invoice exists until the quotation is accepted HERE, so deriving the application from
-  // invoice rows alone waits for a row only this page can cause. The applicant's own
-  // application list is the third rung; the rule lives in payments-application-id.ts
-  // where it is tested as a pure function.
-  const [myApplications, setMyApplications] = useState<Array<{ id: string; status?: string | null; applicationNumber?: string | null }>>([]);
-  useEffect(() => {
-    // Fetched even when ?app= names the application: the checkout entry's due-ness rule
-    // reads this filing's STATUS from the same list, and the submit hand-over — the main
-    // way farmers arrive here — always carries ?app=.
-    let cancelled = false;
-    void (async () => {
-      // Through PaymentService — the boundary this page's tests already stub. Optional
-      // call: an older stub without the method simply skips the third rung.
-      const list = await PaymentService.getMyApplications?.().catch(() => []);
-      if (!cancelled && Array.isArray(list)) setMyApplications(list);
-    })();
-    return () => { cancelled = true; };
-  }, [workspaceEpoch]);
-
-  // A workspace switch: drop the old workspace's answers before asking again,
-  // so nothing derived from them (the quotation lookup's application above all)
-  // is asked for under the new one.
-  useEffect(() => {
-    if (!workspaceId) return;
-    const previous = seenWorkspaceRef.current;
-    seenWorkspaceRef.current = workspaceId;
-    if (previous === null || previous === workspaceId) return;
-    setPayments([]);
-    setMyApplications([]);
-    setQuotations(null);
-    setQuotationLookupFailed(false);
-    setDetailInvoice(null);
-    setWorkspaceEpoch((epoch) => epoch + 1);
-  }, [workspaceId]);
 
   const activeApplicationId = useMemo(
     () => resolvePaymentsApplicationId({ appFilter, payments, applications: myApplications }),
@@ -319,7 +304,7 @@ export default function HealthPaymentsPage() {
 
   useEffect(() => {
     void loadQuotations();
-  }, [loadQuotations, workspaceEpoch]);
+  }, [loadQuotations]);
 
   // P5 (staging walk 2026-09-29): the filter chip printed the application UUID.
   // The applicant knows the application NUMBER; both reads this page already
@@ -790,6 +775,8 @@ export default function HealthPaymentsPage() {
       {/* ui_kit reskin (Wave 3): pill filter chips — leaf-fill active,
           white/soft idle — matching the ref applications/payments screens.
           Filter state + handler unchanged. */}
+      <HolderFilterChips entities={holder.entities} selectedId={holder.selectedId} onSelect={holder.setSelectedId} />
+
       <div className="flex max-w-full flex-wrap gap-2">
         {[
           { value: 'ALL', label: 'ทั้งหมด' },
@@ -894,8 +881,9 @@ export default function HealthPaymentsPage() {
             const phaseDescription = `${serviceNoun} ชำระครั้งเดียวให้บริษัท`;
 
             return (
+              <div key={`${applicationId ?? 'none'}-${phaseKey}`}>
+              <HolderLine name={holder.holderOf(holderRowOf({ applicationId }))} />
               <TwoCardPaymentSection
-                key={`${applicationId ?? 'none'}-${phaseKey}`}
                 phaseLabel={mapPhaseLabel(phaseKey, sectionService)}
                 phaseDescription={phaseDescription}
                 dueState={dueState}
@@ -904,6 +892,7 @@ export default function HealthPaymentsPage() {
                 invoices={rows}
                 onViewDetail={setDetailInvoice}
               />
+              </div>
             );
           })}
 

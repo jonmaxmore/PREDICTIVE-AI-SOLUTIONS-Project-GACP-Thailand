@@ -36,6 +36,7 @@ jest.mock('../../hooks/use-application-flow-store', () => ({
         state: {
             requestType: 'NEW',
             applicantType: 'JURISTIC',
+            holderEntityId: 'e-company',
             certScope: 'PLANTING',
             plantId: 'cannabis',
             previousCertificateNumber: null,
@@ -43,6 +44,15 @@ jest.mock('../../hooks/use-application-flow-store', () => ({
         updateState: mockUpdateState,
     }),
 }));
+
+jest.mock('@/lib/services/my-entities-provider', () => ({
+    useMyEntities: () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { PERSONAL, COMPANY } = require('@/components/holder/__tests__/fixtures');
+        return { entities: [PERSONAL, COMPANY], isLoading: false, error: null, refresh: async () => {} };
+    },
+}));
+jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams('') }));
 
 import Step1RequestType from '../step1-request-type';
 
@@ -82,6 +92,7 @@ describe('Step1RequestType — a hydrated draft (JURISTIC + NEW) renders both an
         for (const [update] of mockUpdateState.mock.calls as Array<[Record<string, unknown>]>) {
             expect(update).not.toHaveProperty('requestType');
             expect(update).not.toHaveProperty('applicantType');
+            expect(update).not.toHaveProperty('holderEntityId');
         }
     });
 });

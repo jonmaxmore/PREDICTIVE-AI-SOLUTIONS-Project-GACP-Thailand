@@ -81,12 +81,8 @@ function _resolvePrisma(tx) { return tx || _prismaDatabase.prisma; }
 // the permission engine).
 const _holderAccess = () => require('./holder-access');
 const _isHolderScope = (scope) => Boolean(scope) && typeof scope === 'object' && Array.isArray(scope.readIds);
-function _holderFragment(holderScope, legacy, model = 'Quotation') {
-    // R1-legacy-pin: removed in Task 12 (→ holderReadWhere). `legacy` is the read's
-    // own pre-R1 key (the application or quotation id the door's gate resolved),
-    // OR-registered beside the fragment: the rows are exactly the pre-R1 rows, also
-    // for a caller whose holder set is empty (operator ruling C1, Task 4 fix round 1).
-    return _isHolderScope(holderScope) ? _holderAccess().r1HolderOrLegacy(holderScope, model, legacy) : {};
+function _holderFragment(holderScope, model = 'Quotation') {
+    return _isHolderScope(holderScope) ? _holderAccess().holderReadWhere(holderScope, model) : {};
 }
 
 const {
@@ -479,7 +475,7 @@ async function _readLiveQuotationRows(client, applicationId, holderScope = null)
     return client.quotation.findMany({
         where: {
             applicationId,
-            ..._holderFragment(holderScope, { applicationId }),
+            ..._holderFragment(holderScope),
             isDeleted: false,
             // Legacy DTAM rows are read on purpose: a pre-W14 pair already
             // quoted this application, so it must not be re-issued (see the
@@ -581,7 +577,7 @@ async function issueQuotationsForApplication(applicationId, opts = {}) {
     };
     const application = _isHolderScope(holderScope)
         ? await db.application.findFirst({
-            where: { id: applicationId, ..._holderFragment(holderScope, { id: applicationId }, 'Application') },
+            where: { id: applicationId, ..._holderFragment(holderScope, 'Application') },
             ...applicationArgs,
         })
         : await db.application.findUnique({ where: { id: applicationId }, ...applicationArgs });
@@ -812,7 +808,7 @@ async function findQuotationsByApplicationId(applicationId, opts = {}) {
     const rows = await db.quotation.findMany({
         where: {
             applicationId,
-            ..._holderFragment(opts.holderScope, { applicationId }),
+            ..._holderFragment(opts.holderScope),
             isDeleted: false,
         },
         orderBy: { createdAt: 'asc' },
@@ -1011,7 +1007,7 @@ async function markQuotationAccepted(quotationId, opts = {}) {
     }
     const db = _resolvePrisma(tx);
     const existing = await db.quotation.findFirst({
-        where: { id: quotationId, ..._holderFragment(holderScope, { id: quotationId }), isDeleted: false },
+        where: { id: quotationId, ..._holderFragment(holderScope), isDeleted: false },
     });
     if (!existing) {
         const err = new Error(

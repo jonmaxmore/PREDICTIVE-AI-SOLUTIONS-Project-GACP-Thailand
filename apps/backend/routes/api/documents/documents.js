@@ -26,8 +26,7 @@ const logger = require('../../../shared/logger');
  */
 async function buildApplicantDocScope(req) {
     const user = req.user;
-    // Spec 2026-09-30 §3.1 (R1): the holder scope rides along so the read carries
-    // the holder fragment beside the pre-R1 ownership where (Task 6).
+    // Spec 2026-09-30 §3.1: the holder scope decides which filings are read.
     const { holderScope } = require('../../../services/holder-access');
     return {
         userId: String(user?.userId || user?.id || '').trim() || undefined,

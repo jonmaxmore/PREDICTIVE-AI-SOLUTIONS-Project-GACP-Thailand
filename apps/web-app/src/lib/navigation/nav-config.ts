@@ -164,7 +164,7 @@ export const FARMER_NAV: NavItem[] = [
     // operator's call, not this fix's) — only the label/description change
     // to surface the applicant-identity purpose.
     labelTH: 'ผู้ยื่นคำขอ / ทีมงาน',
-    descTH: 'สลับหรือสร้างผู้ยื่นคำขอใหม่ (บุคคลธรรมดา นิติบุคคล วิสาหกิจชุมชน) และจัดการสมาชิกทีม',
+    descTH: 'ดูและเพิ่มผู้ยื่นคำขอที่เป็นนิติบุคคลหรือวิสาหกิจชุมชน และจัดการสมาชิกทีม',
     icon: Users,
     roles: ['health'],
     tier: 'secondary',

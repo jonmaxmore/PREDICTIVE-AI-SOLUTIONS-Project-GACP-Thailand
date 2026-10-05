@@ -31,7 +31,7 @@ const logger = require('../../../shared/logger');
 const { storedCultivationScopeCount } = require('../../../shared/application-scope');
 const { isRenewalFiling } = require('../../../shared/instalment-service-names');
 const { previewPhaseAmounts } = require('../../../services/billing/renewal-amount');
-const { holderScope, r1ApplicationHolderOrPin, r1HolderOrLegacyWhenScoped } = require('../../../services/holder-access');
+const { holderScope, holderReadWhere } = require('../../../services/holder-access');
 
 // P-GET (staging walk 2026-09-30, L3): this GET is a read door in EVERY state.
 // It used to write a feePatch back onto the application — phase1Amount,
@@ -43,9 +43,8 @@ const { holderScope, r1ApplicationHolderOrPin, r1HolderOrLegacyWhenScoped } = re
 //
 // Who still stamps those columns (2026-10-02, M3) — and who does NOT:
 //   - services/application-service/application-draft-query-methods.js:71-77
-//     (saveDraft, reached only by POST /api/wizard/draft — controllers/wizard-controller.js:244)
-//   - services/application-service/application-submission-methods.js:169-177
-//     (reached only by POST /api/wizard/submit and /prepare — wizard-controller.js:358,423)
+//     (saveDraft; no route calls it — the deleted /api/wizard door never did either)
+//   (application-submission-methods.js went with the /api/wizard door, R2 Task 10)
 //   - services/payment-service-phase-flow.js:127-145 (createPhase1Payment,
 //     POST /api/payments/create and /phase1/:applicationId — routes/api/finance/payments.js:278,385)
 //   - services/renewal-service.js:399-406 (cultivationScopeCount/totalAreaTypes only)
@@ -62,27 +61,9 @@ const { holderScope, r1ApplicationHolderOrPin, r1HolderOrLegacyWhenScoped } = re
 // uses (M4), so the preview and the quotation cannot disagree about a row.
 // Proof: __tests__/integration/preview-get-writes-nothing-real-postgres.test.js
 
-// The filing is read within the caller's holder scope (spec 2026-09-30 §3.1);
-// holderScope is called inside the handler, after authentication and the
-// active-entity middleware. In R1 the pre-R1 ownership pin below rides along
-// (R1-legacy-pin: removed in Task 12, together with this helper).
-//
-// Detokenize STAGE A (RFC docs/handoffs/national-id-detokenize-rfc-2026-06-29.md,
-// breaker 3c): Application.healthId is an FK to User.canonicalId and stores the
-// keyed-HMAC TOKEN once APP_FK_USE_TOKEN is on (LIVE on prod 2026-06-29), while
-// req.user.healthId is the DECRYPTED PLAINTEXT national ID. Filtering by
-// `{ healthId: <plaintext> }` therefore never matches → every applicant preview
-// 404'd. Prefer the `applicant: { id }` relation join — User.id is a UUID that
-// is never re-keyed, so the ownership scope is correct in BOTH data states.
-// Fallback for callers without a UUID uses the live FK key (canonicalId), never
-// the plaintext; an empty-string fallback matches nothing (fail-closed).
-function buildApplicantOwnershipScope(user) {
-  const userId = String(user?.id || '').trim();
-  if (userId) {
-    return { applicant: { id: userId } };
-  }
-  return { healthId: String(user?.canonicalId || '').trim() };
-}
+// The filing is read within the caller's holder scope alone (spec 2026-09-30
+// §3.1): holderScope is called inside the handler, after authentication. Any
+// ACTIVE member of the holder previews it; there is no filer pin.
 
 router.get('/applications/:id/preview', authenticateHealth, async (req, res) => {
   try {
@@ -92,9 +73,7 @@ router.get('/applications/:id/preview', authenticateHealth, async (req, res) => 
     const application = await prisma.application.findFirst({
       where: {
         id,
-        // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(scope, 'Application')).
-        // OR form: neutral also when no entity context is bound (final review C1).
-        ...r1ApplicationHolderOrPin(scope, buildApplicantOwnershipScope(req.user)),
+        ...holderReadWhere(scope, 'Application'),
         isDeleted: false,
       },
       include: {
@@ -165,8 +144,7 @@ router.get('/applications/:id/preview', authenticateHealth, async (req, res) => 
       where: {
         applicationId: application.id,
         isDeleted: false,
-        // R1-legacy-pin: removed in Task 12 — the filing the gate above resolved decides.
-        ...r1HolderOrLegacyWhenScoped(scope, 'Invoice', { applicationId: application.id }),
+        ...holderReadWhere(scope, 'Invoice'),
       },
       select: {
         id: true,

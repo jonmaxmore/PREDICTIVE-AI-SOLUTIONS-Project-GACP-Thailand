@@ -40,10 +40,6 @@ jest.mock('../../middleware/auth-middleware', () => {
             canonicalRole: 'health',
             role: 'HEALTH_USER',
         };
-        // The test sets globalThis.__testActiveEntity to inject context.
-        if (globalThis.__testActiveEntity) {
-            req.activeEntity = globalThis.__testActiveEntity;
-        }
         next();
     };
     return { authenticateHealth: passUser, authenticateAny: passUser };
@@ -56,7 +52,6 @@ jest.mock('../../services/application-service', () => ({
     // methods instead of reaching into prisma.* directly.
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -69,6 +64,13 @@ jest.mock('../../services/application-service', () => ({
 
 jest.mock('../../services/prisma-database', () => ({
     prisma: {},
+}));
+
+// R2 Task 8: the caller may edit for ent-1 (the draft door checks the
+// application's holder against the scope's editIds; no header, no activeEntity).
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] })),
 }));
 
 // M1 PR-C: keep the real CAPABILITIES tables — the submit guard's engine reads
@@ -150,19 +152,19 @@ describe('SEC — /prepare rejects server-owned formData keys', () => {
     let app;
     beforeAll(() => { app = makeApp(); });
 
+    // Every /prepare names its draft (spec 2026-09-30 §3.2: all writes carry an id).
+    const prepare = (body) => request(app).post('/api/applications/prepare').send({ applicationId: 'app-1', ...body });
+
     beforeEach(() => {
         jest.clearAllMocks();
-        globalThis.__testActiveEntity = { entityId: 'ent-1', role: 'OWNER' };
         applicationService.resolveHealthIdentity.mockResolvedValue({
             userId: 'user-1', healthId: '1100000000008',
         });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
-        applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
         applicationService.findUserOrganizationId.mockResolvedValue('org-1');
-        applicationService.findLatestOpenDraftForHealth.mockResolvedValue({
+        applicationService.findApplicationByIdForHealth.mockResolvedValue({
             id: 'app-1', healthId: '1100000000008', entityId: 'ent-1',
             submitterId: 'user-1', status: 'DRAFT',
-            formData: {}, workflowHistory: [],
+            formData: { applicantType: 'JURISTIC' }, workflowHistory: [],
         });
         applicationService.updateApplicantDraftColumns.mockResolvedValue({
             id: 'app-1', applicationNumber: 'APP-1', status: 'DRAFT',
@@ -170,7 +172,7 @@ describe('SEC — /prepare rejects server-owned formData keys', () => {
     });
 
     it('does not persist a forged audit-pass record', async () => {
-        const r = await request(app).post('/api/applications/prepare').send({
+        const r = await prepare({
             auditResult: 'PASS',
             auditedAt: '2026-07-01T00:00:00.000Z',
         });
@@ -184,7 +186,7 @@ describe('SEC — /prepare rejects server-owned formData keys', () => {
     });
 
     it('does not let the applicant set their own CAR / revision SLA deadlines', async () => {
-        const r = await request(app).post('/api/applications/prepare').send({
+        const r = await prepare({
             carDueAt: '2099-01-01T00:00:00.000Z',
             car_due_at: '2099-01-01T00:00:00.000Z',
             revisionDueAt: '2099-01-01T00:00:00.000Z',
@@ -200,7 +202,7 @@ describe('SEC — /prepare rejects server-owned formData keys', () => {
     });
 
     it('does not let the applicant assign their own auditor or override admin settings', async () => {
-        const r = await request(app).post('/api/applications/prepare').send({
+        const r = await prepare({
             PROVIDERAssignment: { auditorId: 'friendly-auditor' },
             adminOverrides: { skipPayment: true },
             auditSchedule: { date: '2026-09-09' },
@@ -220,7 +222,7 @@ describe('SEC — /prepare rejects server-owned formData keys', () => {
     });
 
     it('preserves what the server already recorded, rather than the applicant payload', async () => {
-        applicationService.findLatestOpenDraftForHealth.mockResolvedValue({
+        applicationService.findApplicationByIdForHealth.mockResolvedValue({
             id: 'app-1', healthId: '1100000000008', entityId: 'ent-1',
             submitterId: 'user-1', status: 'DRAFT',
             formData: {
@@ -231,7 +233,7 @@ describe('SEC — /prepare rejects server-owned formData keys', () => {
             workflowHistory: [],
         });
 
-        const r = await request(app).post('/api/applications/prepare').send({
+        const r = await prepare({
             auditResult: 'PASS',
             PROVIDERAssignment: { auditorId: 'friendly-auditor' },
             carDueAt: '2099-01-01T00:00:00.000Z',
@@ -245,7 +247,7 @@ describe('SEC — /prepare rejects server-owned formData keys', () => {
     });
 
     it('still persists the applicant own wizard answers', async () => {
-        const r = await request(app).post('/api/applications/prepare').send({
+        const r = await prepare({
             applicantData: { applicantType: 'INDIVIDUAL', firstName: 'สมชาย' },
             farmData: { farmName: 'ไร่สมชาย' },
             plantName: 'ขมิ้นชัน',
@@ -258,5 +260,48 @@ describe('SEC — /prepare rejects server-owned formData keys', () => {
         expect(fd.farmData).toEqual({ farmName: 'ไร่สมชาย' });
         expect(fd.plantName).toBe('ขมิ้นชัน');
         expect(fd.certificationPurposes).toEqual(['RESEARCH']);
+    });
+
+    // R2 Task 8 (spec 2026-09-30 §3.2, B11): /prepare never re-homes and never
+    // takes the declared type from the body.
+    it('ignores and strips a body entityId: the update writes no entityId, formData carries none', async () => {
+        const r = await prepare({ entityId: 'ent-other', plantName: 'ขมิ้นชัน' });
+
+        expect(r.status).toBe(200);
+        const data = applicationService.updateApplicantDraftColumns.mock.calls[0][1];
+        expect(Object.prototype.hasOwnProperty.call(data, 'entityId')).toBe(false);
+        expect(data.formData.entityId).toBeUndefined();
+        expect(data.formData.plantName).toBe('ขมิ้นชัน');
+    });
+
+    it('ignores a body applicantType: the stored one survives', async () => {
+        const r = await prepare({ applicantType: 'INDIVIDUAL' });
+
+        expect(r.status).toBe(200);
+        expect(storedFormData().applicantType).toBe('JURISTIC');
+    });
+
+    // R2 Task 9 (spec §4 case 3): a holder the caller reads but may not edit is a
+    // visible refusal (403), not a missing row; a row outside the scope stays 404.
+    it('a draft whose holder the caller may read but not edit → 403 ENTITY_PERMISSION_DENIED, nothing written', async () => {
+        applicationService.findApplicationByIdForHealth.mockResolvedValue({
+            id: 'app-1', healthId: '1100000000008', entityId: 'ent-viewer-only',
+            submitterId: 'user-1', status: 'DRAFT', formData: {}, workflowHistory: [],
+        });
+
+        const r = await prepare({ plantName: 'ห้ามเขียน' });
+
+        expect(r.status).toBe(403);
+        expect(r.body.code).toBe('ENTITY_PERMISSION_DENIED');
+        expect(applicationService.updateApplicantDraftColumns).not.toHaveBeenCalled();
+    });
+
+    it('a draft outside the caller\'s holders → 404, nothing written', async () => {
+        applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
+
+        const r = await prepare({ plantName: 'ห้ามเขียน' });
+
+        expect(r.status).toBe(404);
+        expect(applicationService.updateApplicantDraftColumns).not.toHaveBeenCalled();
     });
 });

@@ -124,7 +124,7 @@ async function main() {
         }
 
         // Step 12: Protected endpoint with random bearer token
-        const randomBearer = await api('GET', '/wizard/draft', { token: 'Bearer random-nonsense-token-12345' });
+        const randomBearer = await api('GET', '/applications/draft', { token: 'Bearer random-nonsense-token-12345' });
         if ([401, 403].includes(randomBearer.status)) {
             j.pass('Random bearer token rejected', `status: ${randomBearer.status}`);
         } else {

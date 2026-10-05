@@ -11,7 +11,7 @@
  *        body: { originalCertificateId }
  *        - HEALTH role (applicant) — must own the certificate and hold
  *          SUBMIT_APPLICATION on the certificate's holder (403
- *          ENTITY_PERMISSION_DENIED otherwise; 400 APPLICANT_ENTITY_MISSING
+ *          ENTITY_PERMISSION_DENIED otherwise; 400 APPLICATION_HOLDER_REQUIRED
  *          when the certificate has no holder).
  *        - Creates the renewal at the site-visit payment gate
  *          (PENDING_AUDIT_FEE) with carry-forward data.
@@ -48,12 +48,9 @@ const {
     authenticateProvider,
 } = require('../../../middleware/auth-middleware');
 const renewalService = require('../../../services/renewal-service');
+// R2 Task 8: the caller's holder scope; the renewal service checks the source holder against it.
 const { holderScope } = require('../../../services/holder-access');
-// M1 (2026-08-15) — a renewal draft copies `entityId` from the source
-// application when the source has one (renewal-service.js:315-317). When the
-// source pre-dates Phase 66 it does not, and the copy inherits the hole: a
-// draft that the submit guard can never accept. Heal it here, at creation.
-const applicationService = require('../../../services/application-service');
+const { entityPermissionDeniedBody } = require('../../../shared/entity-permission-denied');
 
 // ── Error mapper ───────────────────────────────────────────────────────────
 
@@ -62,6 +59,10 @@ function sendServiceError(res, err) {
     const code = err?.code || 'INTERNAL_ERROR';
     if (status >= 500) {
         logger.error(`[renewals-route] ${code}: ${err?.message}`, err);
+    }
+    // One answer for this code at every door (shared/entity-permission-denied.js).
+    if (code === 'ENTITY_PERMISSION_DENIED') {
+        return res.status(403).json(entityPermissionDeniedBody(err?.permission));
     }
     const body = {
         success: false,
@@ -94,43 +95,15 @@ router.post('/', authenticateHealth, async (req, res) => {
             });
         }
 
-        // The holder scope (spec 2026-09-30 §3.1): the renewal's certificate,
-        // application and quotation reads carry it, as the submit door's do.
-        // Who may renew is decided inside the service (SUBMIT_APPLICATION on the
-        // certificate's holder, operator ruling 2026-10-03), not by this scope.
-        const scope = await holderScope(req);
+        // The service decides the holder before it writes anything (R2 Task 8 fix
+        // round 1): no holder → 400 APPLICATION_HOLDER_REQUIRED; a caller without
+        // SUBMIT_APPLICATION on the holder → 403 (operator ruling 2026-10-03: a
+        // renewal is a submission). Both write the APPLICATION_SUBMIT_DENIED audit row.
         const result = await renewalService.createRenewalApplication({
             originalCertificateId,
             actorId,
-            holderScope: scope,
+            holderScope: await holderScope(req),
         });
-
-        // M1 — the renewal must name the legal applicant it is filed for. The
-        // service copies it from the source application when the source has
-        // one; when it does not, heal from the caller's personal entity, and
-        // refuse rather than hand back a draft no door will ever accept.
-        const created = await applicationService.getApplicationSlice(result.applicationId, {
-            select: { id: true, entityId: true },
-            holderScope: scope,
-        });
-        if (!created?.entityId) {
-            const personalEntity = await applicationService.findPersonalEntityForHealthIdentity({
-                userId: actorId,
-                healthId: req.user?.canonicalId || req.user?.healthId || null,
-            });
-            if (!personalEntity?.id) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'VALIDATION_ERROR',
-                    code: 'VALIDATION_ERROR',
-                    message: 'ไม่พบผู้ยื่นตามกฎหมาย (entity) สำหรับคำขอต่ออายุนี้',
-                });
-            }
-            await applicationService.healDraftEntityColumns(result.applicationId, {
-                entityId: personalEntity.id,
-                submitterId: actorId,
-            });
-        }
 
         logger.info('[renewals-route] renewal created', {
             applicationId: result.applicationId,

@@ -26,7 +26,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -35,6 +34,11 @@ jest.mock('../../services/application-service', () => ({
     findUserOrganizationId: jest.fn(),
     getApplicantReadinessSnapshot: jest.fn(),
     getLatestOpenDraftForApplicant: jest.fn(),
+}));
+// R2 Task 8: the caller's holder scope (editIds) — the draft door checks it.
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['entity-1'], editIds: ['entity-1'] })),
 }));
 
 jest.mock('../../services/prisma-database', () => ({ prisma: {} }));
@@ -71,6 +75,10 @@ jest.mock('../../routes/api/applications/application-workflow-handlers', () => r
 
 const applicationService = require('../../services/application-service');
 const applicationsRouter = require('../../routes/api/applications/applications');
+
+// R2 Task 8 (spec 2026-09-30 §3.2): a draft write without an id names its holder;
+// the caller edits for entity-1 (the resume path finds the mocked draft).
+const named = (body) => ({ entityId: 'entity-1', ...body });
 
 /** Canonical wizard data that clears every step the server judges. */
 function completeWizardData(overrides = {}) {
@@ -124,7 +132,6 @@ describe('F-G4-11 — POST /draft: the step a caller claims', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
         applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
         const draft = makeDraft();
         applicationService.findLatestOpenDraftForHealth.mockResolvedValue(draft);
@@ -135,7 +142,7 @@ describe('F-G4-11 — POST /draft: the step a caller claims', () => {
         // The URL trick as an API call: an empty wizard declaring step 9.
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 9, formData: {} });
+            .send(named({ step: 9, formData: {} }));
 
         expect(response.status).toBe(200);
         expect(response.body.data.savedStep).toBe(2);
@@ -149,7 +156,7 @@ describe('F-G4-11 — POST /draft: the step a caller claims', () => {
         // would cost a farmer their typing; only the claim is corrected.
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 9, certificationPurposes: ['EXPORT'], formData: {} });
+            .send(named({ step: 9, certificationPurposes: ['EXPORT'], formData: {} }));
 
         expect(response.status).toBe(200);
         expect(applicationService.updateApplicantDraftColumns).toHaveBeenCalledTimes(1);
@@ -157,7 +164,7 @@ describe('F-G4-11 — POST /draft: the step a caller claims', () => {
     });
 
     it('the audit trail records the earned step too, so history and lastDraftStep cannot disagree', async () => {
-        await request(app).post('/api/applications/draft').send({ step: 9, formData: {} });
+        await request(app).post('/api/applications/draft').send(named({ step: 9, formData: {} }));
 
         const event = savedPayload().workflowHistory.at(-1);
         expect(event.action).toBe('APPLICATION_DRAFT_SAVED');
@@ -168,7 +175,7 @@ describe('F-G4-11 — POST /draft: the step a caller claims', () => {
         const onStepSeven = completeWizardData({ harvestData: {} });
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 7, formData: onStepSeven });
+            .send(named({ step: 7, formData: onStepSeven }));
 
         expect(response.status).toBe(200);
         expect(response.body.data.savedStep).toBe(7);
@@ -179,7 +186,7 @@ describe('F-G4-11 — POST /draft: the step a caller claims', () => {
     it('lets a farmer go BACK to a finished step', async () => {
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 4, formData: completeWizardData() });
+            .send(named({ step: 4, formData: completeWizardData() }));
 
         expect(response.status).toBe(200);
         expect(response.body.data.savedStep).toBe(4);
@@ -191,7 +198,7 @@ describe('F-G4-11 — POST /draft: the step a caller claims', () => {
         // the whole-store save there is nothing else in the request to lose.
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 8, steps: { 8: { files: [{ name: 'x.pdf' }] } }, formData: {} });
+            .send(named({ step: 8, steps: { 8: { files: [{ name: 'x.pdf' }] } }, formData: {} }));
 
         expect(response.status).toBe(422);
         expect(response.body.error).toBe('STEP_PREREQUISITE_UNMET');
@@ -205,7 +212,7 @@ describe('F-G4-11 — POST /draft: the step a caller claims', () => {
     it('accepts step-scoped legacy data for a step that HAS been earned', async () => {
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ step: 8, steps: { 8: { files: [{ name: 'x.pdf' }] } }, formData: completeWizardData() });
+            .send(named({ step: 8, steps: { 8: { files: [{ name: 'x.pdf' }] } }, formData: completeWizardData() }));
 
         expect(response.status).toBe(200);
         expect(applicationService.updateApplicantDraftColumns).toHaveBeenCalledTimes(1);
@@ -218,7 +225,7 @@ describe('F-G4-11 — POST /draft: the step a caller claims', () => {
 
         const response = await request(app)
             .post('/api/applications/draft')
-            .send({ certificationPurposes: ['EXPORT'] });
+            .send(named({ certificationPurposes: ['EXPORT'] }));
 
         expect(response.status).toBe(200);
         expect(response.body.data.savedStep).toBeNull();
@@ -240,7 +247,6 @@ describe('F-G4-11 — POST /prepare: the step-9 door', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
         applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
         applicationService.findLatestOpenDraftForHealth.mockResolvedValue(makeDraft());
         applicationService.updateApplicantDraftColumns.mockResolvedValue({
@@ -251,7 +257,7 @@ describe('F-G4-11 — POST /prepare: the step-9 door', () => {
     it('REFUSES step-scoped legacy data for a step this application has not earned', async () => {
         const response = await request(app)
             .post('/api/applications/prepare')
-            .send({ ...completeWizardData({ farmData: {}, plots: [] }), steps: { 7: { harvest_method: 'MANUAL' } } });
+            .send(named({ ...completeWizardData({ farmData: {}, plots: [] }), steps: { 7: { harvest_method: 'MANUAL' } } }));
 
         expect(response.status).toBe(422);
         expect(response.body.error).toBe('STEP_PREREQUISITE_UNMET');
@@ -264,7 +270,7 @@ describe('F-G4-11 — POST /prepare: the step-9 door', () => {
     it('accepts step-scoped legacy data for a step that HAS been earned', async () => {
         const response = await request(app)
             .post('/api/applications/prepare')
-            .send({ ...completeWizardData(), steps: { 7: { harvest_method: 'MANUAL' } } });
+            .send(named({ ...completeWizardData(), steps: { 7: { harvest_method: 'MANUAL' } } }));
 
         expect(response.status).toBe(200);
         expect(applicationService.updateApplicantDraftColumns).toHaveBeenCalledTimes(1);
@@ -274,14 +280,14 @@ describe('F-G4-11 — POST /prepare: the step-9 door', () => {
         // Completeness is POST /submit's decision, against a higher bar. A
         // second gate here would be that decision written twice, and would
         // break the partial writes this route exists to accept.
-        const response = await request(app).post('/api/applications/prepare').send({});
+        const response = await request(app).post('/api/applications/prepare').send(named({}));
 
         expect(response.status).toBe(200);
         expect(applicationService.updateApplicantDraftColumns).toHaveBeenCalledTimes(1);
     });
 
     it('accepts a complete preparation — the wizard walked through, not around', async () => {
-        const response = await request(app).post('/api/applications/prepare').send(completeWizardData());
+        const response = await request(app).post('/api/applications/prepare').send(named(completeWizardData()));
 
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
@@ -297,7 +303,7 @@ describe('F-G4-11 — POST /prepare: the step-9 door', () => {
 
         const response = await request(app)
             .post('/api/applications/prepare')
-            .send({ ...payload, steps: { 8: { files: [{ name: 'a.pdf' }] } } });
+            .send(named({ ...payload, steps: { 8: { files: [{ name: 'a.pdf' }] } } }));
         expect(response.status).toBe(200);
     });
 
@@ -309,7 +315,7 @@ describe('F-G4-11 — POST /prepare: the step-9 door', () => {
         const response = await request(app)
             .post('/api/applications/prepare')
             // Claims step 9, which is only earned if step 8's documents count.
-            .send({ ...completeWizardData({ documents: [] }), steps: { 9: { reviewed: true } } });
+            .send(named({ ...completeWizardData({ documents: [] }), steps: { 9: { reviewed: true } } }));
 
         expect(response.status).toBe(200);
     });

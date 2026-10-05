@@ -98,38 +98,6 @@ export interface ApiResponse<T = unknown> {
  */
 const ENVELOPE_RESERVED_KEYS = new Set(['success', 'data', 'error', 'message', 'code']);
 
-// Wave C / design-cleanup-2026-08-21 B1 trap — MUST match the localStorage
-// key api-client's header-injection reads (below) and
-// ActiveEntityProvider's STORAGE_KEY (active-entity-provider.tsx). Kept as
-// a literal here (not imported from that 'use client' provider module) to
-// avoid pulling a React context module into this plain HTTP client.
-const ACTIVE_ENTITY_STORAGE_KEY = 'gacp.activeEntityId';
-const ACTIVE_ENTITY_MISMATCH_CODE = 'ACTIVE_ENTITY_MISMATCH';
-
-/**
- * Detect apps/backend/middleware/active-entity-middleware.js's 403 body
- * (`{ success:false, error:'Forbidden', message:'...', code:'ACTIVE_ENTITY_MISMATCH' }`).
- * Before B1 fixed the proxy to forward `x-active-entity-id`, this header
- * never reached the backend, so this path was unreachable in practice. Now
- * that it does, a STALE id left in localStorage (a revoked membership, a
- * switch to a different account on the same browser, etc.) surfaces here
- * instead of silently defaulting — the raw `error:'Forbidden'` would
- * otherwise win the `rawCode = data.error || data.code` harvest below and
- * hide the real code, so this must be checked on the RAW body first.
- */
-function isActiveEntityMismatchBody(data: Record<string, unknown> | null): boolean {
-    return Boolean(data) && (data as Record<string, unknown>).code === ACTIVE_ENTITY_MISMATCH_CODE;
-}
-
-function clearStaleActiveEntitySelection(): void {
-    if (typeof window === 'undefined') return;
-    try {
-        window.localStorage?.removeItem(ACTIVE_ENTITY_STORAGE_KEY);
-    } catch {
-        // localStorage unavailable — nothing to clear.
-    }
-}
-
 function extractEnvelopeMeta(data: Record<string, unknown> | null): Record<string, unknown> | undefined {
     if (!data || typeof data !== 'object') return undefined;
     const meta: Record<string, unknown> = {};
@@ -366,22 +334,6 @@ class ApiClient {
             }
         }
 
-        // Wave C — workspace switcher. Send the user's currently-active
-        // entity (workspace) so the backend's active-entity middleware
-        // can scope the request. localStorage is the canonical source —
-        // ActiveEntityProvider keeps it in sync. Never overrides a header
-        // explicitly set by the caller.
-        if (!skipAuth && typeof window !== 'undefined' && !headers['x-active-entity-id']) {
-            try {
-                const activeEntityId = window.localStorage?.getItem('gacp.activeEntityId');
-                if (activeEntityId) {
-                    headers['x-active-entity-id'] = activeEntityId;
-                }
-            } catch {
-                // localStorage unavailable (private browsing, SSR) — skip silently.
-            }
-        }
-
         // Smart Path Handling: Auto-prefix with /api if needed
         let fullEndpoint = endpoint;
         if (!endpoint.startsWith('http')) {
@@ -540,23 +492,6 @@ class ApiClient {
                 // permission). `.code` is NORMALIZED here because the raw
                 // harvest (data.error || data.code) would capture the Thai
                 // message for the `error`-carried shape.
-                // Wave C / design-cleanup-2026-08-21 B1 trap — checked BEFORE
-                // the generic 403 rewrite AND before the entity-permission
-                // branch (different code, different cause: this is a stale
-                // workspace SELECTION, not a missing permission inside a
-                // valid one). Recover by clearing the bad selection so the
-                // NEXT request falls back to the user's default entity, and
-                // tell the user honestly instead of the blanket "re-login"
-                // copy below (their session is fine).
-                if (response.status === 403 && isActiveEntityMismatchBody(data)) {
-                    clearStaleActiveEntitySelection();
-                    return {
-                        success: false,
-                        error: 'พื้นที่ทำงานที่เลือกไว้ใช้งานไม่ได้แล้ว ระบบสลับกลับไปที่ค่าเริ่มต้นให้อัตโนมัติ กรุณาลองใหม่อีกครั้ง',
-                        status: 403,
-                        code: ACTIVE_ENTITY_MISMATCH_CODE,
-                    };
-                }
                 if (response.status === 403 && isEntityPermissionDenialBody(data)) {
                     const denialMeta = extractEnvelopeMeta(data);
                     return {
@@ -686,17 +621,6 @@ class ApiClient {
             }
         }
 
-        // Wave C — same active-entity propagation as JSON requests.
-        if (!skipAuth && typeof window !== 'undefined' && !headers['x-active-entity-id']) {
-            try {
-                const activeEntityId = window.localStorage?.getItem('gacp.activeEntityId');
-                if (activeEntityId) {
-                    headers['x-active-entity-id'] = activeEntityId;
-                }
-            } catch {
-                // localStorage unavailable — skip silently.
-            }
-        }
 
         let fullEndpoint = endpoint;
         if (!endpoint.startsWith('http')) {

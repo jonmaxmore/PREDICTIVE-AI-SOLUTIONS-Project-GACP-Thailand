@@ -26,7 +26,7 @@
  * dead — no live writer anywhere in the tree. Neither frontend
  * `ProductionData` interface (domain-types.ts:267,
  * print-page-types.ts:82) declares an `areaUnit` field, and no backend
- * write path (application-submission-methods.js et al.) ever sets
+ * write path (the since-deleted application-submission-methods.js et al.) ever sets
  * `formData.productionData.areaUnit`. Before this fix the only two
  * references left in the codebase were the read itself
  * (certificate-service.js:561) and a test fixture

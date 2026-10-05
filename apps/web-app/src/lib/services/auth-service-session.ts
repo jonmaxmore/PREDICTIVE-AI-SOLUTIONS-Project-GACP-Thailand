@@ -82,20 +82,6 @@ export const setStoredUser = (user: AuthUser): void => {
     setStoredValue(STORAGE_KEYS.USER, JSON.stringify(user), LEGACY_PROVIDER_USER_KEY);
 };
 
-// The active-entity id MUST be cleared whenever the session identity changes —
-// on logout, AND on a login that establishes a DIFFERENT account. Otherwise it
-// survives on a shared device, the next user's session sends a stale
-// `x-active-entity-id`, and the backend rejects every entity-scoped read with
-// 403 ACTIVE_ENTITY_MISMATCH (breaks the health dashboard, /applications/my,
-// and the provider auditor APIs). Literal key (= ACTIVE_ENTITY_STORAGE_KEY in
-// active-entity-provider) to avoid a circular import.
-export const clearActiveEntityId = (): void => {
-    if (!isBrowser()) {
-        return;
-    }
-    localStorage.removeItem('gacp.activeEntityId');
-};
-
 export const clearStoredAuthSession = (): void => {
     if (!isBrowser()) {
         return;
@@ -107,7 +93,6 @@ export const clearStoredAuthSession = (): void => {
     localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVITY);
     localStorage.removeItem(LEGACY_PROVIDER_TOKEN_KEY);
     localStorage.removeItem(LEGACY_PROVIDER_USER_KEY);
-    clearActiveEntityId();
 };
 
 /* ── Activity tracking ── */

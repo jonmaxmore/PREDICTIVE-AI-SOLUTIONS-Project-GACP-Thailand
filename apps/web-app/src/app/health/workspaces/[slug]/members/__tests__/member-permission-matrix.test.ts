@@ -191,7 +191,7 @@ describe('member-permission-matrix component — wiring pin (fs source-scan)', (
     test('F3 — the enforcement copy discloses the creator-owned-farm exception', () => {
         expect(componentSrc).toContain('มีผลกับคำขอถัดไปทันที');
         expect(componentSrc).toContain(
-            'ยกเว้นฟาร์มที่สมาชิกคนนั้นเป็นผู้สร้างเอง ระบบยังให้สิทธิ์ผู้สร้างจนกว่าจะถอนสมาชิกออกจาก workspace',
+            'ยกเว้นฟาร์มที่สมาชิกคนนั้นเป็นผู้สร้างเอง ระบบยังให้สิทธิ์ผู้สร้างจนกว่าจะถอนสมาชิกออกจากนิติบุคคลหรือวิสาหกิจชุมชน',
         );
     });
 

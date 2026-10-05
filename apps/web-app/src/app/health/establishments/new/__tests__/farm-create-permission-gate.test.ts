@@ -38,14 +38,15 @@ describe('establishments/new — FARM_CREATE gate pins', () => {
     });
 
     test('F5 — the gated boolean derives from the EXTRACTED behavior-tested function (full expression, polarity-proof)', () => {
-        expect(src).toMatch(/const canCreateFarm = computeCanCreateFarm\(hasWorkspacePermission\);/);
+        // R2: and a holder must be chosen (no default holder), asked of the same function.
+        expect(src).toMatch(/const canCreateFarm = holderEntityId !== null && computeCanCreateFarm\(hasWorkspacePermission\);/);
         // no inverted/raw re-derivation anywhere
         expect(src).not.toMatch(/!computeCanCreateFarm/);
     });
 
     test('F5 — submit button polarity: disabled when NOT allowed, tooltip on the same polarity (full JSX expressions)', () => {
         expect(src).toMatch(/disabled=\{!canCreateFarm\}/);
-        expect(src).toMatch(/title=\{!canCreateFarm \? NO_PERMISSION_TOOLTIP_TH : undefined\}/);
+        expect(src).toMatch(/!canCreateFarm \? NO_PERMISSION_TOOLTIP_TH : undefined/);
         // inverted wiring (disabled={canCreateFarm}) must not exist
         expect(src).not.toMatch(/disabled=\{canCreateFarm\}/);
     });

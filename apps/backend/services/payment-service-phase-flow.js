@@ -31,7 +31,7 @@ function createPhaseFlow(deps) {
   // recompute. Returns { phase1Total, phase2Total, scopeCount, frozen }.
   // Logs a structured drift warning when the two diverge; the frozen price
   // (what the applicant accepted) wins.
-  async function resolveLockedPhaseTotals(applicationId, recomputedFees) {
+  async function resolveLockedPhaseTotals(applicationId, recomputedFees, holderScope = null) {
     const result = {
       phase1Total: recomputedFees.phase1.phaseTotal,
       phase2Total: recomputedFees.phase2.phaseTotal,
@@ -53,7 +53,9 @@ function createPhaseFlow(deps) {
     // assertQuotationAcceptedForPayment (QUOTATION_NOT_ISSUED).
     let frozen = null;
     try {
-      frozen = await getFrozenPhaseFees(applicationId);
+      // A health door's holder scope rides along (R2 Task 9 fix round 1b): the same
+      // quotation rows, read with the holder fragment (quotation-service _holderFragment).
+      frozen = await getFrozenPhaseFees(applicationId, holderScope ? { holderScope } : {});
     } catch (err) {
       if (logger?.error) {
         logger.error('[QUOTE_PRICE_LOCK] frozen-quote read failed — payment refused (fail closed)', {
@@ -82,13 +84,27 @@ function createPhaseFlow(deps) {
     };
   }
 
-async function createPhase1Payment(applicationId, healthId) {
+/**
+ * @param {string} applicationId
+ * @param {string} healthId — the caller's healthId (audit actor; the read where only without a scope)
+ * @param {{ holderScope?: object }} [options] — a health door's holder scope (R2
+ *   Task 9 fix round 1b): every read below then carries the holder fragment and
+ *   returns exactly the rows it returned before. Amounts, numbering, statuses
+ *   and writes are unchanged.
+ */
+async function createPhase1Payment(applicationId, healthId, options = {}) {
   try {
+    const { holderScope } = options;
     // Check if application exists and belongs to user
     const application = await prisma.application.findFirst({
       where: {
         id: applicationId,
-        healthId,
+        // A health door passes its holder scope: the filing is read within it (spec
+        // 2026-09-30 §3.1; the door already asked SUBMIT_APPLICATION, Q3). No scope →
+        // the healthId where, as before. A read filter only: nothing below changes.
+        ...(holderScope
+          ? require('./holder-access').holderReadWhere(holderScope, 'Application')
+          : { healthId }),
         // PR 2c: five legacy spellings dropped. PAYMENT_1_PAID in particular
         // was never a phase-1-payable state — it means the fee is already paid.
         status: { in: ['DRAFT', 'SUBMITTED', 'PENDING_DOC_FEE'] },
@@ -100,7 +116,7 @@ async function createPhase1Payment(applicationId, healthId) {
       throw new Error('Application not found or not in DRAFT status');
     }
 
-    const synced = await syncPhaseStatusesFromInvoices(applicationId);
+    const synced = await syncPhaseStatusesFromInvoices(applicationId, { holderScope });
     if (synced?.phase1Paid) {
       return {
         success: true,
@@ -130,7 +146,7 @@ async function createPhase1Payment(applicationId, healthId) {
     //
     // GAP-5 (2026-07-08): copy the phase totals from the accepted quotation
     // (frozen price-of-record) when one exists; recompute is the fallback.
-    const locked = await resolveLockedPhaseTotals(applicationId, calculatedFees);
+    const locked = await resolveLockedPhaseTotals(applicationId, calculatedFees, holderScope);
     const phase1Amount = locked.phase1Total;
     const phase2Amount = locked.phase2Total;
 
@@ -157,7 +173,7 @@ async function createPhase1Payment(applicationId, healthId) {
 
     // Check if already has pending payment
     if (application.phase1Status === 'PROCESSING' && application.phase1ExpiresAt > new Date()) {
-      const settlements = await getInvoiceSettlementsForApplication(applicationId);
+      const settlements = await getInvoiceSettlementsForApplication(applicationId, { holderScope });
       return {
         success: true,
         existing: true,
@@ -187,6 +203,9 @@ async function createPhase1Payment(applicationId, healthId) {
       await writeApplicationStatus({
         prisma: tx,
         applicationId,
+        // The writer's formData pre-read carries the caller's holder fragment (a
+        // read filter only, spec 2026-09-30 §3.1); staff/system callers pass none.
+        holderScope,
         fromStatus: application.status,
         // The canonical state, not 'PAYMENT_PHASE_1'. That string was in no
         // state list, so payment-slip-service resolved it to itself and refused

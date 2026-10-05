@@ -296,7 +296,8 @@ async function cleanupHolderScopeFixture(prisma, fx) {
         await wipe(model, { applicationId: { in: appIds } });
     }
     await prisma.application.updateMany({ where: { id: { in: appIds } }, data: { bundleId: null } }).catch(() => {});
-    await wipe('applicationBundle', { healthId: fx.users?.A?.canonicalId });
+    const canonicalIds = Object.values(fx.users || {}).map((u) => u.canonicalId).filter(Boolean);
+    await wipe('applicationBundle', { healthId: { in: canonicalIds } });
     await wipe('auditLog', { resourceId: { in: appIds } });
     await wipe('application', { id: { in: appIds } });
     await wipe('farm', { organizationId: fx.orgId });

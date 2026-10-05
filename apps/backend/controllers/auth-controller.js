@@ -1,4 +1,3 @@
-// Using Prisma (PostgreSQL) instead of MongoDB
 const AuthService = require('../services/prisma-auth-service');
 const { auditLogger } = require('../middleware/audit-logger');
 const jwtConfig = require('../config/jwt-security');

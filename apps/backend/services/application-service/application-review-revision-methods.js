@@ -58,15 +58,13 @@ function createApplicationReviewRevisionMethods({
             const { userId: actorUserId, healthId: actorHealthId, actorIdentity, actorRole } = actor;
 
             const byIdOrNumber = { OR: [{ id: applicationId }, { applicationNumber: applicationId }] };
+            // Spec 2026-09-30 §3.1/§3.3 (R2 Task 12): the filing is read within the
+            // caller's holder scope; the door's submit guard already decided that the
+            // caller may act for its holder, so who filed it does not matter. Without
+            // a scope (no health door) the old filer where stays.
             const app = await prisma.application.findFirst({
                 where: holderScope
-                    ? {
-                        // The id-or-number OR moves into AND so the holder OR can sit at the top.
-                        AND: [byIdOrNumber],
-                        healthId: actorHealthId,
-                        // R1-legacy-pin: removed in Task 12 — the pre-R1 filer pin decides.
-                        ...require('../holder-access').r1HolderOrLegacyWhenScoped(holderScope, 'Application', { healthId: actorHealthId }),
-                    }
+                    ? { ...byIdOrNumber, ...require('../holder-access').holderReadWhere(holderScope, 'Application') }
                     : { ...byIdOrNumber, healthId: actorHealthId },
             });
 
@@ -220,6 +218,15 @@ function createApplicationReviewRevisionMethods({
             // round stage, so the snapshot is a no-op there.
             await prisma.$transaction(async (tx) => {
                 if (isDraftSubmit) {
+                    // FIRST statement: a RENEWAL/REPLACEMENT claim (the stored, server-owned
+                    // link) takes the renewal door's per-certificate lock and refuses when
+                    // another filing of that certificate is in flight (409).
+                    await require('../application-submit-guard').lockAndAssertNoSuccessionInFlight(tx, {
+                        application: app, userId: actorUserId, holderScope,
+                        auditContext: { actorType: 'USER', actorRole: actorRole || null, route: 'PUT /applications/:id/revision' },
+                    });
+                }
+                if (isDraftSubmit) {
                     // Hop 1 — DRAFT → SUBMITTED (the applicant's act, via this
                     // door). Mirrors POST /applications/submit's hop 1
                     // (applications.js:846-875).
@@ -313,8 +320,7 @@ function createApplicationReviewRevisionMethods({
             const updated = await prisma.application.findUnique({
                 where: {
                     id: app.id,
-                    // R1-legacy-pin: removed in Task 12 — the row this door just wrote decides.
-                    ...require('../holder-access').r1HolderOrLegacyWhenScoped(holderScope, 'Application', { id: app.id }),
+                    ...require('../holder-access').holderReadWhereIfScoped(holderScope, 'Application'),
                 },
             });
 

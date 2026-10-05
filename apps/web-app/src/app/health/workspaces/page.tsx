@@ -4,8 +4,9 @@
  * /health/workspaces — list every Entity the user is a member of with
  * role badges + a CTA to create a new JURISTIC / COMMUNITY workspace.
  *
- * Wave C PR-4. The active-list comes from useActiveEntity() which
- * already has the list cached from /api/entities/mine.
+ * Wave C PR-4. The list comes from useMyEntities() which already has it
+ * cached from /api/entities/mine. There is no "active" entity: the entity an
+ * application is filed for is chosen when the application starts.
  *
  * Wave D — top of the page now shows a "Pending Invitations" section
  * (when any) sourced from GET /api/entities/invitations. Each row has
@@ -23,7 +24,7 @@ import { Building2, Users as UsersIcon, User as UserIcon, Plus, ArrowRight, Mail
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api/api-client';
 import { logger } from '@/lib/logger';
-import { useActiveEntity, EntityMembership } from '@/lib/services/active-entity-provider';
+import { useMyEntities, type EntityMembership } from '@/lib/services/my-entities-provider';
 import { ConfirmDialog, SummaryHeader } from '@/components/feature';
 
 interface PendingInvitation {
@@ -63,11 +64,12 @@ function TypeIcon({ type, className }: { type: EntityMembership['type']; classNa
 }
 
 export default function WorkspacesListPage() {
-    const { entities, activeEntity, isLoading, setActiveEntity, refresh } = useActiveEntity();
+    const { entities: myEntities, isLoading, refresh } = useMyEntities();
     const router = useRouter();
+    // The person themself first, then the entities they belong to.
+    const entities = [...myEntities].sort((a, b) => Number(b.isPersonal) - Number(a.isPersonal));
 
-    const onOpen = async (e: EntityMembership) => {
-        if (e.id !== activeEntity?.id) await setActiveEntity(e.id);
+    const onOpen = (e: EntityMembership) => {
         const target = e.slug ? `/health/workspaces/${e.slug}/members` : `/health/workspaces`;
         router.push(target);
     };
@@ -142,15 +144,15 @@ export default function WorkspacesListPage() {
         // discoverable even when user has only one entity.
         <div className="space-y-6">
             <SummaryHeader
-                eyebrow="ผู้ขอรับรอง · Workspace"
-                title="Workspace ของคุณ"
-                description="จัดการ workspace ที่คุณเป็นสมาชิก เลือก workspace เพื่อสร้างใบสมัคร / ดูฟาร์ม"
+                eyebrow="ผู้ขอรับรอง"
+                title="นิติบุคคลและวิสาหกิจชุมชนของคุณ"
+                description="จัดการนิติบุคคลและวิสาหกิจชุมชนที่คุณเป็นสมาชิก ระบบจะให้เลือกผู้ยื่นคำขอตอนเริ่มสร้างใบสมัคร"
                 {...(!isLoading
                     ? {
                           metrics: [
-                              { label: 'ทั้งหมด', value: entities.length.toLocaleString('th-TH'), icon: '🗂️' },
+                              { label: 'ทั้งหมด', value: entities.length.toLocaleString('th-TH') },
                               ...(invitations.length > 0
-                                  ? [{ label: 'คำเชิญรอตอบรับ', value: invitations.length.toLocaleString('th-TH'), icon: '✉️' }]
+                                  ? [{ label: 'คำเชิญรอตอบรับ', value: invitations.length.toLocaleString('th-TH') }]
                                   : []),
                           ],
                       }
@@ -161,7 +163,7 @@ export default function WorkspacesListPage() {
                         className="inline-flex items-center gap-2 rounded-lg bg-leaf-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-leaf-800"
                     >
                         <Plus className="h-4 w-4" />
-                        สร้าง workspace ใหม่
+                        สร้างนิติบุคคลหรือวิสาหกิจชุมชนใหม่
                     </Link>
                 }
             />
@@ -239,12 +241,12 @@ export default function WorkspacesListPage() {
 
             {!isLoading && entities.length === 0 && (
                 <div className="rounded-xl border border-zinc-200 bg-card p-8 text-center dark:border-zinc-700">
-                    <p className="text-sm text-muted-foreground">ยังไม่มี workspace</p>
+                    <p className="text-sm text-muted-foreground">ยังไม่มีนิติบุคคลหรือวิสาหกิจชุมชน</p>
                     <Link
                         href="/health/workspaces/new"
                         className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-leaf-700 hover:underline dark:text-primary-300"
                     >
-                        เริ่มต้นโดยสร้าง workspace แรก
+                        เริ่มต้นโดยสร้างนิติบุคคลหรือวิสาหกิจชุมชนแรก
                         <ArrowRight className="h-4 w-4" />
                     </Link>
                 </div>
@@ -253,16 +255,10 @@ export default function WorkspacesListPage() {
             {!isLoading && entities.length > 0 && (
                 <ul className="space-y-3">
                     {entities.map((e) => {
-                        const isActive = e.id === activeEntity?.id;
                         return (
                             <li
                                 key={e.id}
-                                className={cn(
-                                    'rounded-xl border bg-card p-4 transition-shadow',
-                                    isActive
-                                        ? 'border-leaf-300 shadow-sm dark:border-leaf-700'
-                                        : 'border-zinc-200 hover:shadow-sm dark:border-zinc-700',
-                                )}
+                                className="rounded-xl border border-zinc-200 bg-card p-4 transition-shadow hover:shadow-sm dark:border-zinc-700"
                             >
                                 <div className="flex items-start gap-4">
                                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
@@ -270,19 +266,16 @@ export default function WorkspacesListPage() {
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <h3 className="text-base font-semibold text-foreground">{e.displayName}</h3>
-                                            {isActive && (
-                                                <span className="rounded-md bg-leaf-soft px-2 py-0.5 text-[11px] font-bold uppercase text-leaf-onSoft dark:bg-primary-900/40 dark:text-primary-300">
-                                                    ใช้งานอยู่
-                                                </span>
-                                            )}
+                                            <h3 className="text-base font-semibold text-foreground">
+                                                {e.isPersonal ? 'ตัวคุณเอง (บุคคลธรรมดา)' : e.displayName}
+                                            </h3>
                                             <span className={cn('rounded-md px-2 py-0.5 text-[11px] font-semibold', ROLE_BADGE[e.role])}>
                                                 {ROLE_LABEL_TH[e.role]}
                                             </span>
                                         </div>
                                         <p className="mt-0.5 text-xs text-muted-foreground">
                                             {TYPE_LABEL_TH[e.type]}
-                                            {e.slug && <> · /workspaces/<span className="font-mono">{e.slug}</span></>}
+                                            
                                         </p>
                                     </div>
                                     <button

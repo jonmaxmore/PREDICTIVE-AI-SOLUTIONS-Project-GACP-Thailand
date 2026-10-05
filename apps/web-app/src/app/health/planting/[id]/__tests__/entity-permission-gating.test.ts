@@ -33,6 +33,10 @@ const activitiesViewSrc = fs.readFileSync(
 );
 
 describe('planting cycle detail — permission gating pins', () => {
+    test('gates on the farm holder: useEntityPermissions(cycle?.farm?.entityId ?? null)', () => {
+        expect(cycleDetailSrc).toMatch(/useEntityPermissions\(\s*cycle\?\.farm\?\.entityId \?\? null,?\s*\)/);
+    });
+
     test('wires useEntityPermissions', () => {
         expect(cycleDetailSrc).toMatch(/useEntityPermissions/);
         expect(cycleDetailSrc).toMatch(/@\/lib\/services\/use-entity-permissions/);

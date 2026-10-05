@@ -62,13 +62,11 @@ const { prisma } = require('../prisma-database');
 
 /**
  * The holder fragment for a health caller's scope, or null (staff, the processor).
- * R1-legacy-pin: removed in Task 12 (→ holderReadWhere): `legacy` is the read's own
- * pre-R1 key, OR-registered beside the fragment so the rows stay the pre-R1 rows.
  */
-function holderFragmentOf(holderScope, legacy) {
+function holderFragmentOf(holderScope) {
     if (!holderScope || typeof holderScope !== 'object' || !Array.isArray(holderScope.readIds)) { return null; }
     // Lazy: holder-access loads farm-access and the permission engine.
-    return require('../holder-access').r1HolderOrLegacy(holderScope, 'DocumentPrecheck', legacy);
+    return require('../holder-access').holderReadWhere(holderScope, 'DocumentPrecheck');
 }
 const { runWithTenantContext, withoutTenantScope } = require('../tenant-context');
 const { getCanonicalSlotId } = require('@gacp/validation/upload-rules');
@@ -447,10 +445,11 @@ async function loadReference(applicationId) {
  */
 async function acknowledge(precheckId, healthUserId, { holderScope = null } = {}) {
     // The applicant door passes its holder scope (spec 2026-09-30 §3.1): the
-    // lookup is then findFirst + the fragment. The healthId check below stays
-    // (R1: the acknowledgement is the filer's).
+    // lookup is then findFirst + the fragment. The healthId check below stays:
+    // the acknowledgement is the filer's own act (spec §3.3 names no other rule
+    // for it; R2 Task 12 left it unchanged).
     const select = { id: true, application: { select: { healthId: true } } };
-    const fragment = holderFragmentOf(holderScope, { id: precheckId });
+    const fragment = holderFragmentOf(holderScope);
     const row = fragment
         ? await prisma.documentPrecheck.findFirst({ where: { id: precheckId, ...fragment }, select })
         : await prisma.documentPrecheck.findUnique({ where: { id: precheckId }, select });
@@ -496,7 +495,7 @@ async function currentForSlots(applicationId, { holderScope = null } = {}) {
     const rows = await prisma.documentPrecheck.findMany({
         // The applicant's requirements door passes its holder scope (spec
         // 2026-09-30 §3.1); the officer surfaces pass none.
-        where: { applicationId, ...(holderFragmentOf(holderScope, { applicationId }) || {}), status: { not: PRECHECK_STATUS.SUPERSEDED } },
+        where: { applicationId, ...(holderFragmentOf(holderScope) || {}), status: { not: PRECHECK_STATUS.SUPERSEDED } },
         orderBy: { createdAt: 'desc' },
         select: PRECHECK_VIEW_SELECT,
     });

@@ -53,8 +53,8 @@ const {
     getActorIdentity,
 } = require('../helpers/applications-helpers');
 // Spec 2026-09-30 §3.1: health reads spread the holder fragment. holderScope is
-// called inside each handler, after authentication and the active-entity middleware.
-const { holderScope, r1ApplicationHolderOrPin, r1HolderOrLegacyWhenScoped } = require('../../../services/holder-access');
+// called inside each handler, after authentication.
+const { holderScope, holderReadWhere } = require('../../../services/holder-access');
 const {
     AUDITOR_ROLES,
     REJECTABLE_STATUSES,
@@ -279,12 +279,11 @@ router.patch('/:id/reject', authenticateProvider, async (req, res) => {
 
 router.get('/:id', authenticateHealth, async (req, res) => {
     try {
-        const identity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
+        // The identity check stays (an unresolvable caller is refused as before).
+        await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
         const where = {
             id: req.params.id,
-            // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(await holderScope(req), 'Application')).
-            // OR form: neutral also when no entity context is bound (final review C1).
-            ...r1ApplicationHolderOrPin(await holderScope(req), { healthId: identity.healthId }),
+            ...holderReadWhere(await holderScope(req), 'Application'),
             isDeleted: false,
         };
         let app;
@@ -316,13 +315,11 @@ router.get('/:id', authenticateHealth, async (req, res) => {
 // internal view for staff. This endpoint is the public-facing twin.
 router.get('/:id/activities', authenticateHealth, async (req, res) => {
     try {
-        const identity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
+        await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
         const owned = await prisma.application.findFirst({
             where: {
                 id: req.params.id,
-                // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(await holderScope(req), 'Application')).
-                // OR form: neutral also when no entity context is bound (final review C1).
-                ...r1ApplicationHolderOrPin(await holderScope(req), { healthId: identity.healthId }),
+                ...holderReadWhere(await holderScope(req), 'Application'),
                 isDeleted: false,
             },
             select: { id: true },
@@ -393,22 +390,6 @@ router.get('/:id/activities', authenticateHealth, async (req, res) => {
     }
 });
 
-// M1 — heal a pre-Phase-66 null entityId from the caller's personal entity
-// before the guard refuses the row (review M2). Same mechanism as the other
-// doors; the healer persists, the merge keeps the caller's wider row.
-async function healRevisionApplicationEntityId(application, healthIdentity) {
-    if (!application || application.entityId) { return application; }
-    const personalEntity = await applicationService.findPersonalEntityForHealthIdentity({
-        userId: healthIdentity.userId, healthId: healthIdentity.healthId,
-    });
-    if (!personalEntity?.id) { return application; }
-    const healed = await applicationService.healDraftEntityColumns(application.id, {
-        entityId: personalEntity.id,
-        submitterId: application.submitterId || healthIdentity.userId || null,
-    });
-    return { ...application, entityId: healed?.entityId || personalEntity.id };
-}
-
 // M1 AC3 — the accepted act says in whose name it was made. `auditLogger.log()`
 // opens its own transaction and takes its own advisory lock
 // (audit-logger.js:479,505-506), so it runs outside every business transaction
@@ -430,7 +411,6 @@ async function logRevisionSubmitAccepted({ req, applicationId, entityId }) {
             result: 'SUCCESS',
             metadata: {
                 onBehalfOfEntityId: entityId || null,
-                activeEntityId: req.activeEntity?.entityId || null,
                 permission: 'SUBMIT_APPLICATION',
                 applicationId,
                 route: `${req.method} ${req.baseUrl || ''}${req.path || ''}`,
@@ -447,18 +427,19 @@ router.put('/:id/revision', authenticateHealth, async (req, res) => {
         const actorIdentity = getActorIdentity(req.user);
         const healthIdentity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
 
-        // M1 audit F1 — gate BEFORE the service writes anything. Ownership
-        // ("is this my application") is re-checked inside submitRevision;
-        // authority ("may I act for its entity") is decided here, keyed off the
-        // application row's entityId — never the caller's header.
-        let application = await applicationService.findOwnedApplicationForApplicant(req.params.id, {
+        // M1 audit F1 — gate BEFORE the service writes anything. Visibility
+        // (the holder is in the caller's scope) is the read below and is re-checked
+        // inside submitRevision; authority ("may I act for its holder": the submit
+        // guard, SUBMIT_APPLICATION, spec §3.3) is decided here, keyed off the
+        // application row's entityId. A resubmit is a submit: who filed it does
+        // not matter.
+        const application = await applicationService.findOwnedApplicationForApplicant(req.params.id, {
             holderScope: await holderScope(req),
-            filerUserId: healthIdentity.userId, // R1-legacy-pin: removed in Task 12
         });
         if (!application) {
             return res.status(404).json({ success: false, error: 'Application not found' });
         }
-        application = await healRevisionApplicationEntityId(application, healthIdentity);
+        // A null holder is refused by the guard below, never healed (spec 2026-09-30 §3.2 + C3: a null holder is never healed to the caller's personal entity; heal-null-holders.js places legacy rows).
         let onBehalfOfEntityId = null;
         try {
             ({ entityId: onBehalfOfEntityId } = await assertSubmitAllowed({
@@ -472,7 +453,6 @@ router.put('/:id/revision', authenticateHealth, async (req, res) => {
                     ipAddress: req.ip || null,
                     userAgent: typeof req.get === 'function' ? req.get('user-agent') : null,
                     organizationId: req.user?.organizationId || null,
-                    activeEntityId: req.activeEntity?.entityId || null,
                     route: `${req.method} ${req.baseUrl || ''}${req.path || ''}`,
                 },
             }));
@@ -525,7 +505,7 @@ router.put('/:id/revision', authenticateHealth, async (req, res) => {
             // The stamp is SERVER data and travels as such — never mixed into the
             // applicant's `formData` bag, which the service strips (F2).
             serverFormDataPatch: requirementStamp ? { serverRequirementSnapshot: requirementStamp } : {},
-            // Spec 2026-09-30 §3.1 (R1): the service's ownership re-read carries the holder scope.
+            // Spec 2026-09-30 §3.1: the service's ownership re-read carries the holder scope.
             holderScope: await holderScope(req),
         });
         if (result?.status >= 200 && result?.status < 300) {
@@ -549,7 +529,7 @@ router.put('/:id/revision', authenticateHealth, async (req, res) => {
  * is how a screen ends up disagreeing with the submit gate.
  */
 async function loadFilingForKatorlor1(req) {
-    const identity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
+    await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
     // Application has no `documents` Prisma relation — uploaded documents live
     // as JSON in `formData.documents`, and as ApplicationDocument rows. Including
     // `documents: true` here used to 500 every PDF download (UAT 2026-05-03).
@@ -557,9 +537,7 @@ async function loadFilingForKatorlor1(req) {
     const app = await prisma.application.findFirst({
         where: {
             id: req.params.id,
-            // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(scope, 'Application')).
-            // OR form: neutral also when no entity context is bound (final review C1).
-            ...r1ApplicationHolderOrPin(scope, { healthId: identity.healthId }),
+            ...holderReadWhere(scope, 'Application'),
             isDeleted: false,
         },
         include: { applicant: true, entity: true, invoices: { orderBy: { createdAt: 'asc' } } },
@@ -576,8 +554,7 @@ async function loadFilingForKatorlor1(req) {
         const documentRows = await prisma.applicationDocument.findMany({
             where: {
                 applicationId: app.id,
-                // R1-legacy-pin: removed in Task 12 — the filing the gate above resolved decides.
-                ...r1HolderOrLegacyWhenScoped(scope, 'ApplicationDocument', { applicationId: app.id }),
+                ...holderReadWhere(scope, 'ApplicationDocument'),
             },
             select: {
                 documentType: true, fileUrl: true, fileName: true,

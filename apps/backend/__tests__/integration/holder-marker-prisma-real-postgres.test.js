@@ -6,8 +6,8 @@
  * Prisma this repo runs (5.22.0, plan conflict C2), that:
  *   - Prisma ignores the symbol key: a marked where returns the seeded row and
  *     does not throw, at the top level and inside a relation filter;
- *   - the same holds through the tenantInjectExtension client, with a tenant and
- *     an entity context bound so the extension actually rewrites `where`;
+ *   - the same holds through the tenantInjectExtension client, with a tenant
+ *     context bound (R2 Task 12 removed the entity context);
  *   - R(user) computed against the real schema drops a PENDING membership and a
  *     membership on a soft-deleted entity (the `entity: { isDeleted: false }`
  *     relation filter runs in SQL, not in a mock);
@@ -30,7 +30,6 @@ const { PrismaClient } = require('@prisma/client');
 const { describeIfTestDatabase: d } = require('../../test-support/test-database');
 const { tenantInjectExtension } = require('../../services/tenant-prisma-extension');
 const { runWithTenantContext } = require('../../services/tenant-context');
-const { runWithEntityContext } = require('../../services/entity-context');
 const {
     HOLDER_SCOPED,
     holderScopeForUser,
@@ -143,15 +142,13 @@ d('HOLDER_SCOPED marker on Prisma 5.22 (real Postgres)', () => {
         await expect(raw.application.count({ where })).resolves.toBe(0);
     });
 
-    test('the same holds through the tenantInjectExtension client (tenant + entity context bound)', async () => {
+    test('the same holds through the tenantInjectExtension client (tenant context bound)', async () => {
         const scope = await holderScopeForUser(fx.userId);
         const where = { ...holderReadWhere(scope, 'Application'), isDeleted: false };
         // `async () => await` starts the lazy PrismaPromise INSIDE the bound
-        // contexts; returning it unawaited would run it after both have exited.
-        const rows = await runWithTenantContext({ organizationId: fx.orgId }, () => runWithEntityContext(
-            { entityId: fx.X, role: 'VIEWER', personal: false },
-            async () => await extended.application.findMany({ where, select: { id: true } }),
-        ));
+        // context; returning it unawaited would run it after it has exited.
+        const rows = await runWithTenantContext({ organizationId: fx.orgId },
+            async () => await extended.application.findMany({ where, select: { id: true } }));
         expect(rows.map((r) => r.id)).toEqual([fx.appId]);
         expect(hasHolderMarker(where)).toBe(true);
         const first = await runWithTenantContext({ organizationId: fx.orgId }, async () => await extended.application.findFirst({

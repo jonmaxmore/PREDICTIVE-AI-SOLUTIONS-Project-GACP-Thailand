@@ -6,7 +6,7 @@ const PATTERNS = {
   jwt_secret: /JWT_SECRET\s*=\s*['"](?!process\.env)[^'"]+['"]/gi,
   api_key: /API_KEY\s*=\s*['"](?!process\.env)[^'"]+['"]/gi,
   password: /password\s*[:=]\s*['"][^'"]{8,}['"]/gi,
-  mongo_uri: /mongodb(\+srv)?:\/\/[^'"]+/gi,
+  postgres_uri: /postgres(ql)?:\/\/[^'"]+/gi,
   redis_url: /redis:\/\/[^'"]+/gi,
   aws_key: /(AWS|aws)_(ACCESS_KEY|SECRET|KEY_ID)\s*=\s*['"][^'"]+['"]/gi
 };

@@ -11,6 +11,10 @@
  * Farm.ownerId / Certificate.userId are plain User.id UUIDs (never re-keyed),
  * so scope by those instead. This is the same plaintext/token-vs-column class
  * as the documents/preview 404s.
+ *
+ * R2 Task 12 (Review Focus 4): the counters count exactly what the lists list —
+ * the membership-based farm fragment (as GET /farms/my) and the certificate
+ * holder fragment (as GET /certificates/my). Neither touches a healthId.
  */
 
 'use strict';
@@ -32,6 +36,8 @@ jest.mock('../../services/prisma-database', () => ({
         certificate: { count: (...a) => mockCertCount(...a) },
         notification: { count: (...a) => mockNotifCount(...a) },
         application: { count: jest.fn().mockResolvedValue(0) },
+        // The caller is an ACTIVE OWNER of ent-1 (holder-access reads memberships).
+        entityMembership: { findMany: jest.fn().mockResolvedValue([{ entityId: 'ent-1', role: 'OWNER' }]) },
     },
 }));
 
@@ -60,7 +66,7 @@ function buildApp() {
     return app;
 }
 
-describe('GET /dashboard — farm/cert counts scope by owner User.id, not healthId', () => {
+describe('GET /dashboard — farm/cert counts scope by holder membership, not healthId', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         // resolveHealthIdentity returns the TOKEN as healthId + the UUID as userId.
@@ -71,22 +77,31 @@ describe('GET /dashboard — farm/cert counts scope by owner User.id, not health
         mockNotifCount.mockResolvedValue(0);
     });
 
-    test('farm.count is scoped by ownerId=User.id (UUID), never owner.healthId', async () => {
+    test('farm.count counts the /farms/my rows: the farm-access fragment (User.id + memberships), never owner.healthId', async () => {
         await request(buildApp()).get('/dashboard');
         expect(mockFarmCount).toHaveBeenCalledTimes(1);
-        const where = mockFarmCount.mock.calls[0][0].where;
-        // The correct, token-safe scope:
-        expect(where.ownerId).toBe('user-uuid-1');
-        // Must NOT filter on the encrypted User.healthId column (never matches):
-        expect(where.owner?.healthId).toBeUndefined();
+        const where = JSON.parse(JSON.stringify(mockFarmCount.mock.calls[0][0].where));
+        expect(where).toEqual({
+            OR: [
+                { ownerId: 'user-uuid-1', entityId: null },
+                { ownerId: 'user-uuid-1', entityId: { in: ['ent-1'] } },
+                { entityId: { in: ['ent-1'] } },
+            ],
+            isDeleted: false,
+        });
+        expect(JSON.stringify(where)).not.toContain('healthId');
     });
 
-    test('certificate.count is scoped by userId=User.id (UUID), never user.healthId', async () => {
+    test('certificate.count counts the /certificates/my rows: the holder fragment, never user.healthId', async () => {
         await request(buildApp()).get('/dashboard');
         expect(mockCertCount).toHaveBeenCalledTimes(1);
-        const where = mockCertCount.mock.calls[0][0].where;
-        expect(where.userId).toBe('user-uuid-1');
-        expect(where.user?.healthId).toBeUndefined();
+        const where = JSON.parse(JSON.stringify(mockCertCount.mock.calls[0][0].where));
+        expect(where).toEqual({
+            isDeleted: false,
+            status: { in: ['active', 'ACTIVE'] },
+            application: { entityId: { in: ['ent-1'] } },
+        });
+        expect(JSON.stringify(where)).not.toContain('healthId');
     });
 
     test('the counts reach the response (farms:7, certificates:2 — not 0)', async () => {

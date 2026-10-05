@@ -35,7 +35,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -329,7 +328,6 @@ describe('C2 — canonical /submit with REAL validators (no mock)', () => {
     // that names no entity is refused for the entity reason, not the form one.
     it('(d) COMPLETE canonical formData but no entityId (nothing to heal) → 400 VALIDATION_ERROR, never 422', async () => {
         mockDraft(completeCanonicalFormData(), 'DRAFT', null);
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
         const r = await request(app).post('/api/applications/submit').send({});
         expect(r.status).toBe(400);
         expect(r.body.code).toBe('VALIDATION_ERROR');

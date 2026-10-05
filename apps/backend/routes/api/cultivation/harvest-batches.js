@@ -34,6 +34,7 @@ const { maskThaiId } = require('../../../utils/field-encryption');
 // carry the SAME HARVEST_RECORD gate (solo farms unchanged: the engine's
 // LEGACY_OWNER rule passes the entityId=null owner with no membership read).
 const { assertFarmActionPermission } = require('../../../services/entity-effective-permissions-service');
+const { entityPermissionDeniedBody } = require('../../../shared/entity-permission-denied');
 
 // Declared in prisma/schema/harvest.prisma:54 —
 //   status String @default("RECEIVED") // RECEIVED, DRYING, PROCESSED, PACKED, SOLD
@@ -41,12 +42,7 @@ const HARVEST_BATCH_STATUSES = Object.freeze(['RECEIVED', 'DRYING', 'PROCESSED',
 
 /** Map an ENTITY_PERMISSION_DENIED throw to the canonical 403 body. */
 function respondPermissionDenied(res, error) {
-    return res.status(403).json({
-        success: false,
-        code: 'ENTITY_PERMISSION_DENIED',
-        permission: error?.permission || 'HARVEST_RECORD',
-        error: 'คุณไม่มีสิทธิ์บันทึกการเก็บเกี่ยวในพื้นที่ทำงานนี้',
-    });
+    return res.status(403).json(entityPermissionDeniedBody(error?.permission || 'HARVEST_RECORD'));
 }
 
 /**

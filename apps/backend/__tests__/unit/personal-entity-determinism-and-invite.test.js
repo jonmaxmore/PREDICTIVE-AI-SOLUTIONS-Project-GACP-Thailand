@@ -4,16 +4,17 @@
  * (a) findPersonalEntity DETERMINISM: every findFirst that resolves the
  *     personal INDIVIDUAL entity / OWNER membership must carry a stable
  *     ordering (orderBy createdAt asc) so a user with duplicate candidate
- *     rows always lands on the SAME personal workspace across requests.
- *     Sites: active-entity-middleware.findPersonalEntity (membership primary
- *     + both hash fallbacks) and entity-service.ensurePersonalIndividualEntity
- *     (owner-membership link + national-ID dedup lookup).
+ *     rows always lands on the SAME personal entity.
+ *     Site: entity-service.ensurePersonalIndividualEntity (owner-membership
+ *     link + national-ID dedup lookup). R2 Task 12 removed the other two
+ *     resolvers this file pinned (active-entity-middleware.findPersonalEntity
+ *     and findPersonalEntityForHealthIdentity, which had no caller left).
  *
- * (b) Personal-workspace invites are BY DESIGN: a solo farmer hires a worker
+ * (b) Personal-entity invites are BY DESIGN: a solo farmer hires a worker
  *     without creating a company — the personal INDIVIDUAL entity IS
- *     invitable. Pins: the invite works; the worker gets workspace
- *     (personal:false) context on it (the employer keeps personal:true); and
- *     the worker gets NO permissions by default beyond their role.
+ *     invitable. Pins: the invite works, and the worker gets NO permissions
+ *     by default beyond their role. (The workspace-header context case was
+ *     removed with the header in R2 Task 12.)
  */
 
 'use strict';
@@ -45,7 +46,6 @@ jest.mock('../../shared/logger', () => {
 });
 
 const { prisma } = require('../../services/prisma-database');
-const { __resolveActiveEntity } = require('../../middleware/active-entity-middleware');
 const entityService = require('../../services/entity-service');
 const { getEffectiveEntityPermissions } = require('../../services/entity-effective-permissions-service');
 
@@ -57,51 +57,6 @@ beforeEach(() => {
     prisma.entityMemberPermissionGrant.findMany.mockResolvedValue([]);
     prisma.entityMembershipEvent.create.mockResolvedValue({ id: 'evt' });
     delete process.env.AUTH_LOOKUP_USE_HMAC;
-});
-
-describe('(a) findPersonalEntity determinism — active-entity-middleware', () => {
-    it('primary OWNER-membership lookup orders by createdAt asc', async () => {
-        prisma.entityMembership.findFirst.mockResolvedValue({ entityId: 'ent-personal' });
-
-        const resolved = await __resolveActiveEntity({
-            user: { id: 'user-1', healthId: '1100000000008' },
-            headers: {},
-        });
-
-        expect(prisma.entityMembership.findFirst).toHaveBeenCalledWith(
-            expect.objectContaining({ orderBy: ASC }),
-        );
-        expect(resolved).toMatchObject({ kind: 'ok', entityId: 'ent-personal', personal: true });
-    });
-
-    it('legacy-hash fallback lookup orders by createdAt asc', async () => {
-        prisma.entityMembership.findFirst.mockResolvedValue(null);
-        prisma.entity.findFirst.mockResolvedValue({ id: 'ent-personal' });
-
-        await __resolveActiveEntity({
-            user: { id: 'user-1', healthId: '1100000000008' },
-            headers: {},
-        });
-
-        expect(prisma.entity.findFirst).toHaveBeenCalledWith(
-            expect.objectContaining({ orderBy: ASC }),
-        );
-    });
-
-    it('keyed-HMAC fallback lookup orders by createdAt asc (flag on)', async () => {
-        process.env.AUTH_LOOKUP_USE_HMAC = 'true';
-        prisma.entityMembership.findFirst.mockResolvedValue(null);
-        prisma.entity.findFirst.mockResolvedValue({ id: 'ent-personal' });
-
-        await __resolveActiveEntity({
-            user: { id: 'user-1', healthId: '1100000000008' },
-            headers: {},
-        });
-
-        for (const call of prisma.entity.findFirst.mock.calls) {
-            expect(call[0]).toMatchObject({ orderBy: ASC });
-        }
-    });
 });
 
 describe('(a) findPersonalEntity determinism — ensurePersonalIndividualEntity', () => {
@@ -136,27 +91,6 @@ describe('(a) findPersonalEntity determinism — ensurePersonalIndividualEntity'
     });
 });
 
-describe('(a) findPersonalEntity determinism — application-applicant-query-methods (grep-found 4th resolver)', () => {
-    const { createApplicationApplicantQueryMethods } = require('../../services/application-service/application-applicant-query-methods');
-
-    it('membership primary + hash fallback lookups order by createdAt asc', async () => {
-        const prismaStub = {
-            entityMembership: { findFirst: jest.fn().mockResolvedValue(null) },
-            entity: { findFirst: jest.fn().mockResolvedValue({ id: 'ent-personal' }) },
-        };
-        const methods = createApplicationApplicantQueryMethods({ prisma: prismaStub });
-
-        await methods.findPersonalEntityForHealthIdentity({ userId: 'user-1', healthId: '1100000000008' });
-
-        expect(prismaStub.entityMembership.findFirst).toHaveBeenCalledWith(
-            expect.objectContaining({ orderBy: ASC }),
-        );
-        for (const call of prismaStub.entity.findFirst.mock.calls) {
-            expect(call[0]).toMatchObject({ orderBy: ASC });
-        }
-    });
-});
-
 describe('(b) personal-workspace invites — binding design pins', () => {
     it('addMember INTO a personal INDIVIDUAL entity works (solo farmer hires a worker) and seeds role-only permissions', async () => {
         // The entity being invited into is the employer's personal INDIVIDUAL one.
@@ -185,28 +119,6 @@ describe('(b) personal-workspace invites — binding design pins', () => {
         expect(prisma.entityMembershipEvent.create).toHaveBeenCalledWith(expect.objectContaining({
             data: expect.objectContaining({ eventType: 'INVITED', targetUserId: 'worker-1' }),
         }));
-    });
-
-    it('the WORKER gets workspace (personal:false) context on the employer personal entity; the EMPLOYER keeps personal:true', async () => {
-        // Worker: MANAGER on someone else's INDIVIDUAL entity → a real workspace.
-        prisma.entityMembership.findUnique.mockResolvedValue({
-            role: 'MANAGER', status: 'ACTIVE', entity: { type: 'INDIVIDUAL' },
-        });
-        const worker = await __resolveActiveEntity({
-            user: { id: 'worker-1' },
-            headers: { 'x-active-entity-id': 'ent-personal' },
-        });
-        expect(worker).toMatchObject({ kind: 'ok', entityId: 'ent-personal', personal: false });
-
-        // Employer: OWNER on their own INDIVIDUAL entity → personal pin stays.
-        prisma.entityMembership.findUnique.mockResolvedValue({
-            role: 'OWNER', status: 'ACTIVE', entity: { type: 'INDIVIDUAL' },
-        });
-        const employer = await __resolveActiveEntity({
-            user: { id: 'employer-1' },
-            headers: { 'x-active-entity-id': 'ent-personal' },
-        });
-        expect(employer).toMatchObject({ kind: 'ok', entityId: 'ent-personal', personal: true });
     });
 
     it('the worker has NO effective permissions by default beyond the role (VIEWER → none)', async () => {

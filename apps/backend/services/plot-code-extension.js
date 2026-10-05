@@ -11,12 +11,12 @@
  * backfill for the rows that already exist. None of that puts a code on the NEXT plot somebody
  * creates, and a plot with no code is a plot that can never carry a sign in the field.
  *
- * WHY AN EXTENSION AND NOT THREE CALL-SITE PATCHES
+ * WHY AN EXTENSION AND NOT CALL-SITE PATCHES
  *
- * Three runtime paths insert a Plot row today:
- *   services/planting-service.js:656                                  POST /farms/:farmId/plots
- *   services/application-service/application-submission-methods.js:83 wizard submission (in a tx)
- *   services/certificate-service.js:796                               ensurePlotsForFarm at issuance
+ * Runtime paths that insert a Plot row today (the wizard-submission path went with the
+ * /api/wizard door, R2 Task 10):
+ *   services/planting-service.js        POST /farms/:farmId/plots
+ *   services/certificate-service.js     ensurePlotsForFarm at issuance
  * A fix at each of them is correct on the day it is written and wrong the first time somebody
  * adds a fourth — an import route, an admin tool, a fixture. The property we want is not "these
  * three call sites mint a code", it is "a Plot row cannot exist without one", and the only

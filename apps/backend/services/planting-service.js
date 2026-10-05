@@ -992,33 +992,10 @@ class PlantingService {
     });
   }
 
-  /**
-   * Replaces routes/api/cultivation/planting-cycles-activity-harvest-routes.js:42
-   * prisma.applicationDocument.findMany — ownership probe for attachment
-   * ids supplied in a cultivation-log activity create.
-   */
-  async findOwnedApplicationDocuments(documentIds, userId, { holderScope } = {}) {
-    if (!Array.isArray(documentIds) || documentIds.length === 0 || !userId) {
-      return [];
-    }
-    // Spec 2026-09-30 §3.1: the caller's holder scope; no scope fails closed.
-    // R1 (operator ruling C1): the pre-R1 filer pin decides (OR-registered beside
-    // the fragment, and AND) — exactly the pre-R1 rows.
-    if (!holderScope || !Array.isArray(holderScope.readIds)) {
-      return [];
-    }
-    const { r1HolderOrLegacy, r1LegacyApplicantPin } = require('./holder-access');
-    const filerPin = { application: { applicant: { id: userId, isDeleted: false } } };
-    return prisma.applicationDocument.findMany({
-      where: {
-        id: { in: documentIds },
-        // R1-legacy-pin: removed in Task 12 (→ holderReadWhere); the pre-R1 pin decides
-        ...r1HolderOrLegacy(holderScope, 'ApplicationDocument', filerPin),
-        ...r1LegacyApplicantPin(filerPin),
-      },
-      select: { id: true },
-    });
-  }
+  // `findOwnedApplicationDocuments` was deleted on 2026-10-03 (operator "แก้ได้",
+  // C4 round 2). It checked activity attachment ids against ApplicationDocument.id,
+  // which no upload door ever returned; activities now reference the planting
+  // cycle's own attachments (services/planting/planting-attachment-service.js).
 
   /**
    * Narrow projection used to confirm a cycle belongs to one of the caller's

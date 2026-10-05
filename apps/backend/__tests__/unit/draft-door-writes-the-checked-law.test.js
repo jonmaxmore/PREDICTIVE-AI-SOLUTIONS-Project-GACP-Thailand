@@ -45,7 +45,6 @@ jest.mock('../../services/application-service', () => ({
         submitterId: 'user-1', serviceType: 'new_application', areaType: 'OUTDOOR', formData: {}, workflowHistory: [],
     })),
     findLatestOpenDraftForHealth: jest.fn(async () => null),
-    findPersonalEntityForHealthIdentity: jest.fn(async () => null),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: (...a) => mockUpdate(...a),
@@ -137,8 +136,9 @@ describe('POST /api/applications/draft — the law dimensions', () => {
         expect(res.body.data.lawNotice).toBeNull();
     });
 
-    test("a RENEWAL naming someone else's certificate is recorded as NEW, and the draft still saves", async () => {
-        mockCertFindFirst.mockResolvedValue({ ...LIVE_CERT, userId: 'user-someone-else' });
+    test("a RENEWAL naming another holder's certificate is recorded as NEW, and the draft still saves", async () => {
+        // Operator ruling 2026-10-03: who filed it no longer matters; the holder does.
+        mockCertFindFirst.mockResolvedValue({ ...LIVE_CERT, userId: 'user-someone-else', application: { entityId: 'ent-other' } });
         const res = await request(app())
             .post('/api/applications/draft')
             .send({
@@ -150,7 +150,7 @@ describe('POST /api/applications/draft — the law dimensions', () => {
 
         expect(written().requestType).toBe('NEW');
         expect(written().renewalOf).toBeNull();
-        expect(res.body.data.lawNotice.code).toBe('PREVIOUS_CERTIFICATE_NOT_YOURS');
+        expect(res.body.data.lawNotice.code).toBe('PREVIOUS_CERTIFICATE_OTHER_HOLDER');
     });
 
     test('the applicant cannot smuggle a linkage past the checker', async () => {

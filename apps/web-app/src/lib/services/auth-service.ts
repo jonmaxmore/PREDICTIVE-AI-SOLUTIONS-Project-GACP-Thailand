@@ -25,7 +25,6 @@ import {
     setStoredAccessToken,
     setStoredUser,
     resolveSessionCookieKey,
-    clearActiveEntityId,
 } from './auth-service-session';
 import {
     setupCrossTabSync,
@@ -310,19 +309,6 @@ class AuthServiceClass {
         const cookieKey = resolveSessionCookieKey(normalizedUser || data.user || null);
         const isProviderAccount = isProviderUser(normalizedUser || data.user || null);
 
-        // Account-switch hygiene: if this login establishes a DIFFERENT account
-        // than the one currently stored (e.g. logging into the provider portal
-        // while a health session is still present, without an explicit logout),
-        // the prior session's selected entity (`gacp.activeEntityId`) is stale.
-        // It would be sent as `x-active-entity-id` and the backend rejects every
-        // entity-scoped read with 403 ACTIVE_ENTITY_MISMATCH. Clear it so the new
-        // session falls back to the new user's default entity (the
-        // active-entity-provider re-resolves it). A same-user re-login keeps the
-        // selected entity untouched.
-        const priorUser = getStoredUser();
-        if (!priorUser || !normalizedUser || priorUser.id !== normalizedUser.id) {
-            clearActiveEntityId();
-        }
         // Round 5 minor 2 (privacy) + 5b: the application wizard's answers (store +
         // IndexedDB) carry the id of the user who typed them. A sign-in by anyone else
         // empties them, so the next person on a shared device does not rehydrate the

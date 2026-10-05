@@ -319,17 +319,11 @@ describe('STAGE 0 (b) — application-identity resolveHealthIdentity FK value', 
         expect(res).toEqual({ userId: 'u1', healthId: token });
     });
 
-    it('buildHealthWhereClause prefers the stable applicant:{id} relation branch when a UUID is available', () => {
-        const { buildHealthWhereClause } = methods({});
-        const uuid = '11111111-1111-1111-1111-111111111111';
-        // Even with a healthId present (the value-WHERE branch), a UUID userId
-        // wins → relation branch keyed on the never-re-keyed User.id.
-        expect(buildHealthWhereClause(uuid, { healthId: ID, strictHealthId: true }))
-            .toEqual({ applicant: { id: uuid, isDeleted: false } });
-    });
-
-    it('buildHealthWhereClause still returns {healthId} for legacy callers with no UUID (pre-re-key only)', () => {
-        const { buildHealthWhereClause } = methods({});
-        expect(buildHealthWhereClause(null, { healthId: ID })).toEqual({ healthId: ID });
+    // R2 Task 9 (spec 2026-09-30 §3.1): the filer where builder is deleted; every
+    // applicant read carries the holder fragment (holder-access) instead.
+    it('buildHealthWhereClause is gone (no filer where builder survives)', () => {
+        const m = methods({});
+        expect(m.buildHealthWhereClause).toBeUndefined();
+        expect(m.buildHEALTH_USERWhereClause).toBeUndefined();
     });
 });

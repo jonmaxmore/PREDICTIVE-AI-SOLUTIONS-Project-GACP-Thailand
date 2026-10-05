@@ -117,6 +117,8 @@ function buildApp() {
         qrcodeService: qrcodeStub,
         authenticateHealth: authenticateHealthStub,
         getUserFarmIds: getUserFarmIdsStub,
+        // The write gate (POST /:id/print) asks the owner list; the same stub here.
+        getUserWritableFarmIds: getUserFarmIdsStub,
         logger: loggerStub,
     });
     app.use('/api/lots', router);

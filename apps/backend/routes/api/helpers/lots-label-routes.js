@@ -8,8 +8,13 @@ function registerLotLabelRoutes({
     prisma: _prismaUnused,
     authenticateHealth,
     getUserFarmIds,
+    // The lot WRITE gate (the farms the caller owns, pre-R2); reads use getUserFarmIds.
+    getUserWritableFarmIds,
     logger,
 }) {
+    if (typeof getUserWritableFarmIds !== 'function') {
+        throw new Error('lot routes: getUserWritableFarmIds(userId, req) is required for the write doors');
+    }
     router.get('/:id/label', authenticateHealth, async (req, res) => {
         try {
             const { id } = req.params;
@@ -56,7 +61,7 @@ function registerLotLabelRoutes({
                 return res.status(400).json({ success: false, message: 'Maximum 50 labels per batch' });
             }
 
-            const farmIds = await getUserFarmIds(userId, req);
+            const farmIds = await getUserWritableFarmIds(userId, req);
 
             const lots = await traceabilityService.findLotsForBatchLabels(lotIds);
 

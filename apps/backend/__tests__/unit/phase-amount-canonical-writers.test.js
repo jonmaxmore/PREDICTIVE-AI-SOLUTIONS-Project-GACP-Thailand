@@ -43,7 +43,8 @@ const BACKEND_ROOT = path.join(REPO_ROOT, 'apps/backend');
 // Keep this list in lockstep with the audit in commit 5ce0649's body.
 const WRITER_FILES = [
   'services/payment-service-phase-flow.js',
-  'services/application-service/application-submission-methods.js',
+  // application-submission-methods.js left this list in R2 Task 10: the file
+  // (executeWizardSubmission, the /api/wizard door) is deleted.
   'services/application-service/application-draft-query-methods.js',
   // routes/api/preview/preview.js left this list 2026-09-30 (P-GET): the
   // preview GET computes the phase totals and returns them; it no longer

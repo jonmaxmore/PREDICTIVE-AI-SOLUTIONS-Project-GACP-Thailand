@@ -56,6 +56,11 @@ d('POST /api/applications/draft routes an explicit id to its own application (re
         const entity = await raw.entity.create({
             data: { type: 'INDIVIDUAL', displayName: 'ทดสอบ เส้นทางร่าง', organizationId: org.id },
         });
+        // R2 Task 8 (spec 2026-09-30 §3.2): a draft write needs the caller's ACTIVE,
+        // non-VIEWER membership on the draft's holder (holderScope(req).editIds).
+        await raw.entityMembership.create({
+            data: { userId: user.id, entityId: entity.id, role: 'OWNER', status: 'ACTIVE', organizationId: org.id },
+        });
         Object.assign(fx, { orgId: org.id, userId: user.id, canonicalId, entityId: entity.id });
         mockHealthIdentity.current = {
             reqUser: { id: user.id, role: 'health', canonicalRole: 'health' },
@@ -74,8 +79,10 @@ d('POST /api/applications/draft routes an explicit id to its own application (re
         }
         // A no-id POST may mint a fresh DRAFT; sweep everything this user owns.
         if (fx.canonicalId) { await raw.application.deleteMany({ where: { healthId: fx.canonicalId } }).catch(() => {}); }
+        if (fx.entityId) { await raw.entityMembership.deleteMany({ where: { entityId: fx.entityId } }).catch(() => {}); }
         if (fx.entityId) { await raw.entity.deleteMany({ where: { id: fx.entityId } }).catch(() => {}); }
         if (fx.otherCanonicalId) { await raw.application.deleteMany({ where: { healthId: fx.otherCanonicalId } }).catch(() => {}); }
+        if (fx.otherEntityId) { await raw.entity.deleteMany({ where: { id: fx.otherEntityId } }).catch(() => {}); }
         if (fx.otherUserId) { await raw.user.deleteMany({ where: { id: fx.otherUserId } }).catch(() => {}); }
         if (fx.userId) { await raw.user.deleteMany({ where: { id: fx.userId } }).catch(() => {}); }
         if (fx.orgId) { await raw.organization.deleteMany({ where: { id: fx.orgId } }).catch(() => {}); }
@@ -128,7 +135,10 @@ d('POST /api/applications/draft routes an explicit id to its own application (re
         const x = await seed('X-noid', 'REVISION_REQUESTED', 'เดิม');
         const y = await seed('Y-noid', 'DRAFT', 'ร่างอีกใบ');
 
+        // R2 Task 8: an id-less write names its holder; it resumes the caller's own
+        // latest DRAFT on that holder (never the application being corrected).
         const res = await request(app).post('/api/applications/draft').send({
+            entityId: fx.entityId,
             step: 1,
             formData: { applicantData: { firstName: 'ไปผิดใบ' } },
         });
@@ -177,11 +187,18 @@ d('POST /api/applications/draft routes an explicit id to its own application (re
         });
         fx.otherUserId = other.id;
         fx.otherCanonicalId = otherCanon;
+        // R2 Task 9 (spec §3.2): a co-member who may edit the holder edits its drafts
+        // whoever filed them, so "another user's" row here sits on a holder the caller
+        // is not a member of (the other user's own entity).
+        const theirHolder = await raw.entity.create({
+            data: { type: 'INDIVIDUAL', displayName: 'ทดสอบ ผู้ถืออื่น', organizationId: fx.orgId },
+        });
+        fx.otherEntityId = theirHolder.id;
         const theirs = await raw.application.create({
             data: {
                 applicationNumber: `DRAFTID-THEIRS-${s}`,
                 healthId: otherCanon,
-                entityId: fx.entityId,
+                entityId: theirHolder.id,
                 submitterId: other.id,
                 areaType: 'OUTDOOR',
                 organizationId: fx.orgId,

@@ -152,7 +152,7 @@ export default function MemberPermissionMatrix({ entityId, memberUserId, memberD
                 workspace does). Disclose the exception. */}
             <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
                 “สืบทอดจาก role” = ตามบทบาท · “ให้สิทธิ์” = เพิ่มนอกเหนือบทบาท · “เพิกถอน” = ตัดสิทธิ์ (เพิกถอนชนะสิทธิ์ที่ให้/สืบทอด).
-                มีผลกับคำขอถัดไปทันที (ยกเว้นฟาร์มที่สมาชิกคนนั้นเป็นผู้สร้างเอง ระบบยังให้สิทธิ์ผู้สร้างจนกว่าจะถอนสมาชิกออกจาก workspace)
+                มีผลกับคำขอถัดไปทันที (ยกเว้นฟาร์มที่สมาชิกคนนั้นเป็นผู้สร้างเอง ระบบยังให้สิทธิ์ผู้สร้างจนกว่าจะถอนสมาชิกออกจากนิติบุคคลหรือวิสาหกิจชุมชน)
             </p>
 
             {loading && <div className="py-4 text-sm text-muted-foreground">กำลังโหลดสิทธิ์…</div>}

@@ -769,6 +769,25 @@ describe('useAutoSave (mock API)', () => {
   });
 
   // ─── Optimistic concurrency (2-tab race protection) ──────────────────
+  describe('R2 Task 15 - APPLICATION_HOLDER_REQUIRED', () => {
+    it('shows the one holder sentence and posts nothing more within 3 debounce windows', async () => {
+      mountWithLiveState({ plantId: null, requestType: null });
+      mockApi.post.mockResolvedValue({ success: false, status: 400, errorCode: 'APPLICATION_HOLDER_REQUIRED', error: 'The holder (entityId) of a new application is required' } as never);
+
+      storeBecomes({ requestType: 'NEW' });
+      await waitPastDebounce();
+      expect(mockApi.post).toHaveBeenCalledTimes(1);
+      expect(latestHook!.error).toBe(
+        'ยังไม่ได้เลือกว่าจะยื่นในนามใคร กรุณาเลือกที่ขั้นตอนที่ 1 หากเปิดหน้านี้ค้างไว้ ให้โหลดหน้าใหม่ก่อน',
+      );
+
+      await waitPastDebounce();
+      await waitPastDebounce();
+      await waitPastDebounce();
+      expect(mockApi.post).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('optimistic concurrency', () => {
     it('captures version from server response and echoes it on next save', async () => {
       mockApi.post
@@ -850,6 +869,21 @@ describe('useAutoSave (mock API)', () => {
  * (wizard-answers-are-writable.test.js NOT_AN_ANSWER) declares these as "never sent"; this
  * pins that claim on the side that does the sending.
  */
+describe('R2 Task 15 - the holder travels with the first save', () => {
+  const state = { requestType: 'NEW', currentStep: 0, plantId: 'cannabis', holderEntityId: 'e-company' } as never;
+
+  it('the first save (no applicationId) sends entityId at the top of the body, not inside formData', () => {
+    const body = buildDraftPayload(state) as Record<string, unknown>;
+    expect(body.entityId).toBe('e-company');
+    expect((body.formData as Record<string, unknown>).holderEntityId).toBeUndefined();
+  });
+
+  it('a save of an existing application does not name a holder again', () => {
+    const body = buildDraftPayload({ ...(state as object), applicationId: 'app-1' } as never) as Record<string, unknown>;
+    expect(body.entityId).toBeUndefined();
+  });
+});
+
 describe('bookkeeping fields are never sent', () => {
   it('hydrationEpoch, resumePending and ownerUserId are in NOT_SENT_KEYS and absent from the payload', () => {
     const state = {

@@ -13,7 +13,7 @@
  * it structurally cannot bring a row into existence. Every application must
  * therefore be born from some `create`, so flagging `create` would flag the
  * normal birth path — 10 legitimate call sites, including the production
- * submit path (services/application-service/application-submission-methods.js:129)
+ * submit and draft-create paths
  * — while closing no hole: a brand-new row has no prior status to bypass a
  * fence on. The real hole is a write that moves an existing row's status
  * around the writer, which is what this rule catches.

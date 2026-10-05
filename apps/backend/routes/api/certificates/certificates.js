@@ -14,12 +14,63 @@ const certificateService = require('../../../services/certificate-service');
 // Required lazily: holder-access loads the permission engine, which suites that
 // stub entity-service cannot load.
 const holderScopeOf = (req) => require('../../../services/holder-access').holderScope(req);
-const entityService = require('../../../services/entity-service');
+// Same reason: the permission engine loads entity-service.
+const permissionEngine = () => require('../../../services/entity-effective-permissions-service');
+const {
+    ENTITY_PERMISSION_DENIED_CODE,
+    ENTITY_PERMISSION_DENIED_EN,
+    entityPermissionDeniedBody,
+} = require('../../../shared/entity-permission-denied');
 const pdfGenerator = require('../../../services/pdf/pdf-generator.service');
 const logger = require('../../../shared/logger');
 const { isProviderRole, normalizeRole, CANONICAL_ROLES } = require('../../../shared/canonical-rbac');
 const { AREA_UNIT } = require('../../../shared/area-utils');
 const { toCertificateSlug } = require('../../../services/certificate-number-display');
+
+// Spec 2026-09-30 §3.4 (B14): printing the certificate's QR (the PDF, or the
+// QR value on a health read) is PRINT_QR on the certificate's HOLDER
+// (certificate.application.entityId), decided by the permission engine with
+// GRANT and REVOKE, whatever workspace the request has bound. No holder, no
+// membership or a denial = no QR (fail closed).
+const PRINT_QR = 'PRINT_QR';
+
+/**
+ * Throws the engine's 403 ENTITY_PERMISSION_DENIED unless the user may print
+ * the QR of a certificate held by `entityId`.
+ * @param {string} userId
+ * @param {string|null|undefined} entityId
+ * @returns {Promise<void>}
+ */
+async function assertMayPrintQr(userId, entityId) {
+    if (!userId || !entityId) {
+        const err = new Error(ENTITY_PERMISSION_DENIED_EN);
+        err.code = ENTITY_PERMISSION_DENIED_CODE;
+        err.permission = PRINT_QR;
+        throw err;
+    }
+    await permissionEngine().assertEntityActionPermission({ entityId, userId, permission: PRINT_QR });
+}
+
+/**
+ * canPrintQr for one holder, memoised per request (`memo` keyed by entityId).
+ * Any failure reads as false: a read never shows the QR on doubt.
+ * @param {string} userId
+ * @param {string|null|undefined} entityId
+ * @param {Map<string, Promise<boolean>>} memo
+ * @returns {Promise<boolean>}
+ */
+function mayPrintQr(userId, entityId, memo) {
+    if (!userId || !entityId) { return Promise.resolve(false); }
+    if (!memo.has(entityId)) {
+        memo.set(entityId, assertMayPrintQr(userId, entityId).then(() => true, (err) => {
+            if (err?.code !== ENTITY_PERMISSION_DENIED_CODE) {
+                logger.warn('[Certificates] PRINT_QR check failed — QR hidden (fail closed)', { error: err?.message });
+            }
+            return false;
+        }));
+    }
+    return memo.get(entityId);
+}
 
 // C3 (tenant isolation, ADR-014): only PLATFORM_ADMIN may read across tenants.
 // Every other provider role (ADMIN/AUDITOR/SCHEDULER/DOCUMENT_REVIEWER/ACCOUNT*)
@@ -173,14 +224,21 @@ router.get('/', authenticateAny, async (req, res) => {
                     error: 'Unauthorized',
                 });
             }
-            // Spec 2026-09-30 §3.1: the holder scope (R1: the service keeps the pre-R1
-            // userId pin decisive — see certificate-service listCertificates).
-            certificates = await certificateService.listCertificates({
+            // Spec 2026-09-30 §3.1: the certificates of the caller's holders.
+            const rows = await certificateService.listCertificates({
                 scope: 'self',
                 userId,
                 holderScope: await holderScopeOf(req),
                 take: 100,
             });
+            // Spec §3.4 + ruling C5 (Task 11 round 1): the same rule as /my, /:id and
+            // the download door — the QR value only for a caller with PRINT_QR on the
+            // row's holder. The holder id read for the gate is not returned.
+            const memo = new Map();
+            certificates = await Promise.all(rows.map(async ({ application, ...row }) => {
+                const canPrintQr = await mayPrintQr(userId, application?.entityId, memo);
+                return { ...row, qrData: canPrintQr ? row.qrData : null, canPrintQr };
+            }));
         }
 
         res.json({
@@ -198,14 +256,21 @@ router.get('/', authenticateAny, async (req, res) => {
 });
 router.get('/my', authenticateHealth, async (req, res) => {
     try {
-        // Spec 2026-09-30 §3.1 — the holder scope (R1: the pre-R1 userId pin decides).
+        // Spec 2026-09-30 §3.1 — the certificates of the caller's holders.
         const certificates = await certificateService.listCertificatesForUser(
             await holderScopeOf(req),
         );
 
+        // Spec §3.4 + operator ruling C5: each row says whether the caller may
+        // print its QR, and carries the QR value only when it may.
+        const memo = new Map();
+        const printable = await Promise.all(
+            certificates.map((cert) => mayPrintQr(req.user?.id, cert.application?.entityId, memo)),
+        );
+
         // Check expiry and format
         const now = new Date();
-        const formattedCerts = certificates.map(cert => {
+        const formattedCerts = certificates.map((cert, index) => {
             let status = cert.status;
             // Certificate.status is stored lowercase ('active' — schema @default),
             // so the old `status === 'ACTIVE'` never matched and expired certs were
@@ -222,6 +287,7 @@ router.get('/my', authenticateHealth, async (req, res) => {
                 id: cert.id,
                 certificateNumber: cert.certificateNumber,
                 applicationId: cert.applicationId,
+                entityId: cert.application?.entityId ?? null,
                 farmId: cert.farmId,
                 siteName: cert.farmName,
                 plantType: cert.cropType,
@@ -229,7 +295,8 @@ router.get('/my', authenticateHealth, async (req, res) => {
                 expiryDate: cert.expiryDate,
                 status: status,
                 canonicalStatus: String(status || '').toLowerCase(),
-                qrCode: cert.qrData,
+                canPrintQr: printable[index],
+                qrCode: printable[index] ? cert.qrData : null,
                 // Enhanced data for new UI (farm data stored inline on certificate)
                 farm: cert.farmName ? {
                     name: cert.farmName,
@@ -341,13 +408,24 @@ router.get('/:id', authenticateAny, async (req, res) => {
                     error: 'Unauthorized',
                 });
             }
-            // Ownership enforcement (the holder scope, and in R1 the filer pin) lives
+            // Ownership enforcement (the holder scope) lives
             // inside the service so this route cannot drop it (the classic IDOR pattern).
             certificate = await certificateService.getCertificateForUser(id, await holderScopeOf(req), {
                 include: {
-                    application: { select: { applicationNumber: true } },
+                    application: { select: { applicationNumber: true, entityId: true } },
                 },
             });
+            if (certificate) {
+                // Spec §3.4 + ruling C5: the QR value only for a caller who may print it.
+                const canPrintQr = await mayPrintQr(userId, certificate.application?.entityId, new Map());
+                const { application, ...row } = certificate;
+                certificate = {
+                    ...row,
+                    qrData: canPrintQr ? row.qrData : null,
+                    application: application ? { applicationNumber: application.applicationNumber } : application,
+                    canPrintQr,
+                };
+            }
         }
 
         if (!certificate) {
@@ -394,7 +472,7 @@ router.get('/:id/download', authenticateHealth, async (req, res) => {
         // Verify ownership before allowing download — same IDOR guard as above,
         // but only selecting the columns we need to build the filename.
         const certificate = await certificateService.getCertificateForUser(id, scope, {
-            select: { id: true, certificateNumber: true },
+            select: { id: true, certificateNumber: true, application: { select: { entityId: true } } },
         });
 
         if (!certificate) {
@@ -404,22 +482,18 @@ router.get('/:id/download', authenticateHealth, async (req, res) => {
             });
         }
 
-        // Wave C PR-6 — capability gate. Downloading the cert PDF embeds
-        // the QR code that drives /api/trace/* public verification, so it
-        // is gated by PRINT_QR. Default permissions: OWNER, ADMIN, MANAGER
-        // can print; VIEWER cannot.
-        if (req.activeEntity?.role) {
-            try {
-                entityService.assertCapability(req.activeEntity.role, 'PRINT_QR');
-            } catch (_capErr) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'Forbidden',
-                    code: 'CAPABILITY_DENIED',
-                    capability: 'PRINT_QR',
-                    role: req.activeEntity.role,
-                });
+        // Spec §3.4 (B14): the PDF embeds the QR that drives the public
+        // verification, so it is PRINT_QR on the certificate's holder, asked of
+        // the engine every time (fail closed). The active workspace's role no
+        // longer decides (it ignored GRANT/REVOKE and was skipped with no
+        // workspace bound).
+        try {
+            await assertMayPrintQr(req.user?.id, certificate.application?.entityId);
+        } catch (gateErr) {
+            if (gateErr?.code === ENTITY_PERMISSION_DENIED_CODE) {
+                return res.status(403).json(entityPermissionDeniedBody(PRINT_QR));
             }
+            throw gateErr;
         }
 
         // F-PDF-COLD-START-TIMEOUT (evidence/phase0/FINDINGS.md:177-178):

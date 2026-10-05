@@ -16,7 +16,6 @@ const agents = [
     // ── Journey Agents (J1-J10) ──
     { key: 'J1',  name: 'Registration & Login',    script: 'agent-j1-registration.js',       icon: '👤', cat: 'Journey' },
     { key: 'J2',  name: 'Farm Management',          script: 'agent-j2-farm-management.js',    icon: '🌾', cat: 'Journey' },
-    { key: 'J3',  name: 'Wizard Draft & Submit',    script: 'agent-j3-wizard-draft.js',       icon: '📝', cat: 'Journey' },
     { key: 'J4',  name: 'Document Review',           script: 'agent-j4-document-review.js',    icon: '📋', cat: 'Journey' },
     { key: 'J5',  name: 'Audit Workflow',            script: 'agent-j5-audit-workflow.js',     icon: '🔍', cat: 'Journey' },
     { key: 'J6',  name: 'Payment & Invoicing',      script: 'agent-j6-payment-invoicing.js',  icon: '💰', cat: 'Journey' },

@@ -477,11 +477,10 @@ const plotAreaUnitsSchema = z.array(z.object({
 // mint) used to read `farmData.totalAreaUnit || productionData.areaUnit ||
 // AREA_UNIT` and would silently mint Sqm for a unit-less farm (fixed, Task
 // 3). NOT the last occurrence of the pattern in the tree: the same
-// `farmData.totalAreaUnit || AREA_UNIT` guess still lives in
-// application-submission-methods.js:70-71, but that wizard
-// write path only runs behind ENABLE_PROVIDER_LEGACY_ALIAS, a flag set in NO
-// environment (routes/api/index.js:368) — dead in production, tracked as its
-// own cleanup item (f), not fixed here.
+// `farmData.totalAreaUnit || AREA_UNIT` guess lived in
+// application-submission-methods.js, the wizard write path behind
+// ENABLE_PROVIDER_LEGACY_ALIAS; that file was deleted with the /api/wizard
+// door (R2 Task 10), closing cleanup item (f).
 //
 // Honesty rule (plot-mission review, whole-branch review 2026-08-19 — a false
 // "fix it in the form" instruction got a MAJOR): farm-info-step.tsx sets

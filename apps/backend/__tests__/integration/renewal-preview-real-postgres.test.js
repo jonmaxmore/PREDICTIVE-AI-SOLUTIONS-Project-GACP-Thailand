@@ -41,6 +41,7 @@ d('GET /applications/:id/preview prices a renewal as a renewal, on a real Postgr
     let app;
     let orgId;
     let user;
+    let entityId;
     const appIds = [];
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -54,6 +55,14 @@ d('GET /applications/:id/preview prices a renewal as a renewal, on a real Postgr
         user = await prisma.user.create({
             data: { canonicalId: `r5ren-canon-${suffix}`, password: 'x', organizationId: orgId, authType: 'EMAIL_LEGACY' },
         });
+        // R2: a health user reads a filing through the holder it belongs to (no filer fallback).
+        const entity = await prisma.entity.create({
+            data: { type: 'INDIVIDUAL', displayName: 'ทดสอบ การต่ออายุ', organizationId: orgId },
+        });
+        entityId = entity.id;
+        await prisma.entityMembership.create({
+            data: { userId: user.id, entityId, role: 'OWNER', status: 'ACTIVE', organizationId: orgId },
+        });
         mockCurrentUser = { id: user.id, canonicalId: user.canonicalId, role: 'HEALTH_USER', canonicalRole: 'health' };
         const previewRouter = require('../../routes/api/preview/preview');
         app = express();
@@ -65,6 +74,10 @@ d('GET /applications/:id/preview prices a renewal as a renewal, on a real Postgr
         for (const id of appIds) {
             await prisma.invoice.deleteMany({ where: { applicationId: id } }).catch(() => {});
             await prisma.application.deleteMany({ where: { id } }).catch(() => {});
+        }
+        if (entityId) {
+            await prisma.entityMembership.deleteMany({ where: { entityId } }).catch(() => {});
+            await prisma.entity.deleteMany({ where: { id: entityId } }).catch(() => {});
         }
         if (user) { await prisma.user.deleteMany({ where: { id: user.id } }).catch(() => {}); }
         if (orgId) { await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {}); }
@@ -78,6 +91,7 @@ d('GET /applications/:id/preview prices a renewal as a renewal, on a real Postgr
                 healthId: user.canonicalId,
                 areaType: 'OUTDOOR',
                 organizationId: orgId,
+                entityId,
                 // PENDING_AUDIT_FEE is not a previewable status (previewable-statuses.js); the
                 // stage a renewal reaches the preview in is CAR_PENDING.
                 status: 'CAR_PENDING',

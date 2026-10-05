@@ -1,6 +1,5 @@
 const { prisma } = require('./prisma-database');
 const cacheService = require('./cache-service');
-const { getEntityContext } = require('./entity-context');
 const { farmAccessWhere, listAccessibleFarmIds, resolveFarmOwnerAccess } = require('./farm-access');
 const logger = require('../shared/logger');
 const { AREA_UNIT } = require('../shared/area-utils');
@@ -50,6 +49,7 @@ class FarmService {
             irrigationType: true,
             soilType: true,
             waterSource: true,
+            entityId: true,
             status: true,
             verifiedAt: true,
             createdAt: true,
@@ -63,10 +63,15 @@ class FarmService {
      * (Wave A chunk 3; solo farmers keep the byte-identical legacy where).
      * @param {string} ownerId
      */
-    async getByOwner(ownerId) {
+    async getByOwner(ownerId, { holderScope = null } = {}) {
+        // A health door passes its holder scope: the farms its holders hold, whoever
+        // created them (spec 2026-09-30 §3.1). No scope = the legacy access predicate.
+        const access = holderScope
+            ? require('./holder-access').holderReadWhere(holderScope, 'Farm')
+            : await farmAccessWhere(ownerId);
         return prisma.farm.findMany({
             where: {
-                ...(await farmAccessWhere(ownerId)),
+                ...access,
                 isDeleted: false,
             },
             orderBy: { createdAt: 'desc' },
@@ -118,8 +123,8 @@ class FarmService {
                     expiryDate: {
                         gte: now,
                     },
-                    // R1-legacy-pin: removed in Task 12 — the access-scoped farm set above decides.
-                    ...require('./holder-access').r1HolderOrLegacyWhenScoped(holderScope, 'Certificate', { farmId: { in: farmIds } }),
+                    // A health door passes its holder scope: the certificates its holders hold.
+                    ...require('./holder-access').holderReadWhereIfScoped(holderScope, 'Certificate'),
                 },
                 select: {
                     farmId: true,
@@ -187,30 +192,32 @@ class FarmService {
     }
 
     /**
-     * Create a new farm
+     * Create a new farm on the holder the caller names.
      *
-     * Wave A chunk 2 (2026-07-02): stamps `entityId` from the active-entity
-     * scope so runtime-created farms join the workspace dimension (before
-     * this only the run-once backfill wrote entityId — and the read-side
-     * prisma extension entity-filters Farm, so a null-entityId farm vanishes
-     * from list reads under an active entity context). Resolution order:
-     * explicit options.entityId (route threads req.activeEntity, mirroring
-     * the applications.js draft-stamping precedent) → ALS entity context →
-     * null (scripts/seeds without a scope keep working; NEVER a lookup here).
+     * R2 Task 10 (spec 2026-09-30-remove-workspace-mode §3.2 B7/B8):
+     * `options.entityId` is required and is the only source of Farm.entityId.
+     * The active-entity context is no longer read here, and there is no null
+     * default: without a holder this throws before any write. The route
+     * (POST /farms) checks FARM_CREATE on that entity first.
      *
      * @param {string} ownerId
      * @param {object} data
      * @param {object} file (Optional uploaded file)
-     * @param {{ entityId?: string|null }} [options]
+     * @param {{ entityId: string }} options
      */
-    async createFarm(ownerId, data, file, options = {}) {
+    async createFarm(ownerId, data, file, options) {
         const {
             farmName, farmType, address, province, district, subDistrict, postalCode,
             latitude, longitude, totalArea, cultivationArea, areaUnit,
             cultivationMethod, irrigationType, soilType, waterSource, landDocuments,
         } = data;
 
-        const entityId = options.entityId || getEntityContext()?.entityId || null;
+        // R2 Task 10 (spec 2026-09-30 §3.2): the holder is named by the caller,
+        // never inferred from a request context. No write without it.
+        const entityId = String(options?.entityId || '').trim();
+        if (!entityId) {
+            throw new TypeError('createFarm: options.entityId (the farm\'s holder) is required');
+        }
 
         const created = await prisma.farm.create({
             data: {

@@ -295,7 +295,7 @@ describe('apiClient 403 entity-permission denial pass-through (Wave-C F2)', () =
         expect(res.meta).toEqual({ permission: 'FARM_CREATE' });
     });
 
-    it('falls back to the generic workspace-denial Thai copy when the denial body carries no human message (shape C: code in `error`)', async () => {
+    it('falls back to the catalogue permission-denial Thai copy when the denial body carries no human message (shape C: code in `error`)', async () => {
         fetchMock.mockResolvedValueOnce(mockJsonResponse({
             status: 403,
             body: {
@@ -305,7 +305,7 @@ describe('apiClient 403 entity-permission denial pass-through (Wave-C F2)', () =
         }));
 
         const res = await client.post('/api/farms', {});
-        expect(res.error).toBe('ไม่มีสิทธิ์ดำเนินการนี้ ติดต่อเจ้าของ workspace');
+        expect(res.error).toBe('คุณไม่มีสิทธิ์ทำรายการนี้ในนามของผู้ถือรายนี้ ขอให้เจ้าของมอบสิทธิ์ให้คุณก่อน แล้วลองอีกครั้ง');
         expect(res.code).toBe('ENTITY_PERMISSION_DENIED');
     });
 
@@ -327,9 +327,9 @@ describe('apiClient 403 entity-permission denial pass-through (Wave-C F2)', () =
         }));
 
         const res = await client.get('/api/anything');
-        // Existing empty-message generic — NOT the workspace-denial copy.
+        // Existing empty-message generic — NOT the permission-denial copy.
         expect(res.error).toBe('ไม่สามารถดำเนินการได้ (HTTP 403)');
-        expect(res.error).not.toBe('ไม่มีสิทธิ์ดำเนินการนี้ ติดต่อเจ้าของ workspace');
+        expect(res.error).not.toBe('คุณไม่มีสิทธิ์ทำรายการนี้ในนามของผู้ถือรายนี้ ขอให้เจ้าของมอบสิทธิ์ให้คุณก่อน แล้วลองอีกครั้ง');
         expect(res.code).toBeUndefined();
     });
 });

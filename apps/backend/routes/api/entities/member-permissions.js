@@ -126,7 +126,7 @@ async function resolveGuards(req, res, { selfGuard }) {
         res.status(403).json({
             success: false,
             code: 'FORBIDDEN',
-            error: 'Only the workspace OWNER can manage member permissions',
+            error: 'Only the entity OWNER can manage member permissions',
         });
         return null;
     }

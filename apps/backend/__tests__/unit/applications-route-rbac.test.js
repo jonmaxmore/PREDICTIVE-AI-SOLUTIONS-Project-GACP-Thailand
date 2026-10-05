@@ -62,7 +62,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -237,7 +236,6 @@ describe('V1-D D2 — HEALTH role gate on applicant-only routes', () => {
             formData: { steps: {} },
             workflowHistory: [],
         });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
         applicationService.updateApplicantDraftColumns.mockResolvedValue({
             id: 'draft-1',
             applicationNumber: 'APP-2026-000001',

@@ -89,7 +89,6 @@ jest.mock('../../services/application-status-writer', () => {
 
 jest.mock('../../services/application-service', () => ({
     resolveHealthIdentity: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     findOwnedApplicationForApplicant: jest.fn(),
     getApplicationSlice: jest.fn(),
@@ -183,7 +182,6 @@ beforeEach(() => {
     applicationService.resolveHealthIdentity.mockResolvedValue({
         userId: 'user-1', healthId: '1100000000008',
     });
-    applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
     mockWriteApplicationStatus.mockResolvedValue({ id: 'app-1' });
 });
 
@@ -204,7 +202,7 @@ describe('M1 — POST /bundles/:id/submit asks the guard about EVERY linked case
         });
     }
 
-    it('a linked case with no entityId (nothing to heal) → 400 VALIDATION_ERROR, no transaction opened', async () => {
+    it('a linked case with no entityId → 400 VALIDATION_ERROR, no transaction opened', async () => {
         bundleWith([
             { id: 'app-a', status: 'DRAFT', entityId: 'ent-a' },
             { id: 'app-b', status: 'DRAFT', entityId: null },
@@ -271,17 +269,16 @@ describe('M1 — POST /bundles/:id/submit asks the guard about EVERY linked case
         expect(JSON.stringify(prismaMock.applicationBundle.findFirst.mock.calls[0])).toContain('"entityId":true');
     });
 
-    it('heals a pre-Phase-66 linked case from the personal entity instead of refusing it', async () => {
+    // R2 Task 8 (spec 2026-09-30 §3.2 + C3): a null holder is refused by the guard,
+    // never healed to the caller's personal entity (heal-null-holders.js places legacy rows).
+    it('a linked case with a null holder is refused (400), never healed to the personal entity', async () => {
         bundleWith([{ id: 'app-a', status: 'DRAFT', entityId: null }]);
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue({ id: 'ent-personal' });
-        applicationService.healDraftEntityColumns.mockResolvedValue({ id: 'app-a', entityId: 'ent-personal' });
 
         const r = await submit();
 
-        expect(r.status).toBe(200);
-        expect(assertEntityActionPermission).toHaveBeenCalledWith(expect.objectContaining({
-            entityId: 'ent-personal',
-        }));
+        expect(r.status).toBe(400);
+        expect(applicationService.healDraftEntityColumns).not.toHaveBeenCalled();
+        expect(assertEntityActionPermission).not.toHaveBeenCalled();
     });
 });
 
@@ -389,7 +386,7 @@ describe('M1 — POST /applications/:id/car', () => {
         }));
     });
 
-    it('refuses with 400 when the row names no entity and nothing can be healed', async () => {
+    it('refuses with 400 when the row names no entity', async () => {
         applicationService.findOwnedApplicationForApplicant.mockResolvedValue({
             ...JSON.parse(JSON.stringify(CAR_ROW)), entityId: null,
         });
@@ -435,7 +432,7 @@ describe('M1 — PUT /applications/:id/revision (workflow-handlers) asks the gua
         applicationService.submitRevision.mockResolvedValue({ status: 200, body: { success: true } });
     });
 
-    it('no entityId and nothing to heal → 400 VALIDATION_ERROR, submitRevision never runs', async () => {
+    it('no entityId → 400 VALIDATION_ERROR, submitRevision never runs', async () => {
         applicationService.findOwnedApplicationForApplicant.mockResolvedValue({
             id: 'app-1', entityId: null, submitterId: null,
         });
@@ -475,25 +472,25 @@ describe('M1 — PUT /applications/:id/revision (workflow-handlers) asks the gua
         }));
     });
 
-    it('heals a pre-Phase-66 row from the personal entity before deciding', async () => {
+    // R2 Task 8 (spec 2026-09-30 §3.2 + C3): a null holder is refused by the guard,
+    // never healed to the caller's personal entity (heal-null-holders.js places legacy rows).
+    it('a null holder is refused (400) before deciding, never healed to the personal entity', async () => {
         applicationService.findOwnedApplicationForApplicant.mockResolvedValue({
             id: 'app-1', entityId: null, submitterId: null,
         });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue({ id: 'ent-personal' });
-        applicationService.healDraftEntityColumns.mockResolvedValue({ id: 'app-1', entityId: 'ent-personal' });
 
         const r = await put();
 
-        expect(r.status).toBe(200);
-        expect(assertEntityActionPermission).toHaveBeenCalledWith(expect.objectContaining({
-            entityId: 'ent-personal',
-        }));
+        expect(r.status).toBe(400);
+        expect(applicationService.healDraftEntityColumns).not.toHaveBeenCalled();
+        expect(assertEntityActionPermission).not.toHaveBeenCalled();
+        expect(applicationService.submitRevision).not.toHaveBeenCalled();
     });
 });
 
 // ── create side: a renewal draft is born naming an entity, or not at all ─────
 
-describe('M1 — POST /applications/renewals seeds entityId or refuses', () => {
+describe('M1 — POST /applications/renewals carries the source holder or refuses', () => {
     let app;
     beforeAll(() => { app = mount('/api/applications/renewals', '../../routes/api/applications/renewals'); });
 
@@ -505,34 +502,29 @@ describe('M1 — POST /applications/renewals seeds entityId or refuses', () => {
         });
     });
 
-    it('carried an entityId from the source application → 201', async () => {
-        applicationService.getApplicationSlice.mockResolvedValue({ id: 'app-renewal-1', entityId: 'ent-1' });
-
+    it('a renewal the service accepts → 201; the route hands the caller\'s holder scope to the service', async () => {
         const r = await create();
 
         expect(r.status).toBe(201);
+        expect(renewalService.createRenewalApplication).toHaveBeenCalledWith(expect.objectContaining({
+            originalCertificateId: 'cert-1',
+            holderScope: expect.objectContaining({ editIds: expect.any(Array) }),
+        }));
         expect(applicationService.healDraftEntityColumns).not.toHaveBeenCalled();
     });
 
-    it('source had none → heals from the personal entity → 201', async () => {
-        applicationService.getApplicationSlice.mockResolvedValue({ id: 'app-renewal-1', entityId: null });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue({ id: 'ent-personal' });
-        applicationService.healDraftEntityColumns.mockResolvedValue({ id: 'app-renewal-1', entityId: 'ent-personal' });
-
-        const r = await create();
-
-        expect(r.status).toBe(201);
-        expect(applicationService.healDraftEntityColumns).toHaveBeenCalledWith('app-renewal-1',
-            expect.objectContaining({ entityId: 'ent-personal' }));
-    });
-
-    it('nothing to seed and nothing to heal → 400 VALIDATION_ERROR (never a draft that can never be submitted)', async () => {
-        applicationService.getApplicationSlice.mockResolvedValue({ id: 'app-renewal-1', entityId: null });
-        applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
+    // R2 Task 8 fix round 1 (spec 2026-09-30 §3.2 + C3): the SERVICE refuses a source
+    // with no holder before it writes anything (real-Postgres pin:
+    // holder-scope-real-postgres.test.js); the route passes the refusal through.
+    it('the service refuses a source with no holder → 400 APPLICATION_HOLDER_REQUIRED, never healed', async () => {
+        renewalService.createRenewalApplication.mockRejectedValue(Object.assign(
+            new Error('ใบรับรองนี้ยังไม่ระบุผู้ถือ'), { code: 'APPLICATION_HOLDER_REQUIRED', statusCode: 400 },
+        ));
 
         const r = await create();
 
         expect(r.status).toBe(400);
-        expect(r.body.error).toBe('VALIDATION_ERROR');
+        expect(r.body.error).toBe('APPLICATION_HOLDER_REQUIRED');
+        expect(applicationService.healDraftEntityColumns).not.toHaveBeenCalled();
     });
 });

@@ -182,8 +182,8 @@ const { getRequestIp } = require('../../../utils/client-ip');
 
 router.get('/me/export', authenticateHealth, async (req, res) => {
     try {
-        // Spec 2026-09-30 §3.1 (R1): the export's reads carry the holder scope beside the
-        // subject keys, so the read witness sees them; the rows are the subject's own.
+        // PDPA s.30: the export reads the data subject's own rows by the subject keys;
+        // the holder scope marks them for the read witness (pdpa-service subjectOwnWhere).
         const { holderScope } = require('../../../services/holder-access');
         const exportPayload = await pdpaService.assembleUserDataExport(req.user.id, { holderScope: await holderScope(req) });
         try {

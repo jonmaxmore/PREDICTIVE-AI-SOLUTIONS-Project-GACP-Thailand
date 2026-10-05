@@ -4,7 +4,7 @@
  * Write doors and the certificate / document / pre-check / finance doors run
  * clean under the read witness in THROW mode (spec 2026-09-30-remove-workspace-mode
  * §3.1, Task 4), on a REAL Postgres through the REAL prisma-database client and
- * the real tenant-context + active-entity middlewares. Only authentication is
+ * the real tenant-context middleware. Only authentication is
  * attached by hand; the consent gate, the pre-check queue and the certificate PDF
  * renderer are stubbed (none is the subject).
  *
@@ -15,7 +15,7 @@
  * own error), never its normal status. Every door below must answer its normal
  * status and the witness must log nothing.
  *
- * Fixture: A is OWNER of personal P and of company C, and acts with header C.
+ * Fixture: A is OWNER of personal P and of company C (no workspace header, R2 Task 12).
  * The chain is the real filing journey: POST /draft → POST /draft-documents →
  * POST /submit → GET + accept the quotation → POST /payments/checkout (mock
  * adapter) → POST /bundles; plus revision-resubmit and CAR on seeded filings,
@@ -60,12 +60,10 @@ const mockActor = { current: null };
 jest.mock('../../middleware/auth-middleware', () => {
     const actual = jest.requireActual('../../middleware/auth-middleware');
     const { tenantContextMiddleware } = jest.requireActual('../../middleware/tenant-context-middleware');
-    const { activeEntityMiddleware } = jest.requireActual('../../middleware/active-entity-middleware');
     const bindTenant = tenantContextMiddleware();
-    const bindEntity = activeEntityMiddleware();
     const attach = (req, res, next) => {
         req.user = { ...mockActor.current };
-        return bindTenant(req, res, () => bindEntity(req, res, next));
+        return bindTenant(req, res, next);
     };
     return { ...actual, authenticateAny: attach, authenticateHealth: attach, authenticateProvider: attach, authenticateToken: attach };
 });
@@ -186,7 +184,8 @@ d('write doors + certificate/document/finance doors run clean under the witness 
     const as = (u) => {
         mockActor.current = { id: u.id, canonicalId: u.canonicalId, healthId: u.canonicalId, role: 'health', canonicalRole: 'health', organizationId: fx.org };
     };
-    const hdr = () => ({ 'x-active-entity-id': fx.C });
+    // R2 Task 12: no workspace header; membership alone decides.
+    const hdr = () => ({});
 
     beforeAll(async () => {
         raw = new PrismaClient();
@@ -284,6 +283,13 @@ d('write doors + certificate/document/finance doors run clean under the witness 
         };
         // Rows that reference the certificate (report submissions, the cycle) go first, or the
         // certificate delete fails silently and leaves a row behind for later suites.
+        // The planting attachment door stores its file under application-drafts and an Attachment row.
+        for (const { fileUrl } of await raw.attachment.findMany({ where: { organizationId: fx.org }, select: { fileUrl: true } }).catch(() => [])) {
+            if (/^\/uploads\/application-drafts\/[\w.-]+$/.test(fileUrl)) {
+                fs.rmSync(path.join(__dirname, '..', '..', 'public', fileUrl), { force: true });
+            }
+        }
+        await wipe('attachment', { organizationId: fx.org });
         await wipe('cultivationLog', { cycleId: fx.cycle });
         await wipe('plantingCycle', { id: fx.cycle });
         await wipe('reportSubmission', { userId: { in: fx.userIds } });
@@ -340,7 +346,8 @@ d('write doors + certificate/document/finance doors run clean under the witness 
         const pdf = await writePdf(path.join(tmpDir, 'land.pdf'));
         as(fx.A);
 
-        const draft = await call('POST /draft', request(app).post('/api/applications/draft').set(hdr()).send({ formData: { plantId: 'cannabis' } }));
+        // R2 Task 8 (spec 2026-09-30 §3.2): a new draft names its holder (C, the company A acts for).
+        const draft = await call('POST /draft', request(app).post('/api/applications/draft').set(hdr()).send({ entityId: fx.C, formData: { plantId: 'cannabis' } }));
         const draftId = draft.body?.data?.id;
         const upDraft = await call('POST /draft-documents', request(app).post('/api/applications/draft-documents').set(hdr())
             .field('applicationId', draftId || '').field('slotId', 'land_rights').attach('file', pdf));
@@ -439,8 +446,13 @@ d('write doors + certificate/document/finance doors run clean under the witness 
 
     test('planting activity attachments run clean under witness throw (the cycle\'s Farm read converted in Task 6)', async () => {
         as(fx.A);
+        // C4 (2026-10-03): the attachment comes from the cycle's own door, not an application document.
+        const pdf = await writePdf(path.join(tmpDir, 'activity.pdf'));
+        const up = await call('POST /planting-cycles/:id/attachments', request(app)
+            .post(`/api/planting-cycles/${fx.cycle}/attachments?activityType=IRRIGATION`).set(hdr()).attach('file', pdf));
+        expect(up.status).toBe(201);
         const res = await call('POST /planting-cycles/:id/activities', request(app).post(`/api/planting-cycles/${fx.cycle}/activities`).set(hdr())
-            .send({ scope: 'CYCLE', activityType: 'IRRIGATION', attachmentIds: [fx.certDoc] }));
+            .send({ scope: 'CYCLE', activityType: 'IRRIGATION', attachmentIds: [up.body.data.documentId] }));
         expect(res.status).toBe(201);
         expect(witnessLogs()).toEqual([]);
     });

@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/primitives/button';
 import { AuthService, AuthUser } from '@/lib/services/auth-service';
 import { HEALTH_LOGIN_ROUTE, PROVIDER_LOGIN_ROUTE } from '@/lib/constants/auth-routes';
 import { Footer } from '@/components/layout/Footer';
-import { EntitySwitcher } from '@/components/layout/entity-switcher';
 import { LanguageToggle } from '@/components/feature/LanguageToggle';
 import {
   DropdownMenu,
@@ -281,7 +280,7 @@ export function DashboardLayout({
          ═══════════════════════════════════════════════════════ */}
       <header className="gov-topbar">
         {/* Slim bar (N2, tile-home-redesign) — logo only on the left;
-            EntitySwitcher, toggles, bell, and the avatar dropdown on the
+            toggles, bell, and the avatar dropdown on the
             right. The desktop menu-link row + "เพิ่มเติม" overflow menu are
             retired — every destination now lives inside the role's
             tile-home page, and inner pages render BackHomeCrumb in the
@@ -320,12 +319,8 @@ export function DashboardLayout({
             </div>
           </Link>
 
-          {/* Right: Workspace switcher + Theme toggle + Language + Bell + Avatar */}
+          {/* Right: Theme toggle + Language + Bell + Avatar */}
           <div className="flex shrink-0 items-center gap-1.5 lg:gap-3">
-            {/* Wave C — workspace switcher (Google Ads / Stripe pattern).
-                Health users only. Providers scope by Application instead. */}
-            <EntitySwitcher hidden={role !== 'health'} />
-
             {/* Theme toggle — min 44x44 for touch */}
             <button
               type="button"

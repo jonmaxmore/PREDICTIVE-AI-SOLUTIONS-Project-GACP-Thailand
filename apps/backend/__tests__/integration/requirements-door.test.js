@@ -165,16 +165,11 @@ describe('GET /applications/:id/requirements', () => {
         const { where } = mockFindFirst.mock.calls[0][0];
         // Spec 2026-09-30 §3.1: the holder fragment of the token user's ACTIVE
         // memberships, carrying the marker; no filer (healthId) pin at the top level.
-        // R1-legacy-pin (removed in Task 12): OR [fragment, the token's healthId pin] and the
-        // pin as the AND member (final review C1: neutral with or without an entity context).
-        expect(Object.keys(where).sort()).toEqual(['AND', 'OR', 'id', 'isDeleted']);
-        expect(where).toEqual(expect.objectContaining({
-            id: 'app-1', AND: [{ healthId: 'health-1' }], isDeleted: false,
-        }));
-        expect(where.OR[0].entityId).toEqual({ in: ['ent-1'] });
-        expect(hasHolderMarker(where.OR[0])).toBe(true);
-        expect(JSON.parse(JSON.stringify(where.OR[1]))).toEqual({ healthId: 'health-1' });
-        expect(hasHolderMarker(where.OR[1])).toBe(true);
+        // R2 Task 12: the fragment alone (no OR legacy branch, no AND pin).
+        expect(Object.keys(where).sort()).toEqual(['entityId', 'id', 'isDeleted']);
+        expect(where).toEqual(expect.objectContaining({ id: 'app-1', isDeleted: false }));
+        expect(where.entityId).toEqual({ in: ['ent-1'] });
+        expect(hasHolderMarker(where)).toBe(true);
     });
 
     test('someone else’s filing is a 404, not a 403 — asking must not confirm it exists', async () => {

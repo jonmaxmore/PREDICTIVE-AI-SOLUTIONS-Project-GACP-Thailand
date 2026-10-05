@@ -42,6 +42,7 @@ const { createLogger } = require('../shared/logger');
 // dropped (fail-open). Grant rows belong to the ENTITY dimension, so the
 // engine reads them without the org scope.
 const { withoutTenantScope } = require('./tenant-context');
+const { ENTITY_PERMISSION_DENIED_EN } = require('../shared/entity-permission-denied');
 const {
     CAPABILITIES,
     FARM_OPERATION_CAPABILITIES,
@@ -257,7 +258,8 @@ async function entityMemberHasPermission(args, permission) {
  * (the project rules: errors with only `.code` map to 500 via sendServiceError).
  */
 function buildDeniedError(permission) {
-    const err = new Error(`Workspace member lacks permission ${permission}`);
+    // The permission travels on err.permission; the text is the catalogue's.
+    const err = new Error(ENTITY_PERMISSION_DENIED_EN);
     err.code = 'ENTITY_PERMISSION_DENIED';
     err.statusCode = 403;
     err.httpStatus = 403;
@@ -300,7 +302,7 @@ function buildDeniedError(permission) {
  * @param {string} args.permission — one of CAPABILITIES
  * @param {object} [args.prisma]
  * @param {Map}    [args.cache] — per-request effective-permission memo
- * @param {object} [args.holderScope] — a health door's holder scope (R1: rides beside the farm id)
+ * @param {object} [args.holderScope] — a health door's holder scope (the farm is read within it)
  * @returns {Promise<{ allowed: true, via: 'LEGACY_OWNER'|'ENTITY_PERMISSION' }>}
  */
 async function assertFarmActionPermission({ farm, farmId, userId, permission, prisma, cache, holderScope = null } = {}) {
@@ -317,9 +319,9 @@ async function assertFarmActionPermission({ farm, farmId, userId, permission, pr
             farmRow = await db.farm.findUnique({
                 where: {
                     id: String(farmId),
-                    // R1-legacy-pin: removed in Task 12 — a health door passes its holder
-                    // scope; the farm id decides the row, as pre-R1.
-                    ...require('./holder-access').r1HolderOrLegacyWhenScoped(holderScope, 'Farm', { id: String(farmId) }),
+                    // A health door passes its holder scope: a farm outside it is not
+                    // found, which denies below. Other callers read by id.
+                    ...require('./holder-access').holderReadWhereIfScoped(holderScope, 'Farm'),
                 },
                 select: { ownerId: true, entityId: true },
             });
@@ -391,12 +393,11 @@ async function assertFarmActionPermission({ farm, farmId, userId, permission, pr
 }
 
 /**
- * Workspace-context gate with NO farm row yet (e.g. POST /farms creating a
- * farm INTO a workspace): the caller's ACTIVE membership on `entityId` must
- * hold `permission`. Same denial contract as assertFarmActionPermission.
- * Callers must NOT invoke this for personal contexts (rule b — solo farmer
- * paths stay byte-identical); the route decides that from
- * req.activeEntity.personal.
+ * Entity gate with NO farm row yet (e.g. POST /farms creating a farm under the
+ * holder the body names): the caller's ACTIVE membership on `entityId` must
+ * hold `permission`. Same denial contract as assertFarmActionPermission. Every
+ * holder is checked, the caller's personal entity included (spec 2026-09-30
+ * §3.2, R2 Task 10).
  *
  * @param {object} args
  * @param {string} args.entityId

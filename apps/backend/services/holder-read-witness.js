@@ -29,9 +29,9 @@
  *   - a where value-equal to a fragment registered earlier in the same request
  *     (the same predicate, so genuinely scoped).
  *
- * Ordering is load-bearing: under R1 the entity dimension of applyReadScopes
- * still overwrites `where.entityId` for Application and Farm, which would
- * break the value equality. The witness must see the where before that.
+ * Ordering: the witness sees the caller's where before applyReadScopes adds
+ * the organization dimension (the R1 entity dimension, which overwrote
+ * `where.entityId`, was removed in R2 Task 12).
  *
  * Shadow mode must never change a read: the counter and the log are each
  * wrapped, and a failure in either is swallowed. This module requires nothing

@@ -4,7 +4,7 @@
  * The §3.1 door walk (spec 2026-09-30-remove-workspace-mode §3.1 guard part 2,
  * Task 6), on a REAL Postgres through the REAL server app: the real
  * authenticateHealth / authenticateAny middlewares verify real access tokens and
- * bind the tenant and active-entity contexts, and the real prisma-database client
+ * bind the tenant context, and the real prisma-database client
  * carries the read witness. Nothing in the request path is mocked except the
  * headless-browser PDF renderer and the job queues (their bytes and jobs are not
  * the subject; the reads in front of them are).
@@ -16,24 +16,23 @@
  * not know FAILS the walk, so a new health GET door cannot arrive unwalked.
  *
  * Actors (fixture: __tests__/integration/fixtures/holder-scope-fixture.js):
- *   A  OWNER of company C, filer of everything   (R1: header C)
- *   B  MANAGER of C, a co-member                  (R1: header C)
- *   V  VIEWER of C                                (R1: header C)
- *   S  stranger, OWNER of personal PS             (no header)
+ *   A  OWNER of company C, filer of everything
+ *   B  MANAGER of C, a co-member
+ *   V  VIEWER of C
+ *   S  stranger, OWNER of personal PS
+ *   (no actor sends a workspace header since R2 Task 12)
  *
  * Assertions:
  *   1. the witness (THROW mode, the NODE_ENV=test default) refuses no read on
  *      any walked door (no HEALTH_READ_UNSCOPED line);
  *   2. S never receives an id of C's or A's rows in any body (an id S itself
  *      put in the URL is not a disclosure and is ignored for that request);
- *   3. S is refused (never 2xx) on every by-id door keyed on C's or A's rows.
- *      R1 keeps each door's pre-R1 refusal code (C1); the R2 target is 404
- *      everywhere (Task 12), and the 403s are listed in the report;
+ *   3. S is refused with 404 (never 2xx, never a 403 that confirms the row)
+ *      on every by-id door keyed on C's or A's rows (R2 Task 12);
  *   4. counts equal list lengths for B (plan Review Focus 4);
- *   5. R1 is behaviour-neutral: every actor × door answers the same status and
- *      the same set of fixture rows as main before the branch (9616ccdf). The
- *      expected file is recorded by running THIS file on that commit with
- *      HEALTH_DOOR_WALK_RECORD=<path>.
+ *   5. every actor × door answers the recorded status and set of fixture rows
+ *      (R2 answers since Task 12; in R1 this pinned main 9616ccdf). Re-record
+ *      with HEALTH_DOOR_WALK_RECORD=<path>.
  */
 
 process.env.PAYMENT_ADAPTER = process.env.PAYMENT_ADAPTER || 'mock';
@@ -62,6 +61,10 @@ jest.mock('../../services/queue-service', () => ({
     getPdfQueue: () => null,
 }));
 
+// The expected file holds the R2 answers (re-recorded in Task 12, 2026-10-03): no
+// workspace header, no filer pin. Co-members B and V read C's rows like the filer A,
+// A also reads its personal Y, and the stranger S gets 404 wherever it got 403 in R1.
+// Each moved row is listed with its reason in evidence/remove-workspace-mode/task-12/green.txt.
 const EXPECTED_FILE = path.join(__dirname, '..', 'fixtures', 'health-door-walk.expected.json');
 const AUTH_NAMES = new Set(['authenticateHealth', 'authenticateAny']);
 
@@ -160,6 +163,9 @@ const QUERY = {
     '/api/planting-cycles': { farmId: 'farm' },
     // The applicant refund-visibility read (credit notes of one of my invoices).
     '/api/finance/credit-notes': { originalInvoiceId: 'invoiceX' },
+    // R2 Task 8 (spec 2026-09-30 §3.2): reads never create, so the draft-document
+    // list names its draft (no id → 400 for everyone, which would walk nothing).
+    '/api/applications/draft-documents': { applicationId: 'D' },
 };
 
 /** Fill a route path; returns { url, labels } or { missing } naming the unknown parameter. */
@@ -206,14 +212,15 @@ d('health door walk: every GET a health token can reach, witness in throw mode (
     const ORIGINAL_MODE = process.env.HOLDER_READ_WITNESS;
 
     const ACTORS = {
-        A: () => ({ token: fx.tokens.A, headers: { 'x-active-entity-id': fx.entities.C } }),
-        B: () => ({ token: fx.tokens.B, headers: { 'x-active-entity-id': fx.entities.C } }),
-        V: () => ({ token: fx.tokens.V, headers: { 'x-active-entity-id': fx.entities.C } }),
+        // R2 Task 12: no actor sends a workspace header; membership alone decides.
+        A: () => ({ token: fx.tokens.A, headers: {} }),
+        B: () => ({ token: fx.tokens.B, headers: {} }),
+        V: () => ({ token: fx.tokens.V, headers: {} }),
         S: () => ({ token: fx.tokens.S, headers: {} }),
     };
 
     const countsAndLists = async (actor) => {
-        const as = { Authorization: `Bearer ${fx.tokens[actor]}`, 'x-active-entity-id': fx.entities.C };
+        const as = { Authorization: `Bearer ${fx.tokens[actor]}` };
         const [list, statuses, stats, certs, farms] = await Promise.all([
             request(app).get('/api/applications/my').set(as),
             request(app).get('/api/applications/my/statuses').set(as),
@@ -403,32 +410,36 @@ d('health door walk: every GET a health token can reach, witness in throw mode (
             .filter(([k, r]) => !(OWN_ROWS_FILTERED_BY_ID[k.slice(2)] && OWN_ROWS_FILTERED_BY_ID[k.slice(2)](r)))
             .map(([k, r]) => `${k} → ${r.status} ${r.labels.join(',')}`);
         expect(served).toEqual([]);
-        // R1 keeps each pre-R1 refusal code (ruling C1); the R2/Task 12 answer is 404
-        // on every one of them. The 403s are the list Task 12 flips.
+        // R2 Task 12: every refusal of the stranger on C's or A's rows is 404 (R1 kept
+        // the pre-R1 403s; they are gone with the filer pins and the header).
         const refusals = Object.entries(results)
-            .filter(([k, r]) => k.startsWith('S ') && r.urlLabels.some((l) => theirs.has(l)) && (r.status === 403 || r.status === 404))
-            .map(([, r]) => r.status);
+            .filter(([k, r]) => k.startsWith('S ') && r.urlLabels.some((l) => theirs.has(l)) && r.status >= 400 && r.status < 500)
+            .map(([k, r]) => `${k} → ${r.status}`);
         expect(refusals.length).toBeGreaterThan(0);
+        // Doors whose refusal is decided after the read, unchanged since R1 (not a
+        // holder-read refusal): credit notes answer FORBIDDEN_ROLE for an invoice the
+        // caller cannot read; harvest batches sit behind the farm permission gate (T&T
+        // freeze, not touched by R2).
+        const AFTER_READ_403 = new Set(['/api/finance/credit-notes', '/api/harvest-batches/:id',
+            '/api/harvest-batches/:id/lab-results', '/api/harvest-batches/stats/:farmId']);
+        expect(refusals.filter((line) => !line.endsWith('→ 404') && !AFTER_READ_403.has(line.slice(2, line.indexOf(' →')))))
+            .toEqual([]);
     });
 
-    // Review Focus 4. R1 returns what pre-R1 returned (ruling C1), and pre-R1 the
-    // co-member's /my/statuses and the dashboard farm counter used other pins than
-    // their lists. Those two divergences are pinned here as R1 facts, each with its
-    // R2 answer; Task 12 turns them into equalities when every side reads
-    // holderReadWhere. Every other counter already equals its list.
-    test('counts equal list lengths for B (Review Focus 4), R1 divergences pinned with their R2 answer', () => {
+    // Review Focus 4. Every counter equals its list for the co-member: /my/statuses
+    // reads /my's where (R2 Task 9 fix round 1), and the dashboard farm counter
+    // counts the same membership-based farms as /farms/my (R2 Task 12).
+    test('counts equal list lengths for B (Review Focus 4)', () => {
         const b = counts.B;
         expect(b.httpStatuses).toEqual([200, 200, 200, 200, 200]);
         expect(b.list).toEqual([fx.apps.D, fx.apps.D2, fx.apps.X].sort());
         expect(b.stats.applications).toBe(b.list.length);
         expect(b.stats.totalApplications).toBe(b.list.length);
         expect(b.stats.certificates).toBe(b.activeCerts);
-        // R1 = pre-R1: /my/statuses pins the filer's healthId, so the co-member sees none.
-        // R2/Task 12: equals b.list.
-        expect(b.statuses).toEqual([]);
-        // R1 = pre-R1: the dashboard farm counter pins Farm.ownerId; /farms/my is
-        // membership-based (farm-access). R2/Task 12: equals b.farms.
-        expect({ counter: b.stats.farms, list: b.farms }).toEqual({ counter: 0, list: 1 });
+        // R2 Task 9 fix round 1: /my/statuses reads exactly /my's where, so it equals the list.
+        expect(b.statuses).toEqual(b.list);
+        // R2 Task 12: the farm counter counts /farms/my's rows (it pinned Farm.ownerId before).
+        expect({ counter: b.stats.farms, list: b.farms }).toEqual({ counter: 1, list: 1 });
     });
 
     test('counts equal list lengths for the filer A, statuses included', () => {
@@ -440,7 +451,7 @@ d('health door walk: every GET a health token can reach, witness in throw mode (
         expect(a.stats.farms).toBe(a.farms);
     });
 
-    test('R1 is behaviour-neutral: every actor × door answers as main before the branch (9616ccdf)', () => {
+    test('every actor × door answers as recorded for R2 (Task 12 re-record; was main 9616ccdf in R1)', () => {
         if (process.env.HEALTH_DOOR_WALK_RECORD) { return; }
         const expected = JSON.parse(fs.readFileSync(EXPECTED_FILE, 'utf8'));
         const actual = Object.fromEntries(Object.entries(results).map(([k, v]) => [k, { status: v.status, labels: v.labels }]));

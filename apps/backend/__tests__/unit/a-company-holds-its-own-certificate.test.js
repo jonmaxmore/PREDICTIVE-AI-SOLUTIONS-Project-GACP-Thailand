@@ -31,7 +31,7 @@ describe('ผู้ถือใบรับรองต้องเป็นผ�
         expect(held.holderType).toBe('LEGACY_PERSON');
     });
 
-    it('นิติบุคคลที่ยื่นในพื้นที่ทำงานของบริษัท: ผู้ถือคือบริษัท', () => {
+    it('นิติบุคคลที่ยื่นในนามบริษัท: ผู้ถือคือบริษัท', () => {
         const held = resolveHolderForIssuance(app({
             formData: { applicantType: 'JURISTIC' },
             entity: { type: 'JURISTIC', displayName: 'บริษัท ไร่ในร่ม จำกัด' },
@@ -58,6 +58,22 @@ describe('ผู้ถือใบรับรองต้องเป็นผ�
         }), null)).toThrow(/CERTIFICATE_HOLDER_MISMATCH|ผู้ถือ/);
     });
 
+    it('ประเภทผู้ถือไม่ตรงกับที่ประกาศ (นิติบุคคล vs บุคคลธรรมดา): ข้อความบอกว่าประเภทไม่ตรง', () => {
+        try {
+            resolveHolderForIssuance(app({
+                formData: { applicantType: 'JURISTIC' },
+                entity: { type: 'INDIVIDUAL', displayName: 'บุญมี คิวเอฟาร์ม' },
+            }), null);
+            throw new Error('should have refused');
+        } catch (error) {
+            expect(error.code).toBe('CERTIFICATE_HOLDER_MISMATCH');
+            expect(error.message).toBe('ไม่สามารถออกใบรับรองได้ เนื่องจากประเภทผู้ยื่นที่ระบุในคำขอไม่ตรงกับประเภทของผู้ถือที่ผูกกับคำขอนี้ ส่งคำขอกลับให้ผู้ยื่นแก้ไข หรือแจ้งผู้ดูแลระบบ');
+            expect(error.message).not.toMatch(/ใบรับรองเดิม/);
+        }
+        expect(require('../../shared/error-codes').ERROR_CODES.CERTIFICATE_HOLDER_MISMATCH.messageEn)
+            .toMatch(/applicant type .* does not match the type of the holder/i);
+    });
+
     it('การปฏิเสธบอกเป็นภาษาไทยว่าต้องทำอะไรต่อ', () => {
         try {
             resolveHolderForIssuance(app({ formData: { applicantType: 'JURISTIC' } }), null);
@@ -66,7 +82,14 @@ describe('ผู้ถือใบรับรองต้องเป็นผ�
             expect(error.code).toBe('CERTIFICATE_HOLDER_MISMATCH');
             expect(error.statusCode).toBe(422);
             expect(error.message).toMatch(/[ก-๙]/);
-            expect(error.message).toMatch(/พื้นที่ทำงาน|นิติบุคคล/);
+            // Round 2 (review I1b): issuance runs on a reviewed application, not a draft, and
+            // the reader is usually staff. Coordinator ruling 2026-10-03, read from the catalogue.
+            // Round 3: the refusal is a TYPE mismatch (declared applicant type vs the holder's type),
+            // not a comparison with an earlier certificate.
+            const ISSUANCE_TH = 'ไม่สามารถออกใบรับรองได้ เนื่องจากประเภทผู้ยื่นที่ระบุในคำขอไม่ตรงกับประเภทของผู้ถือที่ผูกกับคำขอนี้ ส่งคำขอกลับให้ผู้ยื่นแก้ไข หรือแจ้งผู้ดูแลระบบ';
+            expect(error.message).toBe(ISSUANCE_TH);
+            expect(require('../../shared/error-codes').ERROR_CODES.CERTIFICATE_HOLDER_MISMATCH.messageTh).toBe(ISSUANCE_TH);
+            expect(error.message).not.toMatch(/ฉบับร่าง|พื้นที่ทำงาน|สลับ/);
         }
     });
 });
@@ -88,7 +111,7 @@ describe('ประตูยื่นบอกตั้งแต่ต้นท�
         expect(issue).not.toBeNull();
         expect(issue.code).toBe('APPLICANT_TYPE_NOT_THE_HOLDER');
         expect(issue.messageTH).toMatch(/นิติบุคคล/);
-        expect(issue.messageTH).toMatch(/พื้นที่ทำงาน/);
+        expect(issue.messageTH).toBe('คำขอนี้ระบุผู้ยื่นเป็นนิติบุคคล แต่ผูกอยู่กับบุคคล ผู้ถือใบรับรองต้องเป็นนิติบุคคลเอง กรุณาลบฉบับร่างนี้ แล้วเริ่มคำขอใหม่โดยเลือกยื่นในนามนิติบุคคล');
     });
 
     it('วิสาหกิจชุมชนก็เหมือนกัน', () => {
@@ -102,7 +125,7 @@ describe('ประตูยื่นบอกตั้งแต่ต้นท�
             .toBe('APPLICANT_TYPE_NOT_THE_HOLDER');
     });
 
-    it('ยื่นในพื้นที่ทำงานที่ถูกต้อง → ไม่มีการปฏิเสธข้อนี้', () => {
+    it('ยื่นในนามผู้ถือที่ถูกต้อง → ไม่มีการปฏิเสธข้อนี้', () => {
         expect(holderMismatchIssue({ applicantType: 'JURISTIC' }, 'JURISTIC')).toBeNull();
         expect(holderMismatchIssue({ applicantType: 'COMMUNITY_ENTERPRISE' }, 'COMMUNITY_ENTERPRISE')).toBeNull();
     });

@@ -14,8 +14,8 @@
  * body into it hands the applicant a pen for the second category too. That is
  * not a theoretical concern: certificate-service.js reads
  * `formData.auditResult === 'PASS'` plus `formData.auditedAt` and accepts the
- * pair as proof of a passing audit, and wizard-controller.js reads
- * `formData.uploadedDocuments[].filePath` and passes it to fs.unlink().
+ * pair as proof of a passing audit, and the (since deleted) wizard-controller.js
+ * read `formData.uploadedDocuments[].filePath` and passed it to fs.unlink().
  *
  * ONE DIRECTION: keys listed here flow server -> client only. Applicant input
  * never writes them; it is stripped at the edge, so the value already recorded
@@ -116,6 +116,14 @@ const SERVER_OWNED_FORM_DATA_KEYS = Object.freeze([
     'requestType',
     'replacementOf',
     'certScope',
+
+    // WHO IS APPLYING (spec 2026-09-30-remove-workspace-mode §3.2). The draft door
+    // writes it once, at create, from the holder's own Entity.type, so the type the
+    // paper declares and the holder the certificate names can never disagree on a
+    // new filing (F-HOLDER-01). An applicant who could write it could declare a
+    // company on a person's draft, or the reverse; changing the holder means
+    // deleting the draft and starting a new one (M2 G7).
+    'applicantType',
 ]);
 
 const SERVER_OWNED_KEY_SET = new Set(SERVER_OWNED_FORM_DATA_KEYS);

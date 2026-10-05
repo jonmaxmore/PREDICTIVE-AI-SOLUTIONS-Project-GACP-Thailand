@@ -93,7 +93,9 @@ export default function PlantingCycleDetailPage() {
   // a 404 "not a member" hides. reportPermissionDenial (F1(b)) evicts the
   // snapshot when a live 403 denial proves it stale. See
   // use-entity-permissions.ts.
-  const { has: hasWorkspacePermission, reportPermissionDenial } = useEntityPermissions();
+  const { has: hasWorkspacePermission, reportPermissionDenial } = useEntityPermissions(
+    cycle?.farm?.entityId ?? null,
+  );
   const mayHarvest = hasWorkspacePermission('HARVEST_RECORD');
   const mayGenerateQr = hasWorkspacePermission('QR_GENERATE');
   // F5 — the gated derivation is an EXTRACTED pure function

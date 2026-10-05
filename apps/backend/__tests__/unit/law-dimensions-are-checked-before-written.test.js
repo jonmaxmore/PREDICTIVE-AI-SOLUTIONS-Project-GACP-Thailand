@@ -139,11 +139,23 @@ describe('requestType — RENEWAL and REPLACEMENT are granted only against a rea
         expect(dimensions.renewalOf).toBeNull();
     });
 
+    // Operator ruling 2026-10-03: who filed the previous certificate does not matter;
+    // same holder + SUBMIT_APPLICATION on it is enough.
+    test('a certificate another member filed is accepted when the holder matches and the caller may submit', async () => {
+        const { dimensions, notice } = await resolveLawDimensions({
+            ...base,
+            prisma: prismaWith({ ...LIVE_CERT, userId: 'user-other' }),
+            claimed: { requestType: 'RENEWAL', previousCertificateNumber: 'GACP-TH-2569-ABC123' },
+        });
+        expect(dimensions.requestType).toBe('RENEWAL');
+        expect(dimensions.renewalOf).toBe('cert-1');
+        expect(notice).toBeNull();
+    });
+
     // ── every way the claim fails lands on the SAME safe answer ──────────────
     test.each([
         ['no number typed yet', prismaWith(LIVE_CERT), {}, 'PREVIOUS_CERTIFICATE_REQUIRED'],
         ['a number nobody issued', prismaWith(null), { previousCertificateNumber: 'GACP-TH-2569-NOPE' }, 'PREVIOUS_CERTIFICATE_NOT_FOUND'],
-        ["someone else's certificate", prismaWith({ ...LIVE_CERT, userId: 'user-other' }), { previousCertificateNumber: 'GACP-TH-2569-ABC123' }, 'PREVIOUS_CERTIFICATE_NOT_YOURS'],
         ['a revoked certificate', prismaWith({ ...LIVE_CERT, status: 'revoked' }), { previousCertificateNumber: 'GACP-TH-2569-ABC123' }, 'PREVIOUS_CERTIFICATE_NOT_ACTIVE'],
         ['an expired certificate', prismaWith({ ...LIVE_CERT, expiryDate: new Date(Date.now() - 86400000) }), { previousCertificateNumber: 'GACP-TH-2569-ABC123' }, 'PREVIOUS_CERTIFICATE_EXPIRED'],
         ["a certificate of another holder", prismaWith({ ...LIVE_CERT, application: { entityId: 'entity-other' } }), { previousCertificateNumber: 'GACP-TH-2569-ABC123' }, 'PREVIOUS_CERTIFICATE_OTHER_HOLDER'],

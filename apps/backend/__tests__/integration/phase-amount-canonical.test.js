@@ -42,53 +42,8 @@ describe('Application.phase1Amount / phase2Amount canonical writer semantics', (
   const EXPECTED_PHASE1 = expectedFees.phase1.total;
   const EXPECTED_PHASE2 = expectedFees.phase2.total;
 
-  describe('writer: application-submission-methods.executeWizardSubmission', () => {
-    let mockPrisma;
-    let methods;
-
-    beforeEach(() => {
-      const captured = { applicationCreate: null };
-      mockPrisma = {
-        $transaction: jest.fn(async (fn) => fn({
-          user: { update: jest.fn().mockResolvedValue(null) },
-          farm: { create: jest.fn().mockResolvedValue({ id: 'farm-1' }) },
-          plot: {
-            create: jest.fn().mockResolvedValue(null),
-            createMany: jest.fn().mockResolvedValue({ count: 0 }),
-          },
-          application: {
-            create: jest.fn(async (args) => {
-              captured.applicationCreate = args.data;
-              return { id: 'app-1', ...args.data };
-            }),
-          },
-          applicationDraft: { deleteMany: jest.fn().mockResolvedValue(null) },
-        })),
-      };
-      mockPrisma.__captured = captured;
-      const { createApplicationSubmissionMethods } = require('../../services/application-service/application-submission-methods');
-      methods = createApplicationSubmissionMethods({
-        prisma: mockPrisma,
-        feeService,
-        logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-      });
-    });
-
-    it('persists phase1Amount/phase2Amount as the full phase total (state + platform + VAT)', async () => {
-      await methods.executeWizardSubmission('user-1', 'health-1', {
-        applicantData: { firstName: 'A', lastName: 'B' },
-        farmData: { farmName: 'F', totalAreaSize: 1, gpsLat: 0, gpsLng: 0 },
-        plots: [{ name: 'p', areaSize: 1 }],
-        documents: [],
-        locationType: 'OUTDOOR',
-        cultivationMethods: ['indoor', 'greenhouse', 'outdoor'],
-      });
-      const data = mockPrisma.__captured.applicationCreate;
-      expect(data).toBeTruthy();
-      expect(data.phase1Amount).toBe(EXPECTED_PHASE1);
-      expect(data.phase2Amount).toBe(EXPECTED_PHASE2);
-    });
-  });
+  // The writer application-submission-methods.executeWizardSubmission is gone with
+  // the /api/wizard door (R2 Task 10, spec 2026-09-30-remove-workspace-mode §3.2 B6).
 
   describe('writer: application-draft-query-methods.saveDraft', () => {
     let mockPrisma;

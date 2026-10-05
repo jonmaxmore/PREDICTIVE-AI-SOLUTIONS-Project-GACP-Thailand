@@ -5,18 +5,17 @@
  * company co-members see company finance documents; review round 1 on
  * fix/applicant-receipt-and-billing-scope, finding I-1).
  *
- * On a real Postgres, through the real tenant + active-entity middlewares:
+ * On a real Postgres, through the real tenant-context middleware (R2 Task 12:
+ * no workspace header, no filer pin; the membership set alone decides):
  *   - B (OWNER of company X) and V (VIEWER of X) — neither filed X's application —
- *     list X's invoice in X's workspace and download its receipt and its invoice PDF;
- *   - stranger C gets 403 on both doors;
- *   - A filed X's application, then A's membership on X is REVOKED → 403 on both doors;
- *   - the personal workspace never lists X's invoice;
- *   - a legacy invoice whose application has no entity stays visible to its filer
- *     (and to no one else);
+ *     list X's invoice and download its receipt and its invoice PDF;
+ *   - stranger C gets 404 on both doors;
+ *   - A filed X's application, then A's membership on X is REVOKED → 404 on both doors;
+ *   - a legacy invoice whose application has no entity is invisible to everyone,
+ *     its filer included (spec §3.1: no filer fallback);
  *   - a soft-deleted invoice is 404 on the owner doors;
- *   - review round 2: a member of both X and Y lists only X in X's workspace and
- *     is let through Y's doors by membership; a PENDING member of X is refused on
- *     both doors and cannot list X.
+ *   - a member of both X and Y lists both and is let through Y's doors; a PENDING
+ *     member of X is refused (404) on both doors and cannot list X.
  *
  * Only authentication is attached by hand. PDF rendering goes through the real
  * template service in htmlOnly mode (pdf-parse cannot run under jest's CJS
@@ -33,12 +32,10 @@ const { describeIfTestDatabase: d } = require('../../test-support/test-database'
 const mockActor = { current: null };
 jest.mock('../../middleware/auth-middleware', () => {
     const { tenantContextMiddleware } = jest.requireActual('../../middleware/tenant-context-middleware');
-    const { activeEntityMiddleware } = jest.requireActual('../../middleware/active-entity-middleware');
     const bindTenant = tenantContextMiddleware();
-    const bindEntity = activeEntityMiddleware();
     const attach = (req, res, next) => {
         req.user = { ...mockActor.current };
-        return bindTenant(req, res, () => bindEntity(req, res, next));
+        return bindTenant(req, res, next);
     };
     return { authenticateAny: attach, authenticateHealth: attach, authenticateProvider: attach };
 });
@@ -180,64 +177,64 @@ d('company finance documents follow membership (real Postgres)', () => {
     });
 
     describe.each([['OWNER', 'B'], ['VIEWER', 'V']])('co-member %s of company X (did not file)', (_role, key) => {
-        test('lists X\'s invoice in X\'s workspace', async () => {
+        test('lists X\'s invoice, with no header', async () => {
             as(fx[key]);
-            const { status, ids } = await listIds({ 'x-active-entity-id': fx.X });
+            const { status, ids } = await listIds();
             expect(status).toBe(200);
-            expect(ids).toEqual([fx.companyInvoice.id]);
+            expect(ids).toContain(fx.companyInvoice.id);
         });
 
         test('downloads X\'s receipt', async () => {
             as(fx[key]);
-            const res = await receiptDoor(fx.companyInvoice.id, { 'x-active-entity-id': fx.X });
+            const res = await receiptDoor(fx.companyInvoice.id);
             expect(res.status).toBe(200);
             expect(res.headers['content-type']).toMatch(/application\/pdf/);
         });
 
         test('downloads X\'s invoice PDF', async () => {
             as(fx[key]);
-            const res = await invoiceDoor(fx.companyInvoice.id, { 'x-active-entity-id': fx.X });
+            const res = await invoiceDoor(fx.companyInvoice.id);
             expect(res.status).toBe(200);
         });
+    });
 
-        test('the personal workspace does not list X\'s invoice', async () => {
-            as(fx[key]);
-            const { status, ids } = await listIds();
-            expect(status).toBe(200);
-            expect(ids).not.toContain(fx.companyInvoice.id);
+    test('each member lists exactly the invoices of its holders: B (X and Y) both, V (X) only X', async () => {
+        as(fx.B);
+        expect((await listIds()).ids).toEqual([fx.companyInvoice.id, fx.companyYInvoice.id].sort());
+        as(fx.V);
+        expect((await listIds()).ids).toEqual([fx.companyInvoice.id]);
+    });
+
+    describe('stranger C (no membership on X): 404, never told apart from a missing invoice', () => {
+        test('404 on the receipt door', async () => {
+            as(fx.C);
+            expect((await receiptDoor(fx.companyInvoice.id)).status).toBe(404);
+        });
+        test('404 on the invoice PDF door', async () => {
+            as(fx.C);
+            expect((await invoiceDoor(fx.companyInvoice.id)).status).toBe(404);
+        });
+        test('404 on the legacy invoice of another filer', async () => {
+            as(fx.C);
+            expect((await receiptDoor(fx.legacyInvoice.id)).status).toBe(404);
         });
     });
 
-    describe('stranger C (no membership on X)', () => {
-        test('403 on the receipt door', async () => {
-            as(fx.C);
-            expect((await receiptDoor(fx.companyInvoice.id)).status).toBe(403);
-        });
-        test('403 on the invoice PDF door', async () => {
-            as(fx.C);
-            expect((await invoiceDoor(fx.companyInvoice.id)).status).toBe(403);
-        });
-        test('403 on the legacy invoice of another filer', async () => {
-            as(fx.C);
-            expect((await receiptDoor(fx.legacyInvoice.id)).status).toBe(403);
-        });
-    });
-
-    describe('legacy invoice (application without an entity)', () => {
-        test('its filer lists it in the personal workspace', async () => {
+    describe('legacy invoice (application without an entity): readable by no one (spec §3.1)', () => {
+        test('its filer does not list it', async () => {
             as(fx.A);
             const { ids } = await listIds();
-            expect(ids).toContain(fx.legacyInvoice.id);
-            expect(ids).not.toContain(fx.companyInvoice.id);
+            expect(ids).not.toContain(fx.legacyInvoice.id);
+            expect(ids).toContain(fx.companyInvoice.id);
         });
-        test('its filer downloads its receipt', async () => {
+        test('its filer cannot download its receipt (404)', async () => {
             as(fx.A);
-            expect((await receiptDoor(fx.legacyInvoice.id)).status).toBe(200);
+            expect((await receiptDoor(fx.legacyInvoice.id)).status).toBe(404);
         });
         test('a company co-member does not see it', async () => {
             as(fx.B);
-            expect((await receiptDoor(fx.legacyInvoice.id)).status).toBe(403);
-            const { ids } = await listIds({ 'x-active-entity-id': fx.X });
+            expect((await receiptDoor(fx.legacyInvoice.id)).status).toBe(404);
+            const { ids } = await listIds();
             expect(ids).not.toContain(fx.legacyInvoice.id);
         });
     });
@@ -245,44 +242,41 @@ d('company finance documents follow membership (real Postgres)', () => {
     describe('a soft-deleted invoice', () => {
         test('404 on both owner doors, and not listed', async () => {
             as(fx.B);
-            expect((await receiptDoor(fx.deletedInvoice.id, { 'x-active-entity-id': fx.X })).status).toBe(404);
-            expect((await invoiceDoor(fx.deletedInvoice.id, { 'x-active-entity-id': fx.X })).status).toBe(404);
-            const { ids } = await listIds({ 'x-active-entity-id': fx.X });
+            expect((await receiptDoor(fx.deletedInvoice.id)).status).toBe(404);
+            expect((await invoiceDoor(fx.deletedInvoice.id)).status).toBe(404);
+            const { ids } = await listIds();
             expect(ids).not.toContain(fx.deletedInvoice.id);
         });
     });
 
     describe('W, a member of both X and Y (review round 2)', () => {
-        test('X\'s workspace lists only X\'s invoice', async () => {
+        test('lists both X\'s and Y\'s invoices', async () => {
             as(fx.W);
-            const { status, ids } = await listIds({ 'x-active-entity-id': fx.X });
+            const { status, ids } = await listIds();
             expect(status).toBe(200);
-            expect(ids).toEqual([fx.companyInvoice.id]);
+            expect(ids).toEqual([fx.companyInvoice.id, fx.companyYInvoice.id].sort());
         });
-        test('Y\'s workspace lists only Y\'s invoice', async () => {
+        test('Y\'s receipt and invoice PDF are allowed by membership', async () => {
             as(fx.W);
-            const { ids } = await listIds({ 'x-active-entity-id': fx.Y });
-            expect(ids).toEqual([fx.companyYInvoice.id]);
-        });
-        test('Y\'s receipt and invoice PDF are allowed by membership, whichever workspace is active', async () => {
-            as(fx.W);
-            expect((await receiptDoor(fx.companyYInvoice.id, { 'x-active-entity-id': fx.X })).status).toBe(200);
-            expect((await invoiceDoor(fx.companyYInvoice.id, { 'x-active-entity-id': fx.X })).status).toBe(200);
+            expect((await receiptDoor(fx.companyYInvoice.id)).status).toBe(200);
+            expect((await invoiceDoor(fx.companyYInvoice.id)).status).toBe(200);
         });
     });
 
     describe('P, a PENDING member of X (review round 2)', () => {
-        test('403 on the receipt door', async () => {
+        test('404 on the receipt door', async () => {
             as(fx.P);
-            expect((await receiptDoor(fx.companyInvoice.id)).status).toBe(403);
+            expect((await receiptDoor(fx.companyInvoice.id)).status).toBe(404);
         });
-        test('403 on the invoice PDF door', async () => {
+        test('404 on the invoice PDF door', async () => {
             as(fx.P);
-            expect((await invoiceDoor(fx.companyInvoice.id)).status).toBe(403);
+            expect((await invoiceDoor(fx.companyInvoice.id)).status).toBe(404);
         });
-        test('cannot list X: the X workspace is refused, the personal one does not hold X\'s invoice', async () => {
+        test('cannot list X, with or without a stale X header (200, nothing of X, never 403)', async () => {
             as(fx.P);
-            expect((await listIds({ 'x-active-entity-id': fx.X })).status).toBe(403);
+            const stale = await listIds({ 'x-active-entity-id': fx.X });
+            expect(stale.status).toBe(200);
+            expect(stale.ids).not.toContain(fx.companyInvoice.id);
             const { ids } = await listIds();
             expect(ids).not.toContain(fx.companyInvoice.id);
         });
@@ -292,15 +286,15 @@ d('company finance documents follow membership (real Postgres)', () => {
         beforeAll(async () => {
             await raw.entityMembership.update({ where: { id: fx.aOnX.id }, data: { status: 'REVOKED' } });
         });
-        test('403 on the receipt door', async () => {
+        test('404 on the receipt door', async () => {
             as(fx.A);
-            expect((await receiptDoor(fx.companyInvoice.id)).status).toBe(403);
+            expect((await receiptDoor(fx.companyInvoice.id)).status).toBe(404);
         });
-        test('403 on the invoice PDF door', async () => {
+        test('404 on the invoice PDF door', async () => {
             as(fx.A);
-            expect((await invoiceDoor(fx.companyInvoice.id)).status).toBe(403);
+            expect((await invoiceDoor(fx.companyInvoice.id)).status).toBe(404);
         });
-        test('the personal workspace does not list X\'s invoice', async () => {
+        test('X\'s invoice is gone from A\'s list', async () => {
             as(fx.A);
             const { ids } = await listIds();
             expect(ids).not.toContain(fx.companyInvoice.id);

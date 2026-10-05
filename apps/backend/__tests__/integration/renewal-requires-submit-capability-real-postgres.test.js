@@ -6,7 +6,7 @@
  * certificate's holder entity, checked before any row is written.
  *
  * Real Postgres, the real prisma-database client, the real renewal-service and
- * the real tenant-context + active-entity middlewares. Only authentication is
+ * the real tenant-context middleware. Only authentication is
  * attached by hand. The read witness runs in throw mode, so an unscoped health
  * read on the renewal path answers 500 instead of its normal status.
  *
@@ -17,8 +17,9 @@
  *   VIEWER                             → 403, nothing written
  *   MANAGER, no SUBMIT_APPLICATION     → 403, nothing written
  *   MANAGER + SUBMIT_APPLICATION GRANT → 201
- * plus a non-member on the OWNER's certificate → refused, nothing written,
- * and a certificate whose source application has no holder → 400, nothing written.
+ * plus a non-member on the OWNER's certificate → 404 (R2 Task 12: the certificate
+ * is read within the holder scope), nothing written, and a certificate whose
+ * source application has no holder → 404 (no filer fallback, spec §3.1), nothing written.
  */
 
 const crypto = require('crypto');
@@ -31,12 +32,10 @@ const mockActor = { current: null };
 jest.mock('../../middleware/auth-middleware', () => {
     const actual = jest.requireActual('../../middleware/auth-middleware');
     const { tenantContextMiddleware } = jest.requireActual('../../middleware/tenant-context-middleware');
-    const { activeEntityMiddleware } = jest.requireActual('../../middleware/active-entity-middleware');
     const bindTenant = tenantContextMiddleware();
-    const bindEntity = activeEntityMiddleware();
     const attach = (req, res, next) => {
         req.user = { ...mockActor.current };
-        return bindTenant(req, res, () => bindEntity(req, res, next));
+        return bindTenant(req, res, next);
     };
     return { ...actual, authenticateAny: attach, authenticateHealth: attach, authenticateProvider: attach, authenticateToken: attach };
 });
@@ -113,8 +112,9 @@ d('renewal requires SUBMIT_APPLICATION on the certificate holder (real Postgres)
             invoices: await raw.invoice.count({ where: { applicationId: { in: appIds } } }),
         };
     };
-    const renew = (certId, headers = { 'x-active-entity-id': fx.C }) => request(app)
-        .post('/api/applications/renewals').set(headers).send({ originalCertificateId: certId });
+    // R2 Task 12: no workspace header; membership alone decides.
+    const renew = (certId) => request(app)
+        .post('/api/applications/renewals').send({ originalCertificateId: certId });
 
     beforeAll(async () => {
         raw = new PrismaClient();
@@ -190,7 +190,7 @@ d('renewal requires SUBMIT_APPLICATION on the certificate holder (real Postgres)
         as(fx.viewer);
         const res = await renew(fx.certViewer);
         // One assertion, so a red run shows the status and the rows it wrote together.
-        expect({ status: res.status, error: res.body?.error, after: await counts() })
+        expect({ status: res.status, error: res.body?.code || res.body?.error, after: await counts() })
             .toEqual({ status: 403, error: 'ENTITY_PERMISSION_DENIED', after: before });
         expect(await deniedAudit(fx.viewer, fx.certViewer)).toEqual([{ result: 'FAILURE', errorCode: 'ENTITY_PERMISSION_DENIED' }]);
         expect(witnessLogs()).toEqual([]);
@@ -201,29 +201,28 @@ d('renewal requires SUBMIT_APPLICATION on the certificate holder (real Postgres)
         as(fx.manager);
         const res = await renew(fx.certManager);
         // One assertion, so a red run shows the status and the rows it wrote together.
-        expect({ status: res.status, error: res.body?.error, after: await counts() })
+        expect({ status: res.status, error: res.body?.code || res.body?.error, after: await counts() })
             .toEqual({ status: 403, error: 'ENTITY_PERMISSION_DENIED', after: before });
         expect(await deniedAudit(fx.manager, fx.certManager)).toEqual([{ result: 'FAILURE', errorCode: 'ENTITY_PERMISSION_DENIED' }]);
         expect(witnessLogs()).toEqual([]);
     });
 
-    test('a non-member is refused (the existing owner check) and nothing is written', async () => {
+    test('a non-member is refused 404 CERT_NOT_FOUND (the certificate is outside its holder scope) and nothing is written', async () => {
         const before = await counts();
         as(fx.stranger);
-        const res = await renew(fx.certOwner, {});
+        const res = await renew(fx.certOwner);
         // One assertion, so a red run shows the status and the rows it wrote together.
-        expect({ status: res.status, error: res.body?.error, after: await counts() })
-            .toEqual({ status: 403, error: 'FORBIDDEN_NOT_OWNER', after: before });
+        expect({ status: res.status, error: res.body?.code || res.body?.error, after: await counts() })
+            .toEqual({ status: 404, error: 'CERT_NOT_FOUND', after: before });
         expect(witnessLogs()).toEqual([]);
     });
 
-    test('a certificate with no holder is refused 400 APPLICANT_ENTITY_MISSING and nothing is written', async () => {
+    test('a certificate with no holder is refused 404 CERT_NOT_FOUND (no filer fallback) and nothing is written', async () => {
         const before = await counts();
         as(fx.owner);
         const res = await renew(fx.certNoHolder);
-        expect({ status: res.status, error: res.body?.error, after: await counts() })
-            .toEqual({ status: 400, error: 'APPLICANT_ENTITY_MISSING', after: before });
-        expect(await deniedAudit(fx.owner, fx.certNoHolder)).toEqual([{ result: 'FAILURE', errorCode: 'APPLICANT_ENTITY_MISSING' }]);
+        expect({ status: res.status, error: res.body?.code || res.body?.error, after: await counts() })
+            .toEqual({ status: 404, error: 'CERT_NOT_FOUND', after: before });
         expect(witnessLogs()).toEqual([]);
     });
 

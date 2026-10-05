@@ -1,14 +1,14 @@
 /**
  * Entities Domain — Wave C
  *
- * Surface for the workspace-switcher pattern. PR C-1 ships only the
- * read-side `GET /mine` and the audit-trail write `POST /me/switch`.
- * Subsequent Wave-C PRs extend this file with entity create / update,
- * member invite / revoke, and capability gates.
+ * The holder entities a user belongs to: `GET /mine` (the step-1 holder
+ * picker's list), entity create / update, member invite / revoke, and the
+ * per-member permission admin. There is no active workspace: reads follow
+ * membership and every filing names its holder (spec
+ * 2026-09-30-remove-workspace-mode; `POST /me/switch` was removed in R2 Task 12).
  *
- * Authentication: every route here uses `authenticateAny` so health
- * users can switch context. Provider users don't have entity context
- * (they scope by Application instead) so they get an empty list.
+ * Authentication: every route here uses `authenticateAny`. Provider users
+ * hold no memberships, so they get an empty list.
  */
 
 'use strict';
@@ -33,18 +33,43 @@ function getUserAgent(req) {
     return ua ? String(ua) : null;
 }
 
+const NO_CAPABILITY = Object.freeze({ edit: false, submit: false, createFarm: false });
+
+/**
+ * R2 Task 8 (spec 2026-09-30-remove-workspace-mode §3.2): what the caller may do
+ * on one /mine row, from the effective-permissions engine (role ∪ permissions[]
+ * ∪ GRANT − REVOKE), so the step-1 holder picker can offer only real choices.
+ *   edit       = an ACTIVE membership that is not VIEWER
+ *   submit     = SUBMIT_APPLICATION in the effective set
+ *   createFarm = FARM_CREATE in the effective set
+ * A PENDING invite grants nothing; the engine fails closed on a lookup failure.
+ * @param {string} userId
+ * @param {{ id: string, role: string, membershipStatus: string }} row
+ * @returns {Promise<{ edit: boolean, submit: boolean, createFarm: boolean }>}
+ */
+async function capabilityFlagsFor(userId, row) {
+    if (row.membershipStatus !== 'ACTIVE') { return { ...NO_CAPABILITY }; }
+    const { effective } = await getEffectiveEntityPermissions({ userId, entityId: row.id });
+    return {
+        edit: row.role !== 'VIEWER',
+        submit: effective.includes(entityService.CAPABILITIES.SUBMIT_APPLICATION),
+        createFarm: effective.includes(entityService.CAPABILITIES.FARM_CREATE),
+    };
+}
+
 /**
  * GET /api/entities/mine
  *
  * List the authenticated user's active entity memberships, flattened so the
- * frontend can render a workspace-switcher dropdown without a second query.
+ * frontend can render the holder picker without a second query.
  *
  * Query params:
  *   include=pending — also include PENDING invitations
  *
  * Response:
  *   { success, data: [{ id, type, displayName, role, status, isPersonal,
- *                       organizationId, permissions: [], membershipStatus }] }
+ *                       organizationId, permissions: [], membershipStatus,
+ *                       can: { edit, submit, createFarm } }] }
  */
 router.get('/mine', authenticateAny, async (req, res) => {
     try {
@@ -63,80 +88,14 @@ router.get('/mine', authenticateAny, async (req, res) => {
             includePending,
         });
 
-        return res.json({ success: true, data: memberships });
+        const rows = await Promise.all(memberships.map(async (row) => ({
+            ...row,
+            can: await capabilityFlagsFor(userId, row),
+        })));
+
+        return res.json({ success: true, data: rows });
     } catch (error) {
         logger.error('[Entities Mine] Error:', error);
-        return res.status(500).json({ success: false, error: safeErrorMessage(error) });
-    }
-});
-
-/**
- * POST /api/entities/me/switch
- *
- * Record an entity-context switch in the audit trail. The frontend calls
- * this whenever the user picks a different workspace from the header
- * dropdown. Idempotent — duplicate (from, to) within the same second is
- * fine, the rows just stack up; we never want to drop an audit event.
- *
- * Body:
- *   { fromEntityId?: string, toEntityId: string, source?: 'HEADER' | 'URL_SLUG' | 'DEFAULT' }
- *
- * Response:
- *   { success: true, data: { id, toEntityId, recorded: boolean } }
- *
- * The `recorded: false` case happens when the audit insert silently fails
- * (e.g., FK violation because toEntityId is not the caller's). We still
- * return 200 because the audit row is best-effort — but the frontend
- * shouldn't trust the switch in that case.
- */
-router.post('/me/switch', authenticateAny, async (req, res) => {
-    try {
-        const userId = req.user?.id || req.user?.userId;
-        if (!userId) {
-            return res.status(401).json({ success: false, error: 'Unauthorized' });
-        }
-
-        const { fromEntityId, toEntityId, source } = req.body || {};
-        if (!toEntityId || typeof toEntityId !== 'string') {
-            return res.status(400).json({ success: false, error: 'toEntityId is required' });
-        }
-
-        // Validate the user is actually a member of toEntityId — we don't
-        // want to log spurious "switched to entity X" rows for entities the
-        // caller has no business with.
-        const role = await entityService.getUserRoleOnEntity({ entityId: toEntityId, userId });
-        if (!role) {
-            return res.status(403).json({ success: false, error: 'Not a member of toEntityId' });
-        }
-
-        // Look up the entity's organizationId for the audit row's tenancy.
-        const memberships = await entityService.listMembershipsForUser({ userId });
-        const target = memberships.find(m => m.id === toEntityId);
-        if (!target) {
-            return res.status(403).json({ success: false, error: 'Not an active member of toEntityId' });
-        }
-
-        const row = await entityService.recordContextSwitch({
-            userId,
-            fromEntityId: fromEntityId || null,
-            toEntityId,
-            organizationId: target.organizationId,
-            ipAddress: getRequestIp(req),
-            userAgent: getUserAgent(req),
-            source: source === 'URL_SLUG' || source === 'DEFAULT' ? source : 'HEADER',
-        });
-
-        return res.json({
-            success: true,
-            data: {
-                id: row?.id || null,
-                toEntityId,
-                role,
-                recorded: Boolean(row),
-            },
-        });
-    } catch (error) {
-        logger.error('[Entities Switch] Error:', error);
         return res.status(500).json({ success: false, error: safeErrorMessage(error) });
     }
 });
@@ -325,7 +284,7 @@ router.patch('/:id', authenticateAny, async (req, res) => {
  *
  * `personal` = the requester's OWN personal INDIVIDUAL entity (role OWNER
  * on an INDIVIDUAL entity — the exact Wave-A S1 predicate the
- * active-entity middleware uses). A worker invited INTO someone else's
+ * removed active-entity middleware used). A worker invited INTO someone else's
  * INDIVIDUAL entity gets personal:false (real workspace, by design).
  */
 router.get('/:id/my-permissions', authenticateAny, async (req, res) => {

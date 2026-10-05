@@ -253,6 +253,21 @@ describe('V1-D D8 — certificates route RBAC regression', () => {
             expect(mockListCertificatesForUser).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user-health-1' }));
         });
 
+        test('each row carries the holder (entityId) of its application - R2 task 15 fix 4', async () => {
+            mockListCertificatesForUser.mockResolvedValue([
+                { id: 'c1', certificateNumber: 'N1', status: 'ACTIVE', application: { entityId: 'entity-own' } },
+                { id: 'c2', certificateNumber: 'N2', status: 'ACTIVE', application: null },
+            ]);
+            const response = await request(app)
+                .get('/api/certificates/my')
+                .set('x-test-role', 'health')
+                .set('x-test-user-id', 'user-health-1');
+
+            expect(response.status).toBe(200);
+            expect(response.body.data[0].entityId).toBe('entity-own');
+            expect(response.body.data[1].entityId).toBeNull();
+        });
+
         // Note: because the test mock above accepts any decoded role, a
         // provider hitting /my would in production fail at JWT-secret
         // mismatch (provider tokens sign with PROVIDER_JWT_SECRET, /my

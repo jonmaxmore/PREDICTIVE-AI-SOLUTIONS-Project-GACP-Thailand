@@ -25,7 +25,9 @@
  *   4. With no entity, findOrCreateApplicationForHealth refuses to create the
  *      draft (applications.js, M1 2026-08-15) with a bare VALIDATION_ERROR —
  *      a code that names neither the cause nor the fix, which is why the wire
- *      response was undiagnosable.
+ *      response was undiagnosable. R2 Task 8 (spec 2026-09-30 §3.2) replaced
+ *      the personal-entity default with an explicit holder: the refusal is now
+ *      APPLICATION_HOLDER_REQUIRED, and APPLICANT_ENTITY_MISSING is retired.
  *
  * These are static-source + catalog guards (no DB, no seed execution); the
  * behavioural heal guard is pinned in entity-mine-self-heal.test.js.
@@ -107,28 +109,25 @@ describe('seed-gacp.js upholds the Phase-68 personal-entity invariant (link 2)',
     });
 });
 
-describe('the entity-missing refusal names its cause on the wire (link 4)', () => {
+describe('the missing-holder refusal names its cause on the wire (link 4, R2 Task 8)', () => {
     const source = readCode('routes/api/applications/applications.js');
+    const SPEC_COPY = 'ยังไม่ได้เลือกว่าจะยื่นในนามใคร กรุณาเลือกที่ขั้นตอนที่ 1 หากเปิดหน้านี้ค้างไว้ ให้โหลดหน้าใหม่ก่อน';
 
     test('findOrCreateApplicationForHealth throws a specific code, not bare VALIDATION_ERROR', () => {
-        const guard = source.match(/if \(!seedEntityId\) \{[\s\S]*?\n {4}\}/);
+        const guard = source.match(/if \(!entityId\) \{[\s\S]*?\n {4}\}/);
         expect(guard).not.toBeNull();
-        expect(guard[0]).toMatch(/err\.code = 'APPLICANT_ENTITY_MISSING'/);
+        expect(guard[0]).toMatch(/holderDoorError\(400, 'APPLICATION_HOLDER_REQUIRED'/);
     });
 
-    test('the code carries a Thai default message (not the internal-error fallback)', () => {
-        // sendErrorResponse falls back to INTERNAL_SERVER_ERROR's Thai for any
-        // code missing from this map — i.e. a plain 400 would tell the farmer
-        // "เกิดข้อผิดพลาดภายในระบบ", which is untrue and unactionable.
-        expect(DEFAULT_ERROR_MESSAGES.APPLICANT_ENTITY_MISSING).toBeDefined();
-        expect(typeof DEFAULT_ERROR_MESSAGES.APPLICANT_ENTITY_MISSING.th).toBe('string');
-        expect(DEFAULT_ERROR_MESSAGES.APPLICANT_ENTITY_MISSING.th.length).toBeGreaterThan(0);
-        expect(DEFAULT_ERROR_MESSAGES.APPLICANT_ENTITY_MISSING.th)
-            .not.toBe(DEFAULT_ERROR_MESSAGES.INTERNAL_SERVER_ERROR.th);
+    test('the code carries the spec §3.6 Thai copy as its default message (not the internal-error fallback)', () => {
+        expect(DEFAULT_ERROR_MESSAGES.APPLICATION_HOLDER_REQUIRED.th).toBe(SPEC_COPY);
     });
 
-    test('the code is catalogued', () => {
-        expect(ERROR_CODES.APPLICANT_ENTITY_MISSING).toBeDefined();
-        expect(ERROR_CODES.APPLICANT_ENTITY_MISSING.httpStatus).toBe(400);
+    test('the code is catalogued (400, same copy); the personal-entity code is retired', () => {
+        expect(ERROR_CODES.APPLICATION_HOLDER_REQUIRED.httpStatus).toBe(400);
+        expect(ERROR_CODES.APPLICATION_HOLDER_REQUIRED.messageTh).toBe(SPEC_COPY);
+        expect(ERROR_CODES.APPLICANT_ENTITY_MISSING).toBeUndefined();
+        expect(DEFAULT_ERROR_MESSAGES.APPLICANT_ENTITY_MISSING).toBeUndefined();
+        expect(source).not.toMatch(/APPLICANT_ENTITY_MISSING/);
     });
 });

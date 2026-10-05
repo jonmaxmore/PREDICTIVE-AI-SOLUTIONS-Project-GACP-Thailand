@@ -1,7 +1,5 @@
 const { maskThaiId } = require('../../utils/field-encryption');
 const { useFkToken } = require('../../shared/fk-token');
-// Wave A chunk 4 (2026-07-02) — workspace scope for applicant queries.
-const { getEntityContext } = require('../entity-context');
 const {
     findUserByHealthIdSecurely: defaultFindUserByHealthIdSecurely,
 } = require('../user-lookup-service');
@@ -196,79 +194,6 @@ function createApplicationIdentityMethods({
         return resolveHealthId(identityRef, options);
     }
 
-    function buildHealthWhereClause(identityRef, options = {}) {
-        const healthId = normalizeIdentityValue(options.healthId);
-        const explicitUserId = normalizeIdentityValue(options.userId || identityRef);
-
-        // ── Wave A chunk 4 — workspace scope (farm-worker permissions) ──
-        // When the caller EXPLICITLY acts under a workspace (x-active-entity-id
-        // header → active-entity-middleware validated an ACTIVE membership and
-        // bound `personal:false`), the applicant pin must RELAX to entity
-        // scope. The read-side prisma extension already ANDs
-        // `entityId: <active entity>` into Application reads, so keeping the
-        // applicant pin here would intersect a co-member's identity with the
-        // owner's rows → guaranteed-empty set. Spoofed headers never reach
-        // this code (middleware 403s non-members), and we still require SOME
-        // caller identity so the "no broad query" discipline holds.
-        // Personal default contexts (`personal:true` — solo farmers) keep the
-        // legacy where byte-for-byte.
-        //
-        // Wave A fix M2 (adversarial-verify 2026-07-02): DESTRUCTIVE ops must
-        // NOT ride the relaxed workspace where — a co-member could soft-delete
-        // the owner's draft (permanent-grade; no DRAFT_DELETE in the Wave-B
-        // taxonomy). Callers of destructive methods (deleteDraft) pass
-        // `strictApplicantPin: true` to skip the relax branch: reads stay
-        // relaxed, destructive draft ops stay personal.
-        const entityCtx = getEntityContext();
-        if (
-            options.strictApplicantPin !== true
-            && (explicitUserId || healthId) && entityCtx?.entityId && entityCtx.personal === false
-        ) {
-            return { entityId: entityCtx.entityId };
-        }
-
-        // Detokenize STAGE 0 (RFC docs/handoffs/national-id-detokenize-rfc-2026-06-29.md,
-        // breaker 3c): PREFER the `applicant:{id}` relation branch whenever a
-        // stable UUID userId is available. Application.healthId is an FK to
-        // User.canonicalId; filtering by `{ healthId: <value> }` compares the FK
-        // against req.user.healthId (the national ID), which STOPS matching the
-        // moment the STAGE-A re-key flips Application.healthId to the token. The
-        // relation branch joins on User.id (never re-keyed) → the same ownership
-        // scope, correct in BOTH data states (national ID today, token after the
-        // re-key). It is also strictly equal-or-tighter than the value-WHERE: it
-        // matches exactly the rows owned by this user. Routes pass req.user.id as
-        // identityRef, so this is the live path.
-        if (explicitUserId && isUuid(explicitUserId)) {
-            return {
-                applicant: {
-                    id: explicitUserId,
-                    isDeleted: false,
-                },
-            };
-        }
-
-        // No stable UUID — fall back to the legacy value-WHERE on the FK column.
-        // Reached only by callers that supply a healthId but no userId (e.g. unit
-        // tests / legacy positional callers). Correct pre-re-key; such callers
-        // must migrate to passing a userId before STAGE A flips the data.
-        if (healthId) {
-            return { healthId };
-        }
-
-        if (options.strictHealthId === true) {
-            return null;
-        }
-
-        // Non-UUID explicit identifier with no healthId — refuse a broad query
-        // (matches the prior discipline of "no fallback to broad lookup").
-        return null;
-    }
-
-    // Backward-compatible alias (to be removed after full migration)
-    function buildHEALTH_USERWhereClause(identityRef, options = {}) {
-        return buildHealthWhereClause(identityRef, options);
-    }
-
     return {
         normalizeIdentityValue,
         resolveHealthIdentity,
@@ -277,8 +202,6 @@ function createApplicationIdentityMethods({
         resolveHealthId,
         resolveHEALTH_USERUserId,
         resolveHEALTH_USERHealthId,
-        buildHealthWhereClause,
-        buildHEALTH_USERWhereClause,
     };
 }
 

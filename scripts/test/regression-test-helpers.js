@@ -182,76 +182,6 @@ const {
   ensureNoSensitiveFields,
 } = publicHelpers;
 
-async function prepareApplicationRequest(healthToken, payload) {
-  const endpoints = ['/wizard/prepare', '/wizard/submit'];
-  let lastResult = null;
-  let lastEndpoint = null;
-
-  for (const endpoint of endpoints) {
-    const result = await requestWithRetry(endpoint, {
-      method: 'POST',
-      headers: authHeader(healthToken),
-      body: JSON.stringify(payload),
-    }, { attempts: 4, delayMs: 700 });
-
-    lastResult = result;
-    lastEndpoint = endpoint;
-
-    if (result.response.ok && result.body?.success) {
-      return {
-        result,
-        endpoint,
-        usedLegacySubmit: endpoint === '/wizard/submit',
-      };
-    }
-
-    // Try legacy endpoint when canonical prepare route is not available in runtime.
-    if (endpoint === '/wizard/prepare' && [404, 405, 410].includes(result.response.status)) {
-      continue;
-    }
-
-    break;
-  }
-
-  throw new Error(`Prepare application failed (${lastEndpoint}): ${lastResult?.response?.status} ${JSON.stringify(lastResult?.body)}`);
-}
-
-async function finalizeSubmissionIfRequired(healthToken, applicationId) {
-  const result = await requestWithRetry(`/applications/${encodeURIComponent(applicationId)}/finalize-submission`, {
-    method: 'POST',
-    headers: authHeader(healthToken),
-    body: JSON.stringify({}),
-  }, { attempts: 4, delayMs: 700 });
-
-  if (result.response.ok && result.body?.success) {
-    return {
-      finalized: true,
-      skippedAsLegacy: false,
-      result,
-    };
-  }
-
-  // Legacy runtimes may not expose finalize endpoint because submit is final.
-  if ([404, 405].includes(result.response.status)) {
-    return {
-      finalized: false,
-      skippedAsLegacy: true,
-      result,
-    };
-  }
-
-  const message = String(result.body?.error || result.body?.message || '').toLowerCase();
-  if (result.response.status === 400 && message.includes('already')) {
-    return {
-      finalized: false,
-      skippedAsLegacy: true,
-      result,
-    };
-  }
-
-  throw new Error(`Finalize submission failed: ${result.response.status} ${JSON.stringify(result.body)}`);
-}
-
 async function ensurePhase1InvoicesCreated(healthToken, applicationId) {
   const result = await requestWithRetry(`/payments/phase1/${encodeURIComponent(applicationId)}`, {
     method: 'POST',
@@ -273,59 +203,6 @@ async function ensurePhase1InvoicesCreated(healthToken, applicationId) {
   throw new Error(`Phase 1 invoice init failed: ${result.response.status} ${JSON.stringify(result.body)}`);
 }
 
-async function completePhase1Payment(healthToken, applicationId) {
-  const phase1InitResult = await ensurePhase1InvoicesCreated(healthToken, applicationId);
-
-  const markPaid = await requestWithRetry(`/invoices/mark-paid-by-application/${encodeURIComponent(applicationId)}`, {
-    method: 'POST',
-    headers: authHeader(healthToken),
-    body: JSON.stringify({ transactionId: `MOCK-P1-${Date.now()}` }),
-  }, { attempts: 4, delayMs: 700 });
-
-  if (markPaid.response.ok && markPaid.body?.success) {
-    return {
-      mode: 'invoice-mark',
-      result: markPaid.body,
-    };
-  }
-
-  if (markPaid.response.status !== 404) {
-    throw new Error(`Phase 1 payment mark failed: ${markPaid.response.status} ${JSON.stringify(markPaid.body)}`);
-  }
-
-  // Compatibility fallback for runtimes using paymentTransaction-only flow.
-  if (phase1InitResult?.phasePaid === true) {
-    return {
-      mode: 'already-paid',
-      result: phase1InitResult,
-    };
-  }
-
-  const invoiceId = String(phase1InitResult?.invoiceId || '').trim();
-  if (!invoiceId) {
-    throw new Error(`Missing invoiceId for webhook fallback: ${JSON.stringify(phase1InitResult)}`);
-  }
-
-  const webhook = await requestWithRetry('/webhooks/payment', {
-    method: 'POST',
-    body: JSON.stringify({
-      invoiceId,
-      status: 'SUCCESS',
-      transactionId: `MOCK-WEBHOOK-P1-${Date.now()}`,
-      paidAt: new Date().toISOString(),
-    }),
-  }, { attempts: 4, delayMs: 700 });
-
-  if (!webhook.response.ok || webhook.body?.success !== true) {
-    throw new Error(`Phase 1 webhook fallback failed: ${webhook.response.status} ${JSON.stringify(webhook.body)}`);
-  }
-
-  return {
-    mode: 'webhook',
-    result: webhook.body,
-  };
-}
-
 async function transition(token, applicationId, toState, payload = {}) {
   const result = await requestWithRetry(`/provider/applications/${encodeURIComponent(applicationId)}/workflow-transitions`, {
     method: 'POST',
@@ -338,71 +215,6 @@ async function transition(token, applicationId, toState, payload = {}) {
     `Transition ${toState} failed: ${result.response.status} ${JSON.stringify(result.body)}`,
   );
   return result.body;
-}
-
-async function createApplication(healthToken, formOverrides = {}) {
-  const basePayload = {
-    plantId: 'cannabis',
-    serviceType: 'new_application',
-    certificationPurpose: 'COMMERCIAL',
-    locationType: 'OUTDOOR',
-    cultivationMethods: ['OUTDOOR'],
-    applicantData: {
-      firstName: 'ERP',
-      lastName: 'Trace',
-      phone: '0899999999',
-      address: 'ERP Farm Test Address',
-      province: 'Bangkok',
-      district: 'Huai Khwang',
-      subdistrict: 'Huai Khwang',
-      postalCode: '10310',
-    },
-    farmData: {
-      farmName: 'ERP Regression Farm',
-      address: 'ERP Farm Test Address',
-      province: 'Bangkok',
-      district: 'Huai Khwang',
-      subdistrict: 'Huai Khwang',
-      postalCode: '10310',
-      totalAreaSize: 5,
-      totalAreaUnit: 'rai',
-      gpsLat: '13.7563',
-      gpsLng: '100.5018',
-    },
-    plots: [
-      { name: 'Plot A', areaSize: 5, areaUnit: 'rai', estimatedPlants: 100 },
-    ],
-    documents: [],
-  };
-
-  const payload = {
-    ...basePayload,
-    ...formOverrides,
-    applicantData: { ...basePayload.applicantData, ...(formOverrides.applicantData || {}) },
-    farmData: { ...basePayload.farmData, ...(formOverrides.farmData || {}) },
-    plots: Array.isArray(formOverrides.plots) ? formOverrides.plots : basePayload.plots,
-    cultivationMethods: Array.isArray(formOverrides.cultivationMethods)
-      ? formOverrides.cultivationMethods
-      : basePayload.cultivationMethods,
-  };
-
-  const preparedRequest = await prepareApplicationRequest(healthToken, payload);
-  const prepared = preparedRequest.result;
-
-  assert(prepared.response.ok, `Prepare application failed: ${prepared.response.status}`);
-  assert(prepared.body?.success, 'Prepare application success flag missing');
-  const applicationId = prepared.body?.data?.id || prepared.body?.data?._id;
-  assert(applicationId, 'Application ID missing');
-
-  await completePhase1Payment(healthToken, applicationId);
-
-  const finalized = await finalizeSubmissionIfRequired(healthToken, applicationId);
-  if (!finalized.skippedAsLegacy) {
-    assert(finalized.result?.response?.ok, `Finalize submission failed: ${finalized.result?.response?.status}`);
-    assert(finalized.result?.body?.success, 'Finalize submission returned success=false');
-  }
-
-  return applicationId;
 }
 
 async function approveForPhase2(reviewerToken, applicationId) {
@@ -488,12 +300,8 @@ module.exports = {
   loginProvider,
   loginHEALTH_USER,
   loginPROVIDER,
-  prepareApplicationRequest,
-  finalizeSubmissionIfRequired,
   ensurePhase1InvoicesCreated,
-  completePhase1Payment,
   transition,
-  createApplication,
   approveForPhase2,
   markPaidByApplication,
   listInvoicesForApplication,

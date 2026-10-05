@@ -52,14 +52,6 @@ the JSON envelope, so every catalog row carries both languages.
 - **Source**: `services/payment-slip-service.js:794`
 - **Remediation**: Provide amountVerified equal to the invoice total before approving the payment slip.
 
-### `APPLICANT_ENTITY_MISSING`
-
-- **HTTP**: `400`
-- **EN**: No legal applicant (entity) is linked to this account, so an application cannot be created
-- **TH**: บัญชีนี้ยังไม่มีผู้ยื่นตามกฎหมาย (entity) จึงสร้างคำขอไม่ได้ กรุณาออกจากระบบแล้วเข้าใหม่ หากยังไม่หาย โปรดติดต่อผู้ดูแลระบบ
-- **Source**: `routes/api/applications/applications.js:279`
-- **Remediation**: Have the user re-open the workspace switcher: GET /api/entities/mine self-heals the personal INDIVIDUAL entity for any HEALTH account. For a batch of accounts use scripts/backfill-entities.js. Do NOT re-run the seed as a fix — it reloads fixtures unrelated to this account.
-
 ### `APPLICANT_VALIDATION_FAILED`
 
 - **HTTP**: `400`
@@ -67,6 +59,14 @@ the JSON envelope, so every catalog row carries both languages.
 - **TH**: ตรวจสอบข้อมูลผู้สมัครไม่ผ่าน
 - **Source**: `services/entity-service.js:983`
 - **Remediation**: Cross-check applicant data against the national-ID source-of-truth and resubmit.
+
+### `APPLICATION_HOLDER_REQUIRED`
+
+- **HTTP**: `400`
+- **EN**: No holder was chosen for this application. Choose it at step 1; if this page has been open for a while, reload it first
+- **TH**: ยังไม่ได้เลือกว่าจะยื่นในนามใคร กรุณาเลือกที่ขั้นตอนที่ 1 หากเปิดหน้านี้ค้างไว้ ให้โหลดหน้าใหม่ก่อน
+- **Source**: `routes/api/applications/applications.js:403`
+- **Remediation**: A new draft names its holder: POST /api/applications/draft (and /prepare, /draft-documents) without applicationId must send body.entityId, one of the caller's GET /api/entities/mine rows with can.edit. A new farm names its holder too: POST /api/farms must send body.entityId, a /mine row with can.createFarm. There is no default holder (spec 2026-09-30-remove-workspace-mode §3.2). An old browser tab sends none: reload it.
 
 ### `AUDITOR_INVALID_ROLE`
 
@@ -479,8 +479,8 @@ the JSON envelope, so every catalog row carries both languages.
 ### `INVALID_WORKSPACE_TYPE`
 
 - **HTTP**: `400`
-- **EN**: Workspace type is invalid
-- **TH**: ประเภทเวิร์กสเปซไม่ถูกต้อง
+- **EN**: Entity type is invalid
+- **TH**: ประเภทไม่ถูกต้อง กรุณาเลือกนิติบุคคลหรือวิสาหกิจชุมชน
 - **Source**: `services/entity-service.js:1196`
 - **Remediation**: Verify the workspace type against the entity-type enum (INDIVIDUAL / JURISTIC / COMMUNITY_ENTERPRISE).
 
@@ -1106,21 +1106,13 @@ the JSON envelope, so every catalog row carries both languages.
 - **Source**: `routes/api/auth/auth-provider.js:122`
 - **Remediation**: The account is suspended or deleted and cannot hold a session (shared/account-status.js). There is no self-service recovery; the user contacts DTAM staff. Clients end the session when any call answers this code.
 
-### `ACTIVE_ENTITY_MISMATCH`
-
-- **HTTP**: `403`
-- **EN**: Active entity context does not match request
-- **TH**: บริบทผู้ใช้ปัจจุบันไม่ตรงกับคำขอ
-- **Source**: `middleware/active-entity-middleware.js:99`
-- **Remediation**: Switch active entity via /api/entities/{id}/activate before issuing tenant-bound calls.
-
 ### `ATTACHMENT_OWNERSHIP_DENIED`
 
 - **HTTP**: `403`
 - **EN**: You do not own the attachment
 - **TH**: คุณไม่ใช่เจ้าของไฟล์แนบนี้
-- **Source**: `routes/api/cultivation/planting-cycles-activity-harvest-routes.js:64`
-- **Remediation**: Only the uploader or workspace owner may modify this attachment.
+- **Source**: `routes/api/cultivation/planting-cycles-activity-harvest-routes.js:63`
+- **Remediation**: An activity may carry only live attachments of the same planting cycle, uploaded through POST /api/planting-cycles/:id/attachments under a capability the caller still holds.
 
 ### `AUDIT_AUDITOR_MISMATCH`
 
@@ -1224,7 +1216,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **EN**: Cross-tenant write is forbidden
 - **TH**: ห้ามเขียนข้อมูลข้ามเทแนนต์
 - **Source**: `services/tenant-prisma-extension.js:161`
-- **Remediation**: Operate only on resources owned by the current active entity.
+- **Remediation**: Operate only on resources owned by the organization of the signed-in user.
 
 ### `CSRF_MISMATCH`
 
@@ -1263,16 +1255,16 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `403`
 - **EN**: Only the inspector assigned to this application, or a DTAM system admin, may withhold or disclose an inspector note
 - **TH**: เฉพาะผู้ตรวจประเมินที่ได้รับมอบหมายคำขอนี้ หรือผู้ดูแลระบบ DTAM เท่านั้นที่ตั้งค่าการเปิดเผยหรือไม่เปิดเผยบันทึกของผู้ตรวจได้
-- **Source**: `services/audit-notes-disclosure.js:166`
+- **Source**: `services/audit-notes-disclosure.js:163`
 - **Remediation**: Ask the inspector assigned to the application, or a DTAM system admin, to make the decision under PDPA s.30 para 2.
 
 ### `ENTITY_PERMISSION_DENIED`
 
 - **HTTP**: `403`
-- **EN**: Workspace member lacks the required farm-operation permission
-- **TH**: สมาชิกพื้นที่ทำงานไม่มีสิทธิ์ดำเนินการรายการนี้
-- **Source**: `services/entity-effective-permissions-service.js:251`
-- **Remediation**: Ask the workspace OWNER to grant the permission named in the response body (PUT /api/entities/:id/members/:userId/permissions).
+- **EN**: You may not do this on behalf of this holder. Ask its owner to grant you the permission, then try again
+- **TH**: คุณไม่มีสิทธิ์ทำรายการนี้ในนามของผู้ถือรายนี้ ขอให้เจ้าของมอบสิทธิ์ให้คุณก่อน แล้วลองอีกครั้ง
+- **Source**: `services/entity-effective-permissions-service.js:263`
+- **Remediation**: Ask the holder's OWNER to grant the permission named in the response body (PUT /api/entities/:id/members/:userId/permissions). Every 403 door reads this messageTh through shared/entity-permission-denied.js.
 
 ### `FINANCE_REPORT_FORBIDDEN`
 
@@ -1298,14 +1290,6 @@ the JSON envelope, so every catalog row carries both languages.
 - **Source**: `routes/api/finance/customer-reports.js:225`
 - **Remediation**: PLATFORM and STATE views require their respective roles.
 
-### `FORBIDDEN_NOT_OWNER`
-
-- **HTTP**: `403`
-- **EN**: Only the certificate owner may renew
-- **TH**: เฉพาะเจ้าของใบรับรองเท่านั้นที่ขอต่ออายุได้
-- **Source**: `services/renewal-service.js:311`
-- **Remediation**: Ownership transfer must precede renewal.
-
 ### `FORBIDDEN_OWNER`
 
 - **HTTP**: `403`
@@ -1328,7 +1312,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **EN**: Credit/debit note belongs to a different tenant
 - **TH**: ใบลดหนี้/ใบเพิ่มหนี้นี้เป็นของเทแนนต์อื่น
 - **Source**: `services/credit-note-service.js:159`
-- **Remediation**: Switch to the correct active entity before retrying.
+- **Remediation**: Retry with a document that belongs to your own organization.
 
 ### `HEALTH_ROLE_REQUIRED`
 
@@ -1389,8 +1373,8 @@ the JSON envelope, so every catalog row carries both languages.
 ### `NOT_OWNER`
 
 - **HTTP**: `403`
-- **EN**: Operation requires workspace ownership
-- **TH**: คำสั่งนี้ต้องใช้สิทธิ์เจ้าของเวิร์กสเปซ
+- **EN**: Operation requires ownership of this entity
+- **TH**: คำสั่งนี้ใช้ได้เฉพาะเจ้าของ ขอให้เจ้าของเป็นผู้ทำรายการนี้
 - **Source**: `services/entity-service.js:606`
 - **Remediation**: Only the workspace owner can perform this action.
 
@@ -1586,7 +1570,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `404`
 - **EN**: Certificate not found
 - **TH**: ไม่พบใบรับรอง
-- **Source**: `services/renewal-service.js:305`
+- **Source**: `services/renewal-service.js:320`
 - **Remediation**: Verify the certificate ID under the current tenant.
 
 ### `CHECKLIST_ITEM_NOT_FOUND`
@@ -1594,7 +1578,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `404`
 - **EN**: Checklist item not found
 - **TH**: ไม่พบรายการตรวจนี้
-- **Source**: `services/audit-notes-disclosure.js:155`
+- **Source**: `services/audit-notes-disclosure.js:152`
 - **Remediation**: Verify the checklist item id belongs to the audit named in the path.
 
 ### `CREDIT_NOTE_NOT_FOUND`
@@ -1714,14 +1698,14 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `404`
 - **EN**: Route not found
 - **TH**: ไม่พบเส้นทาง API นี้
-- **Source**: `shared/errors.js:181`
+- **Source**: `shared/errors.js:173`
 - **Remediation**: Verify the URL against the OpenAPI spec at /api-docs; consult docs/api/openapi.json.
 
 ### `TARGET_NOT_MEMBER`
 
 - **HTTP**: `404`
-- **EN**: Target user is not a workspace member
-- **TH**: ผู้รับโอนยังไม่ได้เป็นสมาชิกเวิร์กสเปซ
+- **EN**: Target user is not a member
+- **TH**: ผู้รับโอนยังไม่ได้เป็นสมาชิก กรุณาเชิญเข้าเป็นสมาชิกก่อน
 - **Source**: `services/entity-service.js:619`
 - **Remediation**: Invite the target user to the workspace before transferring ownership.
 
@@ -1854,16 +1838,16 @@ the JSON envelope, so every catalog row carries both languages.
 ### `CANNOT_DEMOTE_OWNER`
 
 - **HTTP**: `409`
-- **EN**: Cannot change the workspace owner's role
-- **TH**: ห้ามเปลี่ยนบทบาทของเจ้าของเวิร์กสเปซ
+- **EN**: Cannot change the owner's role
+- **TH**: เปลี่ยนบทบาทของเจ้าของไม่ได้ ให้โอนความเป็นเจ้าของก่อน
 - **Source**: `routes/api/entities/index.js:474`
 - **Remediation**: Transfer ownership to another member before changing this role.
 
 ### `CANNOT_REVOKE_OWNER`
 
 - **HTTP**: `409`
-- **EN**: Cannot revoke the workspace owner
-- **TH**: ห้ามถอนสิทธิ์ของเจ้าของเวิร์กสเปซ
+- **EN**: Cannot revoke the owner
+- **TH**: ถอนสิทธิ์ของเจ้าของไม่ได้ ให้โอนความเป็นเจ้าของก่อน
 - **Source**: `routes/api/entities/index.js:461`
 - **Remediation**: Transfer ownership to another member before revoking.
 
@@ -1872,7 +1856,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: Certificate has already expired
 - **TH**: ใบรับรองหมดอายุแล้ว
-- **Source**: `services/renewal-service.js:355`
+- **Source**: `services/renewal-service.js:369`
 - **Remediation**: Submit a new application instead of renewal.
 
 ### `CERT_NOT_ACTIVE`
@@ -1880,7 +1864,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: Certificate is not active
 - **TH**: ใบรับรองไม่อยู่ในสถานะใช้งาน
-- **Source**: `services/renewal-service.js:345`
+- **Source**: `services/renewal-service.js:359`
 - **Remediation**: Only ACTIVE certificates can be renewed; check certificate status.
 
 ### `CERT_REQUIRES_AUDIT_PASS`
@@ -1888,7 +1872,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: Certificate issuance requires a passed audit
 - **TH**: การออกใบรับรองต้องผ่านการตรวจสอบก่อน
-- **Source**: `services/certificate-service.js:495`
+- **Source**: `services/certificate-service.js:498`
 - **Remediation**: Complete the on-site audit (status PASSED) before requesting the certificate.
 
 ### `CERTIFICATE_ALREADY_REVOKED`
@@ -1896,7 +1880,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: This certificate is already revoked; the revocation record (who, when, why) was not overwritten
 - **TH**: ใบรับรองนี้ถูกเพิกถอนไปแล้ว คุณไม่ต้องเพิกถอนซ้ำ กรุณาโหลดหน้านี้ใหม่เพื่อดูสถานะล่าสุด
-- **Source**: `services/certificate-service.js:1832`
+- **Source**: `services/certificate-service.js:1818`
 - **Remediation**: The revocation record is the ISO/IEC 17065 §7.11 record of decision: revokeCertificate refuses a second press (pre-read after the org-guard, plus an atomic status notIn [revoked] write that maps Prisma P2025 to this code). The admin door POST /api/admin/certificates/:id/revoke answers 409 with this entry; reload the certificate to see the existing revokedAt/revokedBy/revokedReason.
 
 ### `CERTIFICATE_NOT_REINSTATABLE`
@@ -1904,7 +1888,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: Certificate is not suspended and cannot be reinstated
 - **TH**: ใบรับรองไม่ได้อยู่ในสถานะพักใช้ จึงไม่สามารถคืนสถานะได้
-- **Source**: `services/certificate-service.js:2257`
+- **Source**: `services/certificate-service.js:2243`
 - **Remediation**: Only a suspended certificate can be reinstated; a revoked certificate cannot be reinstated.
 
 ### `CERTIFICATE_NOT_REVISABLE`
@@ -1912,7 +1896,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: Only a certificate in force (status active) can be revised; nothing was changed
 - **TH**: ออกฉบับแก้ไขได้เฉพาะใบรับรองที่ยังมีผลบังคับใช้เท่านั้น ใบนี้ถูกเพิกถอน ระงับ หรือหมดอายุแล้ว กรุณาตรวจสอบสถานะใบรับรองก่อน
-- **Source**: `services/certificate-service.js:1938`
+- **Source**: `services/certificate-service.js:1934`
 - **Remediation**: A revision corrects the register for a live certificate; a revoked/suspended/expired one keeps its history as is.
 
 ### `CERTIFICATE_NOT_SUSPENDABLE`
@@ -1920,7 +1904,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: Certificate is not in an active state and cannot be suspended
 - **TH**: ใบรับรองไม่ได้อยู่ในสถานะใช้งาน จึงไม่สามารถพักใช้ได้
-- **Source**: `services/certificate-service.js:2214`
+- **Source**: `services/certificate-service.js:2200`
 - **Remediation**: Only an active certificate can be suspended; reload to see its current status (it may already be suspended, revoked, or expired).
 
 ### `CERTIFICATE_REVISION_CONFLICT`
@@ -1928,7 +1912,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: Another revision of this certificate was recorded first; reload and review the current revision
 - **TH**: มีการออกฉบับแก้ไขของใบรับรองนี้ไปก่อนหน้าแล้ว กรุณาโหลดหน้านี้ใหม่เพื่อดูฉบับล่าสุดก่อนดำเนินการอีกครั้ง
-- **Source**: `services/certificate-service.js:2053`
+- **Source**: `services/certificate-service.js:2039`
 - **Remediation**: The conditional update on revisionNo lost a race, or the archive row for that number already existed (unique index); nothing was written by the loser.
 
 ### `CERTIFICATE_REVISION_NO_CHANGE`
@@ -1936,7 +1920,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: The farm record and the certificate already agree; there is nothing to revise
 - **TH**: ข้อมูลที่ตั้งบนใบรับรองตรงกับบันทึกฟาร์มอยู่แล้ว ไม่มีอะไรต้องแก้ไข หากบันทึกฟาร์มผิด กรุณาแก้ไขบันทึกฟาร์มก่อนแล้วลองใหม่
-- **Source**: `services/certificate-service.js:2029`
+- **Source**: `services/certificate-service.js:2015`
 - **Remediation**: The corrected values come from the Farm row only; fix the farm first.
 
 ### `CERTIFICATION_EVALUATOR_UNKNOWN`
@@ -1968,7 +1952,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: The payment already started for this instalment is in a state this page cannot continue; no second payment was created
 - **TH**: รายการชำระเงินของงวดนี้อยู่ในสถานะที่หน้านี้ดำเนินการต่อไม่ได้ ระบบจึงไม่สร้างรายการชำระเงินซ้ำ กรุณาติดต่อเจ้าหน้าที่พร้อมแจ้งเลขที่รายการ
-- **Source**: `services/checkout/stripe-checkout-service.js:876`
+- **Source**: `services/checkout/stripe-checkout-service.js:873`
 - **Remediation**: Review I-1 (2026-09-27): an open order that already names a PaymentIntent is re-entered by retrieving that intent, never by minting a second one on the strength of an idempotency key Stripe may have pruned. requires_payment_method / requires_action / processing are reused, succeeded is handed back without a client secret, canceled gets the one replacement. Any other status (requires_confirmation, requires_capture) is not produced by this automatic-capture PromptPay flow and is refused rather than canceled-and-replaced, because the settlement handler maps payment_intent.canceled to cancelling the ORDER by metadata.checkoutOrderId. Look the intent up in the Stripe Dashboard by the order id in its metadata.
 
 ### `CHECKOUT_ORDER_CHANGED`
@@ -1976,7 +1960,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: The payment for this instalment changed while it was being prepared; nothing was recorded
 - **TH**: รายการชำระเงินของงวดนี้เปลี่ยนแปลงระหว่างที่ระบบกำลังเตรียมการชำระ ระบบจึงยังไม่บันทึกรายการนี้ และการกดครั้งนี้ไม่ได้เรียกเก็บเงิน กรุณากลับไปหน้ารายการชำระเงินแล้วเริ่มขั้นตอนชำระเงินใหม่
-- **Source**: `services/checkout/stripe-checkout-service.js:786`
+- **Source**: `services/checkout/stripe-checkout-service.js:783`
 - **Remediation**: Fix round 3 (N-1, 2026-09-27): the write that records a newly minted PaymentIntent on its order is a compare-and-set on the order id, status PENDING_PAYMENT and the intent id read at the start of the request. It matched no row, so between the read and the write the order was cancelled (a payment_intent.canceled webhook) or moved to another intent by a concurrent press. Nothing is overwritten, no client secret is returned, and nothing is canceled: the intent just minted was never shown to a payer and lapses unused. Starting again from the payments list re-reads the order: an order still open re-enters its current intent; an order that was cancelled takes whatever path a cancelled order takes, which this refusal does not decide.
 
 ### `CHECKOUT_PHASE_NOT_PRICED`
@@ -2064,7 +2048,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: The stored draft is not the last save from this page
 - **TH**: ร่างคำขอถูกบันทึกจากหน้าอื่นหลังการบันทึกครั้งล่าสุดของหน้านี้
-- **Source**: `routes/api/applications/applications.js:1016`
+- **Source**: `routes/api/applications/applications.js:922`
 - **Remediation**: The wizard saves its current answers once and submits again. Another tab saved this application after this page did.
 
 ### `DRAFT_OUT_OF_ORDER`
@@ -2072,7 +2056,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: Draft save is older than the last one applied
 - **TH**: มีการบันทึกร่างที่ใหม่กว่านี้แล้ว
-- **Source**: `services/application-service/application-applicant-query-methods.js:256`
+- **Source**: `services/application-service/application-applicant-query-methods.js:218`
 - **Remediation**: Nothing to do: a newer save from the same wizard page already landed. The wizard treats this as superseded (no retry, no error shown).
 
 ### `DUPLICATE_PHOTO`
@@ -2184,7 +2168,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: Lot QR label is already printed — edits are locked
 - **TH**: ฉลาก QR ของล็อตถูกพิมพ์แล้ว ข้อมูลถูกล็อก
-- **Source**: `services/traceability-service.js:1078`
+- **Source**: `services/traceability-service.js:1081`
 - **Remediation**: A print already locked this lot; no further print or edit is permitted. Reload to see the current state.
 
 ### `LOT_ALREADY_RECALLED`
@@ -2267,6 +2251,14 @@ the JSON envelope, so every catalog row carries both languages.
 - **Source**: `services/journal-entry-period-guard.js:123`
 - **Remediation**: Re-open the period or shift entry date to an open period.
 
+### `PLANTING_ATTACHMENT_IN_USE`
+
+- **HTTP**: `409`
+- **EN**: The attachment is carried by a saved planting activity and cannot be deleted
+- **TH**: ไฟล์นี้แนบอยู่กับกิจกรรมที่บันทึกแล้ว จึงลบไม่ได้ หากแนบผิดไฟล์ ให้บันทึกกิจกรรมใหม่พร้อมไฟล์ที่ถูกต้อง
+- **Source**: `routes/api/cultivation/planting-cycles-attachment-routes.js:174`
+- **Remediation**: Nothing to delete: the saved activity keeps its evidence. Record a new activity with the right file instead (operator 2026-10-03: refuse, never unlink).
+
 ### `PLANTING_REQUIRES_CERTIFICATE`
 
 - **HTTP**: `409`
@@ -2344,7 +2336,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `409`
 - **EN**: No receipt has been issued for this invoice yet
 - **TH**: ยังไม่ได้ออกใบเสร็จ/ใบกำกับภาษีสำหรับใบแจ้งหนี้นี้
-- **Source**: `services/invoice-service.js:760`
+- **Source**: `services/invoice-service.js:661`
 - **Remediation**: Issue the receipt for the paid invoice before requesting receipt-dependent operations.
 
 ### `REFUND_ALREADY_COMPLETED`
@@ -2362,6 +2354,14 @@ the JSON envelope, so every catalog row carries both languages.
 - **TH**: ค่าธรรมเนียมของใบสมัครที่ถูกยกเลิก/ไม่ผ่าน ไม่สามารถคืนได้ตามนโยบาย
 - **Source**: `services/refund-service.js:314`
 - **Remediation**: The leniency channel is the fee-reuse waiver reopen, not a cash refund.
+
+### `RENEWAL_ALREADY_IN_PROGRESS`
+
+- **HTTP**: `409`
+- **EN**: This certificate already has a renewal or replacement in progress; nothing was created or submitted
+- **TH**: ใบรับรองใบนี้มีคำขอต่ออายุหรือขอใบแทนที่กำลังดำเนินการอยู่แล้ว กรุณาเปิดคำขอนั้นจากรายการคำขอของคุณ
+- **Source**: `services/application-submit-guard.js:285`
+- **Remediation**: One renewal or replacement per certificate at a time (operator ruling 2026-10-03 lets every member with SUBMIT_APPLICATION on the holder renew, so the platform keeps the first). Open the application already in progress from the application list; once it is terminal (REJECTED, EXPIRED, CANCEL_EXPIRED, CERTIFIED) or deleted, a new one may be filed.
 
 ### `RESCHEDULE_NOT_PENDING`
 
@@ -2652,7 +2652,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `422`
 - **EN**: Certificate issuance was refused because the farm location is incomplete; the audit result was not saved and nothing was changed
 - **TH**: ไม่สามารถออกใบรับรองได้ เนื่องจากข้อมูลที่ตั้งฟาร์มไม่ครบถ้วน ระบบไม่ได้บันทึกการเปลี่ยนแปลงใด ๆ กรุณาแก้ไขข้อมูลที่ตั้งฟาร์มในคำขอให้ครบถ้วน แล้วบันทึกผลการตรวจอีกครั้ง
-- **Source**: `services/certificate-service.js:271`
+- **Source**: `services/certificate-service.js:274`
 - **Remediation**: Fail-closed: a certificate is a government register, so a blank (or a retired stand-in such as Unknown, -, 00000) province/district/sub-district would be signed as fact. The refusal carries missingFields naming the blanks; the audit-result route forwards it. Complete the farm location on the application, then re-submit the audit result. The AUDIT_PASSED flip was rolled back in the same transaction.
 
 ### `CERTIFICATE_FARM_NAME_MISSING`
@@ -2660,23 +2660,23 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `422`
 - **EN**: Certificate issuance was refused because the application names no farm; nothing was changed
 - **TH**: ไม่สามารถออกใบรับรองได้ เนื่องจากคำขอไม่ได้ระบุชื่อฟาร์ม กรุณากรอกชื่อสถานที่ปลูกในคำขอให้ครบถ้วนก่อนออกใบรับรอง
-- **Source**: `services/certificate-service.js:297`
+- **Source**: `services/certificate-service.js:300`
 - **Remediation**: Fail-closed, the same rule as the farm LOCATION refusal beside it (F-G4-52: no literal stand-ins). Until 2026-09-07 a nameless filing was minted a farm called 'Certified Farm' — an English literal that then became the farm's name on the certificate, on both public scan pages and on the COA, for a farm nobody had given that name. Fill the site name on the application (step 3, ชื่อสถานที่ปลูก), then issue again. A farm row already carrying the retired literal is healed on its next issuance, and scripts/repair-platform-named-farms.js pays the debt for rows already certified.
 
 ### `CERTIFICATE_HOLDER_MISMATCH`
 
 - **HTTP**: `422`
-- **EN**: Certificate issuance was refused because the application declares a juristic or community-enterprise applicant but was filed in a person's own name; nothing was changed
-- **TH**: ไม่สามารถออกใบรับรองได้ เนื่องจากคำขอระบุผู้ยื่นเป็นนิติบุคคลหรือวิสาหกิจชุมชน แต่ยื่นในนามบุคคล ผู้ถือใบรับรองต้องเป็นนิติบุคคลหรือวิสาหกิจชุมชนเอง กรุณาสร้างหรือสลับไปพื้นที่ทำงานนั้น แล้วยื่นคำขอในพื้นที่นั้น
-- **Source**: `services/certificate-service.js:2428`
-- **Remediation**: Operator ruling 2026-09-07 (F-HOLDER-01): a company or a community enterprise holds its own certificate, never the person who logged in. The filing declares its applicant type on the paper, but the identity the platform issues to is Application.entityId — and nothing forced the two to agree, so a company's certificate was recorded against an INDIVIDUAL with the submitter's name while the farm name on its face read as the company. Fail-closed rather than minting a legal identity on someone's behalf: create or switch to the juristic / community-enterprise workspace at /health/workspaces/new and file inside it, which makes app.entityId that entity. Certificates already issued under the old behaviour keep the holder they were signed with; correcting one is a revision decision.
+- **EN**: Certificate issuance was refused because the applicant type declared on the application does not match the type of the holder bound to it. Send the application back to the applicant to correct, or tell the system administrator; nothing was changed
+- **TH**: ไม่สามารถออกใบรับรองได้ เนื่องจากประเภทผู้ยื่นที่ระบุในคำขอไม่ตรงกับประเภทของผู้ถือที่ผูกกับคำขอนี้ ส่งคำขอกลับให้ผู้ยื่นแก้ไข หรือแจ้งผู้ดูแลระบบ
+- **Source**: `services/certificate-service.js:2411`
+- **Remediation**: Operator ruling 2026-09-07 (F-HOLDER-01): a company or a community enterprise holds its own certificate, never the person who logged in. The filing declares its applicant type on the paper, but the identity the platform issues to is Application.entityId — and nothing forced the two to agree, so a company's certificate was recorded against an INDIVIDUAL with the submitter's name while the farm name on its face read as the company. Fail-closed rather than minting a legal identity on someone's behalf: a filing's holder never changes (spec 2026-09-30-remove-workspace-mode §3.2), so staff send the application back to the applicant (who deletes the draft and files again choosing the right holder at step 1) or escalate to the system administrator. The pre-submit refusal APPLICANT_TYPE_NOT_THE_HOLDER (application-requirements-service.holderMismatchIssue) tells the applicant this before any fee is paid. Certificates already issued under the old behaviour keep the holder they were signed with; correcting one is a revision decision.
 
 ### `CERTIFICATE_PLANT_UNKNOWN`
 
 - **HTTP**: `422`
 - **EN**: Certificate issuance was refused because the application names a plant that is not in the plant master (or names none); nothing was changed
 - **TH**: ไม่สามารถออกใบรับรองได้ เนื่องจากชนิดพืชในคำขอไม่อยู่ในทะเบียนชนิดพืชของระบบ หรือคำขอไม่ได้ระบุชนิดพืช ระบบไม่ได้บันทึกการเปลี่ยนแปลงใด ๆ กรุณาเลือกชนิดพืชในคำขอจากรายการที่ระบบกำหนด แล้วบันทึกผลการตรวจอีกครั้ง
-- **Source**: `services/certificate-service.js:339`
+- **Source**: `services/certificate-service.js:342`
 - **Remediation**: Fail-closed (F-G4-58): cropType is inside the signed canonical JSON, so it is resolved from the plant_species master (nameTH) through services/plant-species-service.js using formData.plantId (wizard slug) or a master code, never a literal. The refusal carries plantReference (the value the application held, or null). Set the plant on the application to one the master knows (config/plant-species-slugs.js lists the wizard slugs; prisma/seed-plants.js the codes), then re-submit the audit result or re-issue the revision. Both the issuance path and the revision door (preview + revise) refuse before any write.
 
 ### `CRITICAL_CHECKLIST_FAILURE`
@@ -2748,8 +2748,8 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `422`
 - **EN**: This filing claims to renew or replace a certificate held by a different holder; it was not submitted and nothing was changed
 - **TH**: ใบรับรองเดิมออกในนามผู้ถือรายอื่น จึงยื่นต่ออายุหรือขอใบแทนในนามนี้ไม่ได้ กรุณายื่นในนามผู้ถือใบรับรองใบนั้น
-- **Source**: `services/application-submit-guard.js:193`
-- **Remediation**: Operator ruling 2026-10-03: a renewal is a submission, filed under the same holder as the certificate it renews; a replacement (ขอใบแทน) follows the same rule. Switch to the certificate holder's workspace and file the renewal there (the actor also needs SUBMIT_APPLICATION on that holder), or file this one as a new application. The refusal is recorded as an APPLICATION_SUBMIT_DENIED audit row.
+- **Source**: `services/application-submit-guard.js:289`
+- **Remediation**: Operator ruling 2026-10-03: a renewal is a submission, filed under the same holder as the certificate it renews; a replacement (ขอใบแทน) follows the same rule. File the renewal under the certificate's holder (choose that holder at step 1) (the actor also needs SUBMIT_APPLICATION on that holder), or file this one as a new application. The refusal is recorded as an APPLICATION_SUBMIT_DENIED audit row.
 
 ### `REVIEW_DUE_DATE_INVALID`
 
@@ -2796,7 +2796,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `422`
 - **EN**: Withholding an auditor note requires a recorded reason under PDPA s.30 para 2
 - **TH**: การไม่เปิดเผยบันทึกต้องระบุเหตุผลตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล มาตรา 30 วรรคสอง
-- **Source**: `services/audit-notes-disclosure.js:189`
+- **Source**: `services/audit-notes-disclosure.js:186`
 - **Remediation**: Write a reason the applicant can read; a refusal nobody has to justify is not a lawful refusal.
 
 <a id="423"></a>
@@ -2893,7 +2893,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `500`
 - **EN**: Internal server error
 - **TH**: ข้อผิดพลาดภายในระบบ
-- **Source**: `shared/errors.js:154`
+- **Source**: `shared/errors.js:146`
 - **Remediation**: Capture the requestId from the response and report to platform support.
 
 ### `INTERNAL_SERVER_ERROR`
@@ -2997,7 +2997,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `500`
 - **EN**: The revision resubmit surface failed unexpectedly
 - **TH**: ระบบส่งคำขอกลับให้เจ้าหน้าที่ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง
-- **Source**: `routes/api/applications/revision-resubmit.js:74`
+- **Source**: `routes/api/applications/revision-resubmit.js:78`
 - **Remediation**: The catch-all for anything this door does not model; the cause is in the [revision-resubmit] log line beside it.
 
 ### `SERVER_ERROR`
@@ -3029,7 +3029,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `500`
 - **EN**: Source application for certificate not found
 - **TH**: ไม่พบใบสมัครต้นทางของใบรับรอง
-- **Source**: `services/renewal-service.js:384`
+- **Source**: `services/renewal-service.js:397`
 - **Remediation**: Internal data integrity issue; contact platform support.
 
 ### `STORAGE_UPLOAD_FAILED`
@@ -3046,7 +3046,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **EN**: Failed to resolve tenant context for request
 - **TH**: ไม่สามารถระบุบริบทเทแนนต์ของคำขอได้
 - **Source**: `middleware/tenant-context-middleware.js:95`
-- **Remediation**: Verify that the user is associated with at least one active entity; re-authenticate if uncertain.
+- **Remediation**: Verify that the user belongs to at least one organization; re-authenticate if uncertain.
 
 ### `TESSERACT_TERMINATED`
 
@@ -3171,7 +3171,7 @@ the JSON envelope, so every catalog row carries both languages.
 - **HTTP**: `503`
 - **EN**: The certificate signing key is unavailable; issuance was refused and nothing was changed
 - **TH**: ระบบลงลายมือชื่อดิจิทัลของใบรับรองไม่พร้อมใช้งาน จึงยังออกใบรับรองไม่ได้ ระบบไม่ได้บันทึกการเปลี่ยนแปลงใด ๆ กรุณาแจ้งผู้ดูแลระบบแล้วบันทึกผลการตรวจอีกครั้ง
-- **Source**: `services/certificate-service.js:1415`
+- **Source**: `services/certificate-service.js:1401`
 - **Remediation**: Fail-closed by design (Ruling 2, 2026-08-22): a GACP certificate without its PKI signature cannot be verified by a third party. Mount the signing key read-only, confirm SIGNING_KEY_FINGERPRINT matches, restart, and re-submit the audit result. Never bypass by issuing hash-only.
 
 ### `CERTIFIED_SCOPE_UNVERIFIABLE`

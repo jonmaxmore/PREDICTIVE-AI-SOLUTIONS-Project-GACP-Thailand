@@ -35,11 +35,6 @@ describe('[carpet BUG-1] identity methods are destructure-safe (no `this` depend
         expect(normalizeIdentityValue('')).toBeNull();
     });
 
-    it('buildHealthWhereClause works when destructured', () => {
-        const { buildHealthWhereClause } = makeMethods();
-        expect(buildHealthWhereClause(null, { healthId: HEALTH_ID })).toEqual({ healthId: HEALTH_ID });
-        expect(buildHealthWhereClause(null, { strictHealthId: true })).toBeNull();
-    });
 
     it('resolveHealthIdentity works when destructured (the exact BUG-1 call shape)', async () => {
         const { resolveHealthIdentity } = makeMethods();

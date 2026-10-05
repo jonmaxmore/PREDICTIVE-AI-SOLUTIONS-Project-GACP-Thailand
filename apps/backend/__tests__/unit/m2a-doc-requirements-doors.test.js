@@ -95,7 +95,6 @@ jest.mock('../../services/application-status-writer', () => {
 
 jest.mock('../../services/application-service', () => ({
     resolveHealthIdentity: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     findOwnedApplicationForApplicant: jest.fn(),
     findDraftForSubmit: jest.fn(),
@@ -234,7 +233,6 @@ beforeEach(() => {
     globalThis.__testUser = { ...HEALTH_USER };
     assertEntityActionPermission.mockResolvedValue({ allowed: true, via: 'ENTITY_PERMISSION' });
     applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: '1100000000008' });
-    applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
     applicationService.getApplicationSlice.mockResolvedValue({
         id: 'app-1', applicationNumber: 'GACP-2026-0001', status: 'PENDING_DOC_FEE',
     });

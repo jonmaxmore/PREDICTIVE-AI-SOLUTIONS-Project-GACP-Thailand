@@ -74,7 +74,6 @@ jest.mock('../../services/planting-service', () => ({
   findCycleForGenerate: jest.fn(),
   findCyclePlotInCycle: jest.fn(),
   listPlotCycleQrRecordsForCycle: jest.fn().mockResolvedValue([]),
-  findOwnedApplicationDocuments: jest.fn().mockResolvedValue([]),
   // `findPlantUnitInCycle` is absent on purpose: planting-service deleted it on
   // 2026-08-25 (per-plant resolution, retired by spec R8). Mocking a member the
   // real module no longer exports would let a re-added caller pass on a fiction.

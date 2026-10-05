@@ -286,9 +286,9 @@ async function analyzeApplication(applicationId, standardCode, { actor, holderSc
         where: {
             id: applicationId,
             isDeleted: false,
-            // R1-legacy-pin: removed in Task 12 — a health caller passes its holder scope;
-            // the id decides the row and the healthId compare below decides ownership.
-            ...require('./holder-access').r1HolderOrLegacyWhenScoped(holderScope, 'Application', { id: applicationId }),
+            // A health caller passes its holder scope: the filing is read within it
+            // (spec 2026-09-30 §3.1). Staff pass none and read by id.
+            ...require('./holder-access').holderReadWhereIfScoped(holderScope, 'Application'),
         },
         include: { documents: true },
     });
@@ -300,8 +300,10 @@ async function analyzeApplication(applicationId, standardCode, { actor, holderSc
     // ('HEALTH') or the canonical value ('health'). The route passes
     // normalizeRole(...) output (lowercase) — comparing against the literal
     // 'HEALTH' made this ownership gate dead in production (PR-666 review).
+    // A health caller without a holder scope (no door passes none today) keeps
+    // the filer compare, so it can never read wider than before.
     const actorRole = normalizeRole(actor?.canonicalRole || actor?.role);
-    if (actorRole === CANONICAL_ROLES.HEALTH && application.healthId !== actor?.canonicalId) {
+    if (actorRole === CANONICAL_ROLES.HEALTH && !holderScope && application.healthId !== actor?.canonicalId) {
         // Same 404 as not-found: a HEALTH user must not learn that someone
         // else's application id exists.
         throw httpError(404, 'APPLICATION_NOT_FOUND', 'Application not found');

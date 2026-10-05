@@ -90,9 +90,9 @@ async function certifiedAreaTypes({ farmId, client = prisma, holderScope = null 
                 // อ่านใบรับรองไม่ได้ "ทุกครั้ง" แล้วปฏิเสธด้วย 503 ตามที่ fail-closed ออกแบบไว้
                 // ⇒ เกษตรกรที่มีใบรับรองจริงเพิ่มแปลงไม่ได้เลย (วัดจริงบน staging 2026-09-07)
                 expiryDate: { gt: new Date() },
-                // R1-legacy-pin: removed in Task 12 — a health door passes its holder scope;
-                // the farm its gate already resolved decides the rows, as pre-R1.
-                ...require('./holder-access').r1HolderOrLegacyWhenScoped(holderScope, 'Certificate', { farmId: String(farmId) }),
+                // A health door passes its holder scope: the certificates of that farm
+                // the caller's holders hold (spec 2026-09-30 §3.1).
+                ...require('./holder-access').holderReadWhereIfScoped(holderScope, 'Certificate'),
             },
             orderBy: { createdAt: 'desc' },
             include: { scopes: true, application: true },

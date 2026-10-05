@@ -13,9 +13,7 @@
  * 403 ENTITY_PERMISSION_DENIED. FE gating is UX-only, hence the BINDING
  * failure policy:
  *
- *   - personal context (role OWNER on own INDIVIDUAL entity — the Wave-A
- *     S1 predicate) → has() always TRUE, instantly, NO fetch. Solo farmer
- *     flows byte-identical.
+ *   - no entity id given → has() always TRUE, instantly, NO fetch.
  *   - fetch ERROR / still loading → TRUE (fail-OPEN to visible: hiding
  *     buttons on a flaky fetch would be a false lockout). 'error' is never
  *     cached; when a REVALIDATION errors and a snapshot exists, the
@@ -41,7 +39,8 @@
  *   (c) 'not-member' is cached as revalidate-on-next-mount, NOT terminal.
  *
  * Pure decision functions are exported for TDD; the hook only wires
- * useActiveEntity + apiClient to them.
+ * apiClient to them. The entity id comes from the caller (R2: there is no
+ * "active entity").
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -50,12 +49,11 @@ import {
     isEntityPermissionDeniedResult,
     type PermissionDeniableApiResult,
 } from '@/lib/api/entity-permission-denial';
-import { useActiveEntity } from '@/lib/services/active-entity-provider';
 import { useAuth } from '@/lib/services/auth-provider';
 import { logger } from '@/lib/logger';
 
 /** Owner-facing copy for gated/disabled operation buttons. */
-export const NO_PERMISSION_TOOLTIP_TH = 'ไม่มีสิทธิ์ ติดต่อเจ้าของ workspace';
+export const NO_PERMISSION_TOOLTIP_TH = 'ไม่มีสิทธิ์ ขอให้เจ้าของมอบสิทธิ์ให้คุณ';
 
 export type EntityPermissionState =
     | { kind: 'personal' }
@@ -69,20 +67,6 @@ interface MyPermissionsPayload {
     role: string;
     personal: boolean;
     effective: string[];
-}
-
-/**
- * The Wave-A S1 predicate: the caller's OWN personal INDIVIDUAL entity is
- * role OWNER on an INDIVIDUAL entity. A worker invited into someone
- * ELSE's INDIVIDUAL entity is a real workspace (Wave-B, by design).
- * No membership at all (provider absent / still hydrating) counts as
- * personal so legacy solo paths stay byte-identical.
- */
-export function isPersonalWorkspaceMembership(
-    membership: { role: string; type: string } | null | undefined,
-): boolean {
-    if (!membership) return true;
-    return membership.role === 'OWNER' && membership.type === 'INDIVIDUAL';
 }
 
 /** The binding failure policy — see module doc. */
@@ -254,12 +238,14 @@ export interface UseEntityPermissionsResult {
     reportPermissionDenial: (result: PermissionDeniableApiResult | null | undefined) => boolean;
 }
 
-export function useEntityPermissions(): UseEntityPermissionsResult {
-    const { activeEntity } = useActiveEntity();
+/**
+ * `entityId` null (the caller has no entity to ask about) = nothing to gate:
+ * everything stays visible and the server stays authoritative.
+ */
+export function useEntityPermissions(entityId: string | null): UseEntityPermissionsResult {
     const { user } = useAuth();
 
-    const personal = isPersonalWorkspaceMembership(activeEntity);
-    const entityId = !personal && activeEntity ? activeEntity.id : null;
+    const personal = entityId === null;
     const userId = user?.id;
     const cacheKey = entityId ? entityPermissionsCacheKey(userId, entityId) : null;
 

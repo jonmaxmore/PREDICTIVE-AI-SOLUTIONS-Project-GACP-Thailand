@@ -68,7 +68,6 @@ jest.mock('@/lib/services/auth-service', () => ({
 }));
 
 jest.mock('@/components/layout/Footer', () => ({ Footer: () => null }));
-jest.mock('@/components/layout/entity-switcher', () => ({ EntitySwitcher: () => null }));
 
 // The health navItems prop (from legacy healthNavigation) is no longer the
 // source for the bottom nav — passed here to prove that's true (this list

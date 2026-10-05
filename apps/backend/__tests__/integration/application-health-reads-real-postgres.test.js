@@ -3,24 +3,18 @@
 /**
  * Application health reads go through holderReadWhere (spec 2026-09-30 §3.1,
  * Task 3), on a REAL Postgres through the REAL prisma-database client and the
- * real tenant-context + active-entity middlewares. Only authentication is
- * attached by hand.
+ * real tenant-context middleware. Only authentication is attached by hand.
  *
  * Fixture: company C (JURISTIC). A is its OWNER and filed appC; B is a MANAGER
  * of C who filed nothing; S is a stranger with only a personal entity. A also
  * owns a personal entity P with appP.
  *
- * R1 (operator ruling C1, Task 3 fix round 1): every door also keeps its pre-R1
- * filer pin (r1LegacyApplicantPin), so a co-member is NOT given the filer's rows
- * in R1 — B in workspace C gets what the pre-R1 code gave B. The exact pre-R1
- * equality over actors × workspaces × doors is r1-application-reads-neutral-real-postgres.test.js.
+ * R2 Task 12: the holder fragment alone decides (no filer pin, no workspace
+ * header): a co-member reads the holder's filings like the filer does.
  *
- * What only a real run shows:
- *   - the read witness (HOLDER_READ_WITNESS) sees Prisma's clone of the args, so
- *     "the where carries the fragment" is proved only when the witness is
- *     silent for model Application on a live request;
- *   - the R1 intersection (holderScope ∩ req.activeEntity, ruling C1) and the
- *     entity ALS rewrite really combine to the rows the doors return.
+ * What only a real run shows: the read witness (HOLDER_READ_WITNESS) sees
+ * Prisma's clone of the args, so "the where carries the fragment" is proved
+ * only when the witness is silent for model Application on a live request.
  *
  * Doors whose only watched reads are Application reads run with the witness in
  * THROW mode: an unscoped Application read would 500 the door. Doors that also
@@ -38,12 +32,10 @@ const mockActor = { current: null };
 jest.mock('../../middleware/auth-middleware', () => {
     const actual = jest.requireActual('../../middleware/auth-middleware');
     const { tenantContextMiddleware } = jest.requireActual('../../middleware/tenant-context-middleware');
-    const { activeEntityMiddleware } = jest.requireActual('../../middleware/active-entity-middleware');
     const bindTenant = tenantContextMiddleware();
-    const bindEntity = activeEntityMiddleware();
     const attach = (req, res, next) => {
         req.user = { ...mockActor.current };
-        return bindTenant(req, res, () => bindEntity(req, res, next));
+        return bindTenant(req, res, next);
     };
     return {
         ...actual,
@@ -172,7 +164,8 @@ d('Application health reads carry the holder fragment (real Postgres, real middl
     });
     afterEach(() => { warn.mockRestore(); });
 
-    const get = (path, entityId) => request(app).get(path).set({ 'x-active-entity-id': entityId });
+    // R2 Task 12: no workspace header; membership alone decides.
+    const get = (path) => request(app).get(path);
 
     // ── by-id doors: A and co-member B (workspace C) read appC; S gets 404 ─────
     const byIdDoors = [
@@ -184,22 +177,24 @@ d('Application health reads carry the holder fragment (real Postgres, real middl
     ];
 
     describe.each(byIdDoors)('%s (witness throw)', (_name, path) => {
-        test('filer A in workspace C → 200; co-member B in workspace C → 404 (R1 keeps the filer pin); stranger S → 404; no unscoped Application read', async () => {
+        test('filer A and co-member B (MANAGER of C) → 200 on appC; stranger S → 404; no unscoped Application read', async () => {
             setMode('throw');
             as(fx.A);
-            expect((await get(path(fx.appC), fx.C)).status).toBe(200);
+            expect((await get(path(fx.appC))).status).toBe(200);
             as(fx.B);
-            expect((await get(path(fx.appC), fx.C)).status).toBe(404);
+            expect((await get(path(fx.appC))).status).toBe(200);
             as(fx.S);
-            expect((await get(path(fx.appC), fx.PS)).status).toBe(404);
+            expect((await get(path(fx.appC))).status).toBe(404);
             expect(applicationWitnessLogs()).toEqual([]);
         });
 
-        test('R1 intersection: A in the personal workspace does not reach the company filing (404), and does reach appP', async () => {
+        test('A reaches both its holders\' filings (C and P); B, a member of C only, does not reach appP (404)', async () => {
             setMode('throw');
             as(fx.A);
-            expect((await get(path(fx.appC), fx.P)).status).toBe(404);
-            expect((await get(path(fx.appP), fx.P)).status).toBe(200);
+            expect((await get(path(fx.appC))).status).toBe(200);
+            expect((await get(path(fx.appP))).status).toBe(200);
+            as(fx.B);
+            expect((await get(path(fx.appP))).status).toBe(404);
             expect(applicationWitnessLogs()).toEqual([]);
         });
     });
@@ -208,52 +203,43 @@ d('Application health reads carry the holder fragment (real Postgres, real middl
     // /my/statuses rows name the filing `applicationId`; the other lists name it `id`.
     const ids = (res) => (Array.isArray(res.body?.data) ? res.body.data.map((r) => r.id || r.applicationId).sort() : res.body);
 
-    test('GET /applications/my, /, /my/statuses (witness throw): A lists per workspace; B sees C\'s filings only where pre-R1 relaxed; S nothing', async () => {
+    test('GET /applications/my, /, /my/statuses (witness throw): A lists both holders\' filings; B sees C\'s; S nothing', async () => {
         setMode('throw');
         for (const path of ['/api/applications/my', '/api/applications/my/statuses', '/api/applications/']) {
             as(fx.A);
-            expect(ids(await get(path, fx.C))).toEqual([fx.appC]);
-            expect(ids(await get(path, fx.P))).toEqual([fx.appP]);
+            expect(ids(await get(path))).toEqual([fx.appC, fx.appP].sort());
+            as(fx.B);
+            expect(ids(await get(path))).toEqual([fx.appC]);
             as(fx.S);
-            expect(ids(await get(path, fx.PS))).toEqual([]);
+            expect(ids(await get(path))).toEqual([]);
         }
-        as(fx.B);
-        // /my and / relaxed to the workspace pre-R1 (buildHealthWhereClause personal:false); /my/statuses pinned the filer.
-        expect(ids(await get('/api/applications/my', fx.C))).toEqual([fx.appC]);
-        expect(ids(await get('/api/applications/', fx.C))).toEqual([fx.appC]);
-        expect(ids(await get('/api/applications/my/statuses', fx.C))).toEqual([]);
         expect(applicationWitnessLogs()).toEqual([]);
     });
 
-    test('GET /applications/draft (witness throw): the caller\'s own open draft within the workspace; B filed none', async () => {
+    test('GET /applications/draft (witness throw): the caller\'s own open draft on a holder it edits; B filed none', async () => {
         setMode('throw');
         as(fx.A);
-        expect((await get('/api/applications/draft', fx.C)).body.data?.id).toBe(fx.appC);
+        expect([fx.appC, fx.appP]).toContain((await get('/api/applications/draft')).body.data?.id);
         as(fx.B);
-        expect((await get('/api/applications/draft', fx.C)).body.data).toBeNull();
+        expect((await get('/api/applications/draft')).body.data).toBeNull();
         as(fx.S);
-        expect((await get('/api/applications/draft', fx.PS)).body.data).toBeNull();
+        expect((await get('/api/applications/draft')).body.data).toBeNull();
         expect(applicationWitnessLogs()).toEqual([]);
     });
 
-    test('GET /applications/bundles/my and /:id (witness throw): the filer\'s bundle, its filings listed as pre-R1 (no nested narrowing in R1)', async () => {
+    test('GET /applications/bundles/my and /:id (witness throw): the filer\'s bundle and its filings (C8)', async () => {
         setMode('throw');
         as(fx.A);
-        const mine = await get('/api/applications/bundles/my', fx.C);
+        const mine = await get('/api/applications/bundles/my');
         expect(mine.status).toBe(200);
         expect(mine.body.data.map((b) => b.id)).toEqual([fx.bundle]);
         expect(mine.body.data[0].applications.map((a) => a.id)).toEqual([fx.appC]);
-        const one = await get(`/api/applications/bundles/${fx.bundle}`, fx.C);
+        const one = await get(`/api/applications/bundles/${fx.bundle}`);
         expect(one.status).toBe(200);
         expect(one.body.data.applications.map((a) => a.id)).toEqual([fx.appC]);
-        // R1: the included filings are not narrowed — pre-R1 never scoped the
-        // include, so the company filing still lists in the personal workspace (Task 9).
-        const personal = await get(`/api/applications/bundles/${fx.bundle}`, fx.P);
-        expect(personal.status).toBe(200);
-        expect(personal.body.data.applications.map((a) => a.id)).toEqual([fx.appC]);
         // B does not own the bundle (C8: bundles stay with their filer).
         as(fx.B);
-        expect((await get(`/api/applications/bundles/${fx.bundle}`, fx.C)).status).toBe(404);
+        expect((await get(`/api/applications/bundles/${fx.bundle}`)).status).toBe(404);
         expect(applicationWitnessLogs()).toEqual([]);
     });
 
@@ -266,24 +252,26 @@ d('Application health reads carry the holder fragment (real Postgres, real middl
     ];
 
     describe.each(shadowDoors)('%s (witness shadow)', (_name, path) => {
-        test('A in workspace C is not refused; B (R1 filer pin) and S get 404; no unscoped Application read', async () => {
+        test('A and co-member B are not refused; stranger S gets 404; no unscoped Application read', async () => {
             as(fx.A);
-            expect((await get(path(fx.appC), fx.C)).status).not.toBe(404);
+            expect((await get(path(fx.appC))).status).not.toBe(404);
             as(fx.B);
-            expect((await get(path(fx.appC), fx.C)).status).toBe(404);
+            expect((await get(path(fx.appC))).status).not.toBe(404);
             as(fx.S);
-            expect((await get(path(fx.appC), fx.PS)).status).toBe(404);
+            expect((await get(path(fx.appC))).status).toBe(404);
             expect(applicationWitnessLogs()).toEqual([]);
         });
     });
 
     test('GET /dashboard/stats (witness shadow): the application count follows the holder scope, no unscoped Application read', async () => {
         as(fx.A);
-        const res = await get('/api/dashboard/stats', fx.C);
+        const res = await get('/api/dashboard/stats');
         expect(res.status).toBe(200);
-        expect(res.body.data.totalApplications).toBe(1);
+        expect(res.body.data.totalApplications).toBe(2);
+        as(fx.B);
+        expect((await get('/api/dashboard/stats')).body.data.totalApplications).toBe(1);
         as(fx.S);
-        expect((await get('/api/dashboard/stats', fx.PS)).body.data.totalApplications).toBe(0);
+        expect((await get('/api/dashboard/stats')).body.data.totalApplications).toBe(0);
         expect(applicationWitnessLogs()).toEqual([]);
     });
 
@@ -295,7 +283,7 @@ d('Application health reads carry the holder fragment (real Postgres, real middl
         const { holderScope } = require('../../services/holder-access');
 
         /** Run `fn(scope, req)` inside one request through the real middlewares. */
-        async function inRequest(user, entityId, fn) {
+        async function inRequest(user, fn) {
             const probe = express();
             let out;
             let failure = null;
@@ -304,47 +292,47 @@ d('Application health reads carry the holder fragment (real Postgres, real middl
                 res.json({ ok: true });
             });
             as(user);
-            await request(probe).get('/probe').set({ 'x-active-entity-id': entityId });
+            await request(probe).get('/probe');
             if (failure) { throw failure; }
             return out;
         }
 
-        // Each caller passes its own filer identity for the R1 pin, as the doors do.
-        const byIdCalls = (user) => (scope) => Promise.all([
-            applicationService.findForPaymentOwnership(fx.appC, { holderScope: scope, filerHealthId: user.canonicalId }),
-            applicationService.findOwnedApplicationForApplicant(fx.appC, { holderScope: scope, filerUserId: user.id }),
-            applicationService.findApplicationByIdForHealth(fx.appC, { holderScope: scope, filerHealthId: user.canonicalId }),
+        // R2 Task 12: every by-id method carries the fragment alone.
+        const byIdCalls = () => (scope) => Promise.all([
+            applicationService.findForPaymentOwnership(fx.appC, { holderScope: scope }),
+            applicationService.findOwnedApplicationForApplicant(fx.appC, { holderScope: scope }),
+            applicationService.findApplicationByIdForHealth(fx.appC, { holderScope: scope }),
         ]);
 
-        test('the filer A reads appC through each by-id method; co-member B and stranger S read none (R1 filer pin); no unscoped Application read', async () => {
+        test('the filer A and the co-member B read appC through each by-id method; stranger S reads none; no unscoped Application read', async () => {
             setMode('throw');
-            const asA = await inRequest(fx.A, fx.C, byIdCalls(fx.A));
-            expect(asA.map((row) => row && row.id)).toEqual([fx.appC, fx.appC, fx.appC]);
-            expect(await inRequest(fx.B, fx.C, byIdCalls(fx.B))).toEqual([null, null, null]);
-            expect(await inRequest(fx.S, fx.PS, byIdCalls(fx.S))).toEqual([null, null, null]);
+            expect((await inRequest(fx.A, byIdCalls())).map((row) => row && row.id)).toEqual([fx.appC, fx.appC, fx.appC]);
+            expect((await inRequest(fx.B, byIdCalls())).map((row) => row && row.id)).toEqual([fx.appC, fx.appC, fx.appC]);
+            expect(await inRequest(fx.S, byIdCalls())).toEqual([null, null, null]);
             expect(applicationWitnessLogs()).toEqual([]);
         });
 
-        test('latest open draft is the filer\'s (pre-R1 healthId pin): A → appC in C, B → null', async () => {
+        test('latest open draft is the caller\'s own on a holder it edits: A → one of its drafts, B → null', async () => {
             setMode('throw');
-            const latest = (user) => (scope) => applicationService.findLatestOpenDraftForHealth({ holderScope: scope, filerHealthId: user.canonicalId });
-            expect((await inRequest(fx.A, fx.C, latest(fx.A)))?.id).toBe(fx.appC);
-            expect(await inRequest(fx.B, fx.C, latest(fx.B))).toBeNull();
+            // R2 Task 8 (spec §3.2 resume): the caller's own draft, on a holder it may edit.
+            const latest = (user) => (scope) => applicationService.findLatestOpenDraftForHealth({
+                holderScope: scope, submitterId: user.id, editIds: scope.editIds,
+            });
+            expect([fx.appC, fx.appP]).toContain((await inRequest(fx.A, latest(fx.A)))?.id);
+            expect(await inRequest(fx.B, latest(fx.B))).toBeNull();
             expect(applicationWitnessLogs()).toEqual([]);
         });
 
-        test('deleteDraft keeps the strict filer pin AND the fragment: B cannot delete appC; nothing is deleted', async () => {
+        test('deleteDraft (R2 Task 9, spec §3.3): B (MANAGER, not creator) is refused 403, S sees nothing; nothing is deleted', async () => {
             setMode('throw');
             const del = (user) => (scope) => applicationService.deleteDraft(user.id, fx.appC, { holderScope: scope });
-            expect(await inRequest(fx.B, fx.C, del(fx.B))).toBeNull();
-            expect(await inRequest(fx.S, fx.PS, del(fx.S))).toBeNull();
-            // A in the personal workspace: the filer pin matches, the fragment does not.
-            expect(await inRequest(fx.A, fx.P, del(fx.A))).toBeNull();
+            await expect(inRequest(fx.B, del(fx.B))).rejects.toMatchObject({ statusCode: 403, code: 'ENTITY_PERMISSION_DENIED' });
+            expect(await inRequest(fx.S, del(fx.S))).toBeNull();
             const row = await raw.application.findUnique({ where: { id: fx.appC }, select: { isDeleted: true } });
             expect(row.isDeleted).toBe(false);
-            // The filer in the holder's workspace still deletes their own draft.
+            // The creator (OWNER) still deletes their own draft.
             const appD = await makeApplication('D', fx.A, fx.C);
-            const deleted = await inRequest(fx.A, fx.C, (scope) => applicationService.deleteDraft(fx.A.id, appD, { holderScope: scope }));
+            const deleted = await inRequest(fx.A, (scope) => applicationService.deleteDraft(fx.A.id, appD, { holderScope: scope }));
             expect(deleted).toEqual({ id: appD });
             expect(applicationWitnessLogs()).toEqual([]);
         });

@@ -12,17 +12,17 @@ const { authenticateHealth } = require('../../../middleware/auth-middleware');
 const upload = require('../../../middleware/upload-middleware');
 const rejectBadUpload = require('../../../middleware/reject-bad-upload');
 const logger = require('../../../shared/logger');
-// Wave B chunk 4 — per-member workspace permission gate (FARM_CREATE).
+const { sendErrorResponse } = require('../../../shared/api-response');
+// A refusal writes nothing: the photo multer already stored is removed again
+// (the same confined unlink the draft-document door uses).
+const { discardRejectedUpload } = require('../../../services/upload-content-guard');
+// FARM_CREATE on the holder the caller names (spec 2026-09-30 §3.2 B7/B8).
 const { assertEntityActionPermission } = require('../../../services/entity-effective-permissions-service');
+const { entityPermissionDeniedBody } = require('../../../shared/entity-permission-denied');
 
 /** Map an ENTITY_PERMISSION_DENIED throw to the canonical 403 body; rethrow others. */
 function respondPermissionDenied(res, error, fallbackPermission) {
-    return res.status(403).json({
-        success: false,
-        code: 'ENTITY_PERMISSION_DENIED',
-        permission: error?.permission || fallbackPermission,
-        error: 'คุณไม่มีสิทธิ์ดำเนินการรายการนี้ในพื้นที่ทำงาน',
-    });
+    return res.status(403).json(entityPermissionDeniedBody(error?.permission || fallbackPermission));
 }
 
 /**
@@ -65,7 +65,9 @@ router.get('/', authenticateHealth, async (req, res) => {
  */
 router.get('/my', authenticateHealth, async (req, res) => {
     try {
-        const farms = await farmService.getByOwner(req.user.id);
+        // Spec 2026-09-30 §3.1: the farms of the caller's holders, whoever created them.
+        const { holderScope } = require('../../../services/holder-access');
+        const farms = await farmService.getByOwner(req.user.id, { holderScope: await holderScope(req) });
         res.json({
             success: true,
             count: farms.length,
@@ -91,7 +93,7 @@ router.get('/my', authenticateHealth, async (req, res) => {
  */
 router.get('/my/eligible-for-planting', authenticateHealth, async (req, res) => {
     try {
-        // Spec 2026-09-30 §3.1 (R1): the certificate read carries the holder scope.
+        // Spec 2026-09-30 §3.1: the certificate read carries the holder scope.
         const { holderScope } = require('../../../services/holder-access');
         const farms = await farmService.getEligibleForPlanting(req.user.id, { holderScope: await holderScope(req) });
         res.json({
@@ -149,7 +151,11 @@ router.get('/:id', authenticateHealth, async (req, res) => {
  *         multipart/form-data:
  *           schema:
  *             type: object
+ *             required: [entityId, farmName, address, province, district, subDistrict]
  *             properties:
+ *               entityId:
+ *                 type: string
+ *                 description: The farm's holder, one of GET /api/entities/mine with can.createFarm. Missing → 400 APPLICATION_HOLDER_REQUIRED; no FARM_CREATE on it → 403 ENTITY_PERMISSION_DENIED.
  *               farmName:
  *                 type: string
  *               address:
@@ -159,41 +165,48 @@ router.get('/:id', authenticateHealth, async (req, res) => {
  *                 format: binary
  */
 router.post('/', authenticateHealth, upload.single('evidence_photo'), rejectBadUpload, async (req, res) => {
+    let created = false;
     try {
         const { farmName, address, province, district, subDistrict } = req.body;
 
         if (!farmName || !address || !province || !district || !subDistrict) {
+            await discardRejectedUpload(req.file);
             return res.status(400).json({
                 success: false,
                 message: 'Missing required fields',
             });
         }
 
-        // Wave B chunk 4 — FARM_CREATE gate, WORKSPACE context only. Rule (b):
-        // personal context (solo farmer / owner under their own personal
-        // INDIVIDUAL entity) and no-context callers stay byte-identical —
-        // only an explicit workspace (personal:false) is permission-gated.
-        if (req.activeEntity?.entityId && req.activeEntity.personal !== true) {
-            try {
-                await assertEntityActionPermission({
-                    entityId: req.activeEntity.entityId,
-                    userId: req.user.id,
-                    permission: 'FARM_CREATE',
-                });
-            } catch (permError) {
-                if (permError?.code === 'ENTITY_PERMISSION_DENIED') {
-                    return respondPermissionDenied(res, permError, 'FARM_CREATE');
-                }
-                throw permError;
-            }
+        // R2 Task 10 (spec 2026-09-30-remove-workspace-mode §3.2 "Farm create
+        // (B7/B8)"): the caller names the holder in body.entityId. There is no
+        // default: neither the active-entity header nor the personal entity is
+        // a fallback. The copy names step 1 because the farm form shows the
+        // same holder picker.
+        const entityId = String(req.body?.entityId || '').trim();
+        if (!entityId) {
+            await discardRejectedUpload(req.file);
+            return sendErrorResponse(res, req, { status: 400, code: 'APPLICATION_HOLDER_REQUIRED' });
         }
 
-        // Wave A chunk 2 — thread the active workspace so the farm joins the
-        // entity dimension (default = personal INDIVIDUAL entity, resolved by
-        // active-entity-middleware when no x-active-entity-id header is sent).
-        const farm = await farmService.createFarm(req.user.id, req.body, req.file, {
-            entityId: req.activeEntity?.entityId || null,
-        });
+        // FARM_CREATE is checked on that entity every time, the personal entity
+        // included: its OWNER holds FARM_CREATE by role, a MANAGER does not, and
+        // a non-member holds nothing (the engine fails closed).
+        try {
+            await assertEntityActionPermission({
+                entityId,
+                userId: req.user.id,
+                permission: 'FARM_CREATE',
+            });
+        } catch (permError) {
+            if (permError?.code === 'ENTITY_PERMISSION_DENIED') {
+                await discardRejectedUpload(req.file);
+                return respondPermissionDenied(res, permError, 'FARM_CREATE');
+            }
+            throw permError;
+        }
+
+        const farm = await farmService.createFarm(req.user.id, req.body, req.file, { entityId });
+        created = true;
 
         logger.info(`[Farms] Farm created: ${farm.id} by user ${req.user.id}`);
 
@@ -203,6 +216,9 @@ router.post('/', authenticateHealth, upload.single('evidence_photo'), rejectBadU
             data: farm,
         });
     } catch (error) {
+        if (!created) {
+            await discardRejectedUpload(req.file);
+        }
         logger.error('[Farms] Error creating farm:', error);
         res.status(500).json({ success: false, error: 'Failed to create farm' });
     }

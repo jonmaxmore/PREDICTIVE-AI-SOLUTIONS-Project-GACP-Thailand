@@ -208,7 +208,7 @@ describe('/api/auth/health/[...path] proxy', () => {
         expect(response.headers.get('set-cookie')).toBe('auth_token=new-session-token; HttpOnly; Path=/');
     });
 
-    it('forwards the x-active-entity-id header to the backend (B1 — workspace-switching bug)', async () => {
+    it('the proxy does not forward x-active-entity-id', async () => {
         const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
         fetchMock.mockResolvedValue(
             new Response(JSON.stringify({ success: true }), {
@@ -228,7 +228,7 @@ describe('/api/auth/health/[...path] proxy', () => {
 
         await callGet(request);
 
-        expect(headersOf(fetchMock)['x-active-entity-id']).toBe('ent-juristic-789');
+        expect(headersOf(fetchMock)['x-active-entity-id']).toBeUndefined();
     });
 
     it('returns 503 BACKEND_UNREACHABLE without leaking the raw error.message when the backend is unreachable', async () => {

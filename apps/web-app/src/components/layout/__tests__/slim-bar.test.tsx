@@ -73,10 +73,9 @@ jest.mock('@/lib/services/auth-service', () => ({
   },
 }));
 
-// Footer/EntitySwitcher pull in env + entity hooks that don't matter here —
+// Footer pulls in env hooks that don't matter here —
 // same stub pattern as dashboard-layout-bell.test.tsx.
 jest.mock('@/components/layout/Footer', () => ({ Footer: () => null }));
-jest.mock('@/components/layout/entity-switcher', () => ({ EntitySwitcher: () => null }));
 
 // Mirrors healthNavigation (constants.ts) — the real prop shape
 // health/layout.tsx passes today, so this proves the menu row is gone

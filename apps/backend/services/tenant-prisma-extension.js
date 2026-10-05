@@ -51,7 +51,6 @@
  */
 
 const { getTenantContext, isWithoutTenantScope } = require('./tenant-context');
-const { getEntityContext } = require('./entity-context');
 const { emitMissingContext, emitWouldBeBlocked } = require('./rls-shadow-metrics');
 const { checkHolderScoped } = require('./holder-read-witness');
 
@@ -205,37 +204,6 @@ function isTenantScoped(modelName) {
 }
 
 /**
- * Entity-scoped Prisma model names — Wave C, PR C-2.
- *
- * Models that carry an `entityId` FK pointing at the legal-applicant
- * Entity (separate dimension from Organization). The Prisma extension
- * auto-filters reads on these models by `entityId = activeEntity.id`
- * when an active-entity context is bound to the request — a row-level
- * read filter for the entity dimension.
- *
- * Conservative first pass: only Application and Farm. Certificate is
- * transitively scoped via Application.entityId so doesn't need direct
- * filtering. EntityMembership is intentionally NOT scoped because the
- * picker UI lists memberships across entities by design. TraceQrSecurity
- * has an `entityId` column but it's polymorphic
- * (entityType=HARVEST_BATCH/PACKAGING_LOT/PLANT_UNIT) — different sense
- * of "entity", not the legal-applicant Entity, so left out.
- *
- * Adding a new model here? Make sure every existing call site that
- * reads it is OK with implicit entityId filtering — handlers that
- * legitimately need to read across entities must wrap their Prisma
- * calls in withoutEntityScope().
- */
-const ENTITY_SCOPED_MODELS = new Set([
-  'Application', // applications
-  'Farm',        // farms
-]);
-
-function isEntityScoped(modelName) {
-  return ENTITY_SCOPED_MODELS.has(modelName);
-}
-
-/**
  * Mutates the data object to add organizationId if missing, or verifies
  * that an existing organizationId matches the current tenant. Returns the
  * (possibly modified) data object.
@@ -313,22 +281,18 @@ function shadowGucEnabled() {
 }
 
 /**
- * Inject row-level read filters into a read op's `args`, per dimension.
- * Both dimensions fail-open: if their context is null, nothing is added.
+ * Inject the row-level read filter into a read op's `args`: the organization
+ * dimension, fail-open when no tenant context is bound. (The Wave C entity
+ * dimension, which overwrote where.entityId with the active workspace, was
+ * removed in R2 Task 12: health reads carry their holder fragment explicitly,
+ * spec 2026-09-30-remove-workspace-mode §3.1.)
  * @param {string} model — Prisma model name
  * @param {object} args — read op args (findMany/findFirst/count)
  * @returns {object} the (possibly modified) args
  */
 function applyReadScopes(model, args) {
   const next = args || {};
-  // 1. entity dimension (Wave C — unchanged behaviour, always on)
-  if (isEntityScoped(model)) {
-    const ectx = getEntityContext();
-    if (ectx) {
-      next.where = { ...(next.where || {}), entityId: ectx.entityId };
-    }
-  }
-  // 2. organization dimension (ENT-01 backstop — flag-gated)
+  // organization dimension (ENT-01 backstop — flag-gated)
   if (orgReadScopeEnabled() && isTenantScoped(model)) {
     const tctx = getTenantContext();
     if (tctx) {
@@ -616,11 +580,10 @@ const tenantInjectExtension = {
         return withShadowGuc(client || getClosureExtendedClient(), getTenantContext(), args, query);
       },
 
-      // Read-side scoping (findMany / findFirst / count). Two INDEPENDENT
-      // dimensions, both fail-open when their context is absent (scripts,
-      // withoutTenantScope, public/unauthenticated reads → getXContext()=null):
-      //   1. entity (entityId)  — Wave C, PR C-2. Always on for ENTITY_SCOPED_MODELS.
-      //   2. organization (organizationId) — ENT-01 data-layer backstop for
+      // Read-side scoping (findMany / findFirst / count). One dimension,
+      // fail-open when its context is absent (scripts, withoutTenantScope,
+      // public/unauthenticated reads → getTenantContext()=null):
+      //   organization (organizationId) — ENT-01 data-layer backstop for
       //      TENANT_SCOPED_MODELS. FLAG-GATED via env TENANT_READ_ORG_SCOPE so it
       //      can be enabled + verified on staging (2-org data) before prod. When
       //      the flag is off this is a strict no-op → behaviour identical to before.
@@ -649,9 +612,9 @@ const tenantInjectExtension = {
       //
       // Read witness (spec 2026-09-30-remove-workspace-mode §3.1): every read
       // hook calls checkHolderScoped FIRST, on the args as they reach this
-      // hook (Prisma's clone of the caller's), before applyReadScopes, whose
-      // entity dimension overwrites where.entityId and would break the value
-      // match against the request's registered holder fragments. Check-only:
+      // hook (Prisma's clone of the caller's), before applyReadScopes adds
+      // anything, so the value match against the request's registered holder
+      // fragments sees the caller's own where. Check-only:
       // in shadow mode (default) it never changes the op; in throw mode it
       // rejects an unscoped health read of a watched model before it runs.
       // findFirstOrThrow / findUniqueOrThrow are hooked for the witness only
@@ -728,8 +691,6 @@ module.exports = {
   tenantInjectExtension,
   isTenantScoped,
   TENANT_SCOPED_MODELS,
-  isEntityScoped,
-  ENTITY_SCOPED_MODELS,
   applyReadScopes,
   orgReadScopeEnabled,
   WOULD_BE_BLOCKED_SCAN_CAP,

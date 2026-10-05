@@ -53,24 +53,18 @@ describe('/api/[...path] generic proxy — transport failure', () => {
 });
 
 /**
- * reports/design-cleanup-2026-08-21/01-IDENTITY-AND-VOCABULARY.md B1 — the
- * real bug behind "farmer can't switch applicant identity". The web app's
- * api-client sends `x-active-entity-id` (apps/web-app/src/lib/api/api-client.ts)
- * so the backend's active-entity middleware
- * (apps/backend/middleware/active-entity-middleware.js) can scope the
- * request to the chosen workspace. This proxy builds its outbound headers
- * from an empty map and only ever copied Content-Type / Authorization /
- * X-User-ID — the header was silently dropped and every request ran as the
- * default (personal) entity no matter what the header said.
+ * R2 (remove workspace mode): the workspace header is retired. The proxy
+ * must not carry `x-active-entity-id` to the backend even if an old browser
+ * tab still sends it.
  */
-describe('/api/[...path] generic proxy — active-entity header forwarding (B1)', () => {
+describe('/api/[...path] generic proxy — retired active-entity header', () => {
   const originalFetch = global.fetch;
   afterEach(() => {
     global.fetch = originalFetch;
     jest.resetAllMocks();
   });
 
-  it('forwards x-active-entity-id to the backend unchanged', async () => {
+  it('the proxy does not forward x-active-entity-id', async () => {
     const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ success: true }), {
@@ -88,24 +82,6 @@ describe('/api/[...path] generic proxy — active-entity header forwarding (B1)'
     await GET(request, { params: Promise.resolve({ path: ['applications', 'my'] }) });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const headers = init.headers as Record<string, string>;
-    expect(headers['x-active-entity-id']).toBe('ent-juristic-123');
-  });
-
-  it('does not invent the header when the caller sent none', async () => {
-    const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
-    );
-    global.fetch = fetchMock;
-
-    const request = new NextRequest('http://localhost:3000/api/applications/my', { method: 'GET' });
-    await GET(request, { params: Promise.resolve({ path: ['applications', 'my'] }) });
-
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
     expect(headers['x-active-entity-id']).toBeUndefined();

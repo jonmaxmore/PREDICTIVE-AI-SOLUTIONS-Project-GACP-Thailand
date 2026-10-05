@@ -9,7 +9,6 @@ const logger = require('../shared/logger');
 const { createApplicationIdentityMethods } = require('./application-service/application-identity-methods');
 const { createApplicationDraftQueryMethods } = require('./application-service/application-draft-query-methods');
 const { createApplicationReviewRevisionMethods } = require('./application-service/application-review-revision-methods');
-const { createApplicationSubmissionMethods } = require('./application-service/application-submission-methods');
 const { createApplicationProviderQueryMethods } = require('./application-service/application-provider-query-methods');
 const { createApplicationApplicantQueryMethods } = require('./application-service/application-applicant-query-methods');
 
@@ -34,11 +33,6 @@ Object.assign(
         feeService,
         sendNotification,
         NotifyType,
-        logger,
-    }),
-    createApplicationSubmissionMethods({
-        prisma,
-        feeService,
         logger,
     }),
     createApplicationProviderQueryMethods({ prisma }),

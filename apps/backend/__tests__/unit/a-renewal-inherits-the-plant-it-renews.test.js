@@ -77,14 +77,15 @@ describe('a succeeding request is judged as the plant its certificate names', ()
         expect(out.dimensions.plantId).toBeUndefined();
     });
 
-    it('ใบรับรองของคนอื่น ไม่ยกพืชมาให้ และคำขอถูกลดเป็นขอใหม่', async () => {
+    // Operator ruling 2026-10-03: a certificate another member of the same holder filed
+    // renews like one's own (same holder + SUBMIT_APPLICATION), so its plant is inherited.
+    it('ใบรับรองที่สมาชิกอื่นของผู้ถือเดียวกันยื่น ต่ออายุได้และยกพืชมาให้', async () => {
         prisma.certificate.findFirst.mockResolvedValue({ ...ACTIVE_CERT, userId: 'someone-else' });
         const out = await resolveLawDimensions({
             prisma, actorUserId: OWNER, filingEntityId: 'entity-holder',
             claimed: { requestType: 'RENEWAL', previousCertificateNumber: ACTIVE_CERT.certificateNumber },
         });
-        expect(out.dimensions.requestType).toBe('NEW');
-        expect(out.dimensions.plantId ?? null).toBeNull();
-        expect(out.notice.code).toBe('PREVIOUS_CERTIFICATE_NOT_YOURS');
+        expect(out.dimensions.requestType).toBe('RENEWAL');
+        expect(out.notice).toBeNull();
     });
 });

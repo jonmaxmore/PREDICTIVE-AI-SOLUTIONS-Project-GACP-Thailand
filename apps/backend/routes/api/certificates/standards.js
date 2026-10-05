@@ -70,7 +70,7 @@ router.get('/:code/analyze/:applicationId', authenticateAny, async (req, res) =>
             role: normalizeRole(req.user?.canonicalRole || req.user?.role),
             canonicalId: req.user?.canonicalId,
         };
-        // Spec 2026-09-30 §3.1 (R1): a health caller's read carries its holder scope.
+        // Spec 2026-09-30 §3.1: a health caller reads within its holder scope.
         const holderScope = actor.role === 'health'
             ? await require('../../../services/holder-access').holderScope(req)
             : null;

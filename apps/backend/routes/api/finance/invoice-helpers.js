@@ -37,37 +37,24 @@ async function resolveHealthId(user) {
 /**
  * The invoice behind a health door that hands out a finance document (invoice
  * PDF, receipt / tax invoice), read by holder (spec 2026-09-30-remove-workspace-mode
- * §3.1, Task 5): one findFirst whose where carries the Invoice holder fragment
- * of `scope` (holderScope(req)). A soft-deleted invoice is never returned.
- *
- * Task 12 target: findFirst({ id, isDeleted: false, ...holderReadWhere(scope,
- * 'Invoice') }); no row → 404, for strangers and deleted rows alike.
- *
- * R1 (operator ruling C1) answers exactly as the pre-R1 assertHealthOwnsInvoice
- * (9616ccdf): `r1Owner` ({ userId, healthId }) carries its rule — an ACTIVE
- * EntityMembership, any role, on the application's entity, or with no entity
- * the filer pin — as the registered legacy OR branch and the AND pin; and a
- * live invoice the caller may not read is still 403, a missing or soft-deleted
- * one 404 (R1-legacy-pin, removed in Task 12).
+ * §3.1): one findFirst whose where carries the Invoice holder fragment of
+ * `scope` (holderScope(req)). No row → 404, for strangers, missing and
+ * soft-deleted invoices alike (an existing invoice the caller may not read is
+ * never told apart from a missing one).
  *
  * No holder scope: 404 with no query (fail closed).
  * @param {string} invoiceId
  * @param {{ readIds: string[] }} scope
- * @param {{ r1Owner?: { userId?: string, healthId?: string } }} [options]
  * @returns {Promise<object>} the invoice (billing view)
  */
-async function findHealthInvoice(invoiceId, scope, { r1Owner } = {}) {
+async function findHealthInvoice(invoiceId, scope) {
     const notFound = () => Object.assign(new Error('Invoice not found'), { statusCode: 404 });
     if (!scope || !Array.isArray(scope.readIds)) {
         throw notFound();
     }
-    const invoice = await invoiceService.getForHolder(invoiceId, { scope, r1Owner });
+    const invoice = await invoiceService.getForHolder(invoiceId, { scope });
     if (invoice) {
         return invoice;
-    }
-    // R1-legacy-pin: removed in Task 12 (R2: 404 here, for everyone).
-    if (await invoiceService.r1LiveInvoiceExists(invoiceId)) {
-        throw Object.assign(new Error('Forbidden'), { statusCode: 403 });
     }
     throw notFound();
 }

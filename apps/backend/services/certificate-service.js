@@ -33,6 +33,7 @@ const { addLocalYears } = require('../utils/working-days');
 // holder-access is required lazily: it pulls farm-access and the permission
 // engine, which this widely-required module must not load at require time.
 const holderAccess = () => require('./holder-access');
+const { ERROR_CODES } = require('../shared/error-codes');
 const isHolderScope = (scope) => Boolean(scope) && typeof scope === 'object' && Array.isArray(scope.readIds);
 
 // CERT-01: key namespace for the certificate PKI signature. signWithLocalKey
@@ -1173,15 +1174,10 @@ class CertificateService {
                 throw new Error('listCertificates: userId is required for self scope');
             }
             // Spec 2026-09-30 §3.1: the health 'self' view reads within the holder
-            // scope; R1 keeps the pre-R1 `{ userId }` pin as the AND member. No
-            // holder scope fails closed (no query).
+            // scope. No holder scope fails closed (no query).
             if (!isHolderScope(holderScope)) { return []; }
-            const { r1HolderOrLegacy, r1LegacyApplicantPin } = holderAccess();
             where = {
-                // R1-legacy-pin: removed in Task 12 (→ holderReadWhere). The pre-R1 pin
-                // decides the rows; the OR carries the fragment for the witness.
-                ...r1HolderOrLegacy(holderScope, 'Certificate', { userId }),
-                ...r1LegacyApplicantPin({ userId }),
+                ...holderAccess().holderReadWhere(holderScope, 'Certificate'),
                 isDeleted: false,
             };
         } else if (!crossTenant && organizationId) {
@@ -1191,34 +1187,28 @@ class CertificateService {
         return prisma.certificate.findMany({
             where,
             orderBy: { issuedDate: 'desc' },
-            take,
+            take, ...(scope === 'self' ? { include: { application: { select: { entityId: true } } } } : {}),
         });
     }
 
     /**
      * Health-user "my certificates" view, including application number for UI.
      *
-     * Spec 2026-09-30 §3.1: read within the caller's holder scope. R1 (operator
-     * ruling C1, Task 4 fix round 1): the pre-R1 filer pin `{ userId }` alone
-     * decided these rows (Certificate is outside the ALS entity dimension), so
-     * the where is `{ OR: [fragment, legacy pin], AND: [pin] }` = the pre-R1 rows
-     * exactly, even for a filer whose membership was revoked.
+     * Spec 2026-09-30 §3.1: the certificates of every holder the caller is an
+     * ACTIVE member of (no filer pin: a revoked membership takes them away).
      * No scope (or a positional userId) fails closed: no query.
      * @param {{ userId: string, readIds: string[] }} scope
      */
     async listCertificatesForUser(scope) {
         if (!isHolderScope(scope)) { return []; }
-        const { r1HolderOrLegacy, r1LegacyApplicantPin } = holderAccess();
         return prisma.certificate.findMany({
             where: {
-                // R1-legacy-pin: removed in Task 12 (→ holderReadWhere)
-                ...r1HolderOrLegacy(scope, 'Certificate', { userId: scope.userId }),
-                ...r1LegacyApplicantPin({ userId: scope.userId }),
+                ...holderAccess().holderReadWhere(scope, 'Certificate'),
                 isDeleted: false,
             },
             orderBy: { issuedDate: 'desc' },
             include: {
-                application: { select: { applicationNumber: true } },
+                application: { select: { applicationNumber: true, entityId: true } },
             },
         });
     }
@@ -1227,20 +1217,16 @@ class CertificateService {
      * Fetch one certificate by id within the caller's holder scope.
      * Returns null when the certificate is missing OR outside the scope, so the
      * caller cannot distinguish "deleted" from "not yours" — preventing
-     * id-enumeration / IDOR side-channels. R1: the pre-R1 `{ userId }` pin decides
-     * (see listCertificatesForUser).
+     * id-enumeration / IDOR side-channels.
      * @param {string} certificateId
      * @param {{ userId: string, readIds: string[] }} scope
      */
     async getCertificateForUser(certificateId, scope, { select, include } = {}) {
         if (!certificateId || !isHolderScope(scope)) {return null;}
-        const { r1HolderOrLegacy, r1LegacyApplicantPin } = holderAccess();
         const query = {
             where: {
                 id: certificateId,
-                // R1-legacy-pin: removed in Task 12 (→ holderReadWhere)
-                ...r1HolderOrLegacy(scope, 'Certificate', { userId: scope.userId }),
-                ...r1LegacyApplicantPin({ userId: scope.userId }),
+                ...holderAccess().holderReadWhere(scope, 'Certificate'),
                 isDeleted: false,
             },
         };
@@ -2302,9 +2288,7 @@ class CertificateService {
         // within the same holder scope; the worker and staff callers keep findUnique.
         const cert = isHolderScope(holderScope)
             ? await prisma.certificate.findFirst({
-                // R1-legacy-pin: removed in Task 12 (→ holderReadWhere): the id the door
-                // already resolved decides, as the pre-R1 findUnique did.
-                where: { id: certificateId, ...holderAccess().r1HolderOrLegacy(holderScope, 'Certificate', { id: certificateId }) },
+                where: { id: certificateId, ...holderAccess().holderReadWhere(holderScope, 'Certificate') },
             })
             : await prisma.certificate.findUnique({ where: { id: certificateId } });
         if (!cert) { throw new Error('Certificate not found'); }
@@ -2414,17 +2398,16 @@ function resolveHolderForIssuance(app, farm) {
     const declaredType = String(app?.formData?.applicantType || '').trim().toUpperCase();
     if (declaredType === 'JURISTIC' || declaredType === 'COMMUNITY_ENTERPRISE') {
         if (!entity || String(entity.type || '').toUpperCase() !== declaredType) {
-            const wording = declaredType === 'JURISTIC' ? 'นิติบุคคล' : 'วิสาหกิจชุมชน';
             logger.error(
                 `[Certificate] Application ${app?.applicationNumber || app?.id} declares ${declaredType} `
                 + `but its entity is ${entity ? entity.type : 'none'} — issuance REFUSED (fail-closed)`,
                 { applicationId: app?.id || null },
             );
-            const err = new Error(
-                `ไม่สามารถออกใบรับรองได้ เนื่องจากคำขอนี้ระบุผู้ยื่นเป็น${wording} `
-                + `แต่ยื่นในนามบุคคล ผู้ถือใบรับรองต้องเป็น${wording}เอง `
-                + `กรุณาสร้างหรือสลับไปพื้นที่ทำงาน${wording} แล้วยื่นคำขอในพื้นที่นั้น`,
-            );
+            // Issuance runs on a reviewed application, not a draft, and the reader of this
+            // 422 is usually staff: the issuance-stage copy is its own catalogue entry
+            // (coordinator ruling 2026-10-03, R2 Task 10 round 2). The pre-submit copy
+            // (application-requirements-service.holderMismatchIssue) is a different message.
+            const err = new Error(ERROR_CODES.CERTIFICATE_HOLDER_MISMATCH.messageTh);
             err.code = 'CERTIFICATE_HOLDER_MISMATCH';
             err.statusCode = 422;
             err.declaredApplicantType = declaredType;

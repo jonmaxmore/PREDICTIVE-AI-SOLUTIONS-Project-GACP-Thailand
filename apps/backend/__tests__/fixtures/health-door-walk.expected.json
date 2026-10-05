@@ -52,7 +52,8 @@
   "labels": [
    "D",
    "D2",
-   "X"
+   "X",
+   "Y"
   ]
  },
  "A /api/applications/:applicationId/quotations": {
@@ -134,13 +135,15 @@
  "A /api/applications/draft": {
   "status": 200,
   "labels": [
+   "C",
    "D2"
   ]
  },
  "A /api/applications/draft-documents": {
   "status": 200,
   "labels": [
-   "D2"
+   "D",
+   "draftDoc"
   ]
  },
  "A /api/applications/my": {
@@ -148,7 +151,8 @@
   "labels": [
    "D",
    "D2",
-   "X"
+   "X",
+   "Y"
   ]
  },
  "A /api/applications/my/statuses": {
@@ -156,7 +160,8 @@
   "labels": [
    "D",
    "D2",
-   "X"
+   "X",
+   "Y"
   ]
  },
  "A /api/applications/readiness": {
@@ -216,7 +221,9 @@
    "C",
    "D",
    "D2",
+   "PA",
    "X",
+   "Y",
    "certX",
    "draftDoc",
    "farm",
@@ -260,6 +267,7 @@
  "A /api/certificates/my": {
   "status": 200,
   "labels": [
+   "C",
    "X",
    "certX",
    "farm"
@@ -369,6 +377,7 @@
  "A /api/farms": {
   "status": 200,
   "labels": [
+   "C",
    "farm"
   ]
  },
@@ -392,12 +401,14 @@
  "A /api/farms/my": {
   "status": 200,
   "labels": [
+   "C",
    "farm"
   ]
  },
  "A /api/farms/my/eligible-for-planting": {
   "status": 200,
   "labels": [
+   "C",
    "farm"
   ]
  },
@@ -765,48 +776,64 @@
   ]
  },
  "B /api/applications/:applicationId/quotations": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "quotation"
+  ]
  },
  "B /api/applications/:applicationId/quotations/:issuerType/pdf": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "B /api/applications/:applicationId/statement": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "invoiceX",
+   "quotation",
+   "userA"
+  ]
  },
  "B /api/applications/:id": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X"
+  ]
  },
  "B /api/applications/:id/activities": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "B /api/applications/:id/audit-notes": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X"
+  ]
  },
  "B /api/applications/:id/history": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X"
+  ]
  },
  "B /api/applications/:id/katorlor1": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "B /api/applications/:id/pdf": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "B /api/applications/:id/requirements": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "B /api/applications/:id/status": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X"
+  ]
  },
  "B /api/applications/bundles/:id": {
   "status": 404,
@@ -826,7 +853,10 @@
  },
  "B /api/applications/draft-documents": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "D",
+   "draftDoc"
+  ]
  },
  "B /api/applications/my": {
   "status": 200,
@@ -838,15 +868,22 @@
  },
  "B /api/applications/my/statuses": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "D",
+   "D2",
+   "X"
+  ]
  },
  "B /api/applications/readiness": {
   "status": 200,
   "labels": []
  },
  "B /api/applications/revision-deadline/:applicationId": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "revisionDeadline"
+  ]
  },
  "B /api/audits/site-analysis": {
   "status": 403,
@@ -896,19 +933,34 @@
  },
  "B /api/certificates": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "X",
+   "certX",
+   "farm",
+   "userA"
+  ]
  },
  "B /api/certificates/:id": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "certX",
+   "farm",
+   "userA"
+  ]
  },
  "B /api/certificates/:id/download": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "B /api/certificates/my": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "C",
+   "X",
+   "certX",
+   "farm"
+  ]
  },
  "B /api/consent": {
   "status": 200,
@@ -959,11 +1011,17 @@
  },
  "B /api/documents": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "D",
+   "draftDoc"
+  ]
  },
  "B /api/documents/:id": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "D",
+   "draftDoc"
+  ]
  },
  "B /api/entities/:id": {
   "status": 200,
@@ -1004,6 +1062,7 @@
  "B /api/farms": {
   "status": 200,
   "labels": [
+   "C",
    "farm"
   ]
  },
@@ -1027,12 +1086,14 @@
  "B /api/farms/my": {
   "status": 200,
   "labels": [
+   "C",
    "farm"
   ]
  },
  "B /api/farms/my/eligible-for-planting": {
   "status": 200,
   "labels": [
+   "C",
    "farm"
   ]
  },
@@ -1041,7 +1102,7 @@
   "labels": []
  },
  "B /api/finance/credit-notes": {
-  "status": 403,
+  "status": 200,
   "labels": []
  },
  "B /api/finance/issuers/by-service-type/:serviceType": {
@@ -1090,24 +1151,33 @@
   "labels": []
  },
  "B /api/lots/:id": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "batch",
+   "cycle",
+   "farm",
+   "lot",
+   "userA"
+  ]
  },
  "B /api/lots/:id/label": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "B /api/lots/:id/qr": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "B /api/lots/:id/qr/print": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "B /api/lots/batch/:batchId": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "batch",
+   "lot"
+  ]
  },
  "B /api/mfa/status": {
   "status": 200,
@@ -1146,7 +1216,9 @@
  },
  "B /api/planting-cycles/capacity/summary": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "farm"
+  ]
  },
  "B /api/planting-cycles/my": {
   "status": 200,
@@ -1160,12 +1232,18 @@
   ]
  },
  "B /api/preview/applications/:id/preview": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "D",
+   "draftDoc"
+  ]
  },
  "B /api/quotes/my": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "X",
+   "quote"
+  ]
  },
  "B /api/report-submissions": {
   "status": 200,
@@ -1177,15 +1255,20 @@
  },
  "B /api/report-submissions/schedule": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "certX"
+  ]
  },
  "B /api/report-submissions/types": {
   "status": 200,
   "labels": []
  },
  "B /api/revision-deadline/:applicationId": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "revisionDeadline"
+  ]
  },
  "B /api/seed-sources/cycle/:cycleId": {
   "status": 200,
@@ -1230,8 +1313,11 @@
   "labels": []
  },
  "B /api/standards/:code/analyze/:applicationId": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "standardCode"
+  ]
  },
  "B /api/surveys/active": {
   "status": 200,
@@ -1397,8 +1483,10 @@
   "labels": []
  },
  "S /api/applications/draft-documents": {
-  "status": 200,
-  "labels": []
+  "status": 404,
+  "labels": [
+   "D"
+  ]
  },
  "S /api/applications/my": {
   "status": 200,
@@ -1433,11 +1521,11 @@
   "labels": []
  },
  "S /api/audits/site-analysis/farm/:farmId": {
-  "status": 403,
+  "status": 404,
   "labels": []
  },
  "S /api/audits/site-analysis/farm/:farmId/latest": {
-  "status": 403,
+  "status": 404,
   "labels": []
  },
  "S /api/auth/health/me": {
@@ -1595,7 +1683,7 @@
   "labels": []
  },
  "S /api/invoices/:invoiceId/pdf": {
-  "status": 403,
+  "status": 404,
   "labels": []
  },
  "S /api/invoices/my": {
@@ -1603,7 +1691,7 @@
   "labels": []
  },
  "S /api/invoices/my/:invoiceId/receipt/pdf": {
-  "status": 403,
+  "status": 404,
   "labels": []
  },
  "S /api/lots/:id": {
@@ -1715,11 +1803,11 @@
   "labels": []
  },
  "S /api/site-analyses/farm/:farmId": {
-  "status": 403,
+  "status": 404,
   "labels": []
  },
  "S /api/site-analyses/farm/:farmId/latest": {
-  "status": 403,
+  "status": 404,
   "labels": []
  },
  "S /api/sop-documents": {
@@ -1767,19 +1855,19 @@
   "labels": []
  },
  "S /api/training-records/farm/:farmId": {
-  "status": 403,
+  "status": 404,
   "labels": []
  },
  "S /api/training-records/farm/:farmId/compliance": {
-  "status": 403,
+  "status": 404,
   "labels": []
  },
  "S /api/training-records/farm/:farmId/personnel": {
-  "status": 403,
+  "status": 404,
   "labels": []
  },
  "S /api/training-records/farm/:farmId/summary": {
-  "status": 403,
+  "status": 404,
   "labels": []
  },
  "S /api/water-sources/plot/:plotId": {
@@ -1839,48 +1927,64 @@
   ]
  },
  "V /api/applications/:applicationId/quotations": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "quotation"
+  ]
  },
  "V /api/applications/:applicationId/quotations/:issuerType/pdf": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "V /api/applications/:applicationId/statement": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "invoiceX",
+   "quotation",
+   "userA"
+  ]
  },
  "V /api/applications/:id": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X"
+  ]
  },
  "V /api/applications/:id/activities": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "V /api/applications/:id/audit-notes": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X"
+  ]
  },
  "V /api/applications/:id/history": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X"
+  ]
  },
  "V /api/applications/:id/katorlor1": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "V /api/applications/:id/pdf": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "V /api/applications/:id/requirements": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "V /api/applications/:id/status": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X"
+  ]
  },
  "V /api/applications/bundles/:id": {
   "status": 404,
@@ -1899,8 +2003,10 @@
   "labels": []
  },
  "V /api/applications/draft-documents": {
-  "status": 200,
-  "labels": []
+  "status": 403,
+  "labels": [
+   "D"
+  ]
  },
  "V /api/applications/my": {
   "status": 200,
@@ -1912,15 +2018,22 @@
  },
  "V /api/applications/my/statuses": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "D",
+   "D2",
+   "X"
+  ]
  },
  "V /api/applications/readiness": {
   "status": 200,
   "labels": []
  },
  "V /api/applications/revision-deadline/:applicationId": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "revisionDeadline"
+  ]
  },
  "V /api/audits/site-analysis": {
   "status": 403,
@@ -1970,19 +2083,34 @@
  },
  "V /api/certificates": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "X",
+   "certX",
+   "farm",
+   "userA"
+  ]
  },
  "V /api/certificates/:id": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "certX",
+   "farm",
+   "userA"
+  ]
  },
  "V /api/certificates/:id/download": {
-  "status": 404,
+  "status": 403,
   "labels": []
  },
  "V /api/certificates/my": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "C",
+   "X",
+   "certX",
+   "farm"
+  ]
  },
  "V /api/consent": {
   "status": 200,
@@ -2033,11 +2161,17 @@
  },
  "V /api/documents": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "D",
+   "draftDoc"
+  ]
  },
  "V /api/documents/:id": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "D",
+   "draftDoc"
+  ]
  },
  "V /api/entities/:id": {
   "status": 200,
@@ -2078,6 +2212,7 @@
  "V /api/farms": {
   "status": 200,
   "labels": [
+   "C",
    "farm"
   ]
  },
@@ -2101,12 +2236,14 @@
  "V /api/farms/my": {
   "status": 200,
   "labels": [
+   "C",
    "farm"
   ]
  },
  "V /api/farms/my/eligible-for-planting": {
   "status": 200,
   "labels": [
+   "C",
    "farm"
   ]
  },
@@ -2115,7 +2252,7 @@
   "labels": []
  },
  "V /api/finance/credit-notes": {
-  "status": 403,
+  "status": 200,
   "labels": []
  },
  "V /api/finance/issuers/by-service-type/:serviceType": {
@@ -2164,24 +2301,33 @@
   "labels": []
  },
  "V /api/lots/:id": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "batch",
+   "cycle",
+   "farm",
+   "lot",
+   "userA"
+  ]
  },
  "V /api/lots/:id/label": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "V /api/lots/:id/qr": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "V /api/lots/:id/qr/print": {
-  "status": 404,
+  "status": 200,
   "labels": []
  },
  "V /api/lots/batch/:batchId": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "batch",
+   "lot"
+  ]
  },
  "V /api/mfa/status": {
   "status": 200,
@@ -2220,7 +2366,9 @@
  },
  "V /api/planting-cycles/capacity/summary": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "farm"
+  ]
  },
  "V /api/planting-cycles/my": {
   "status": 200,
@@ -2234,12 +2382,18 @@
   ]
  },
  "V /api/preview/applications/:id/preview": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "D",
+   "draftDoc"
+  ]
  },
  "V /api/quotes/my": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "X",
+   "quote"
+  ]
  },
  "V /api/report-submissions": {
   "status": 200,
@@ -2251,15 +2405,20 @@
  },
  "V /api/report-submissions/schedule": {
   "status": 200,
-  "labels": []
+  "labels": [
+   "certX"
+  ]
  },
  "V /api/report-submissions/types": {
   "status": 200,
   "labels": []
  },
  "V /api/revision-deadline/:applicationId": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "revisionDeadline"
+  ]
  },
  "V /api/seed-sources/cycle/:cycleId": {
   "status": 200,
@@ -2304,8 +2463,11 @@
   "labels": []
  },
  "V /api/standards/:code/analyze/:applicationId": {
-  "status": 404,
-  "labels": []
+  "status": 200,
+  "labels": [
+   "X",
+   "standardCode"
+  ]
  },
  "V /api/surveys/active": {
   "status": 200,

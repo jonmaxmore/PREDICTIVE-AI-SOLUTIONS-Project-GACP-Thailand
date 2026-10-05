@@ -89,12 +89,12 @@ describe('ROLE_CAPABILITY_SUMMARY_TH — derived from the real capability sets, 
 });
 
 describe('eyebrowFor / descriptionFor — no organisation-speak for a personal entity', () => {
-    it('personal → farm-flavoured copy, no bare "Workspace" word', () => {
-        expect(eyebrowFor(true)).not.toMatch(/Workspace/);
+    it('personal → farm-flavoured copy, no entity-register word', () => {
+        expect(eyebrowFor(true)).not.toMatch(/นิติบุคคล/);
         expect(descriptionFor(true, 'เจ้าของ')).toContain('ฟาร์ม');
     });
     it('non-personal (JURISTIC/COMMUNITY) keeps the existing workspace copy', () => {
-        expect(eyebrowFor(false)).toBe('ผู้ขอรับรอง · Workspace');
+        expect(eyebrowFor(false)).toBe('ผู้ขอรับรอง · นิติบุคคลและวิสาหกิจชุมชน');
         expect(descriptionFor(false, 'เจ้าของ')).toContain('จัดการสมาชิก');
     });
 });

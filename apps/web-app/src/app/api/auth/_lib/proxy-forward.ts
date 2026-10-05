@@ -84,19 +84,6 @@ export function buildForwardHeaders(
         headers['x-csrf-token'] = csrfToken;
     }
 
-    // Active-entity (workspace) header — Wave C workspace switcher (design-
-    // cleanup-2026-08-21 audit, B1). apps/web-app/src/lib/api/api-client.ts
-    // sends this so apps/backend/middleware/active-entity-middleware.js can
-    // scope entity-owned reads/writes to the workspace the user picked. This
-    // shared header builder is used by BOTH the auth/health and auth/provider
-    // proxies (src/app/api/auth/health/[...path]/route.ts and
-    // src/app/api/auth/provider/[...path]/route.ts) — same mirror-header gap
-    // as the generic /api/[...path] proxy (route.ts).
-    const activeEntityId = request.headers.get('x-active-entity-id');
-    if (activeEntityId) {
-        headers['x-active-entity-id'] = activeEntityId;
-    }
-
     const xForwardedFor = request.headers.get('x-forwarded-for');
     if (xForwardedFor) {
         headers['X-Forwarded-For'] = xForwardedFor;

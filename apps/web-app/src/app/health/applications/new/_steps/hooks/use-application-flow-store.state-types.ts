@@ -44,6 +44,13 @@ export interface WizardState {
     /** v2 step 1. `serviceType` below is the v1 spelling, kept while drafts drain. */
     requestType: RequestType | null;
     certScope: CertScope | null;
+    /**
+     * Whom the certificate is filed for (R2, spec 2026-09-30 §3.2): the Entity chosen at
+     * step 1. Travels as `entityId` on the first save only and is never re-homed after
+     * create. `applicantType` below is not asked any more: it is the type OF this entity,
+     * written in the same update.
+     */
+    holderEntityId: string | null;
     applicantType: ApplicantHolderType | null;
     /** Required when requestType is RENEWAL or REPLACEMENT — there is a certificate to name. */
     previousCertificateNumber: string | null;

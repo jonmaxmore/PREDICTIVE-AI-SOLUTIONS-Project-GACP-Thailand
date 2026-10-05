@@ -696,8 +696,8 @@ const SOD_DECISION_STATUSES = new Set(['DOC_APPROVED', 'REVISION_REQUESTED', 'AU
  *   rolls the status update back to `fromStatus` and re-throws a wrapped
  *   error so the caller can surface the failure to the auditor.
  * @param {object|null} [args.holderScope] — the health caller's holder scope
- *   (holder-access, spec 2026-09-30 §3.1). When given, the formData pre-read
- *   carries the holder fragment. Staff and system callers omit it.
+ *   (holder-access, spec 2026-09-30 §3.1). When given, the status and formData
+ *   pre-reads carry the holder fragment. Staff and system callers omit it.
  * @returns {Promise<object>} the updated application row
  */
 async function writeApplicationStatus(args) {
@@ -755,10 +755,16 @@ async function writeApplicationStatus(args) {
     // actual status first (one extra SELECT only on that rare shape).
     if (_fenceCandidate && (_fenceFrom === undefined || _fenceFrom === null)) {
         try {
-            const row = await prisma.application.findUnique({
-                where: { id: applicationId },
-                select: { status: true },
-            });
+            // A health caller's read carries its holder fragment (spec 2026-09-30 §3.1).
+            const row = holderScope && Array.isArray(holderScope.readIds)
+                ? await prisma.application.findFirst({
+                    where: { id: applicationId, ...require('./holder-access').holderReadWhere(holderScope, 'Application') },
+                    select: { status: true },
+                })
+                : await prisma.application.findUnique({
+                    where: { id: applicationId },
+                    select: { status: true },
+                });
             _fenceFrom = row?.status ?? null;
         } catch (_e) {
             // Unreadable row → let the UPDATE below surface the real error.
@@ -872,8 +878,7 @@ async function writeApplicationStatus(args) {
                     ? await prisma.application.findFirst({
                         where: {
                             id: applicationId,
-                            // R1-legacy-pin: removed in Task 12 (→ holderReadWhere): the id decides.
-                            ...require('./holder-access').r1HolderOrLegacy(holderScope, 'Application', { id: applicationId }),
+                            ...require('./holder-access').holderReadWhere(holderScope, 'Application'),
                         },
                         select: { formData: true },
                     })

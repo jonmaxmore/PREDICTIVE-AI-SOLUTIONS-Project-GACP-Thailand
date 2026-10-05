@@ -179,7 +179,6 @@ jest.mock('../../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -188,6 +187,11 @@ jest.mock('../../../services/application-service', () => ({
     findUserOrganizationId: jest.fn(),
     getApplicantReadinessSnapshot: jest.fn(),
     getLatestOpenDraftForApplicant: jest.fn(),
+}));
+// R2 Task 8: every draft write names its draft, and the caller edits for its holder.
+jest.mock('../../../services/holder-access', () => ({
+    ...jest.requireActual('../../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['ent-ind'], editIds: ['ent-ind'] })),
 }));
 
 jest.mock('../../../services/entity-service', () => ({
@@ -856,6 +860,7 @@ describe('POST /draft-documents — the pre-check hook', () => {
         const before = listDraftDir();
         const res = await request(buildApp())
             .post('/api/applications/draft-documents')
+            .field('applicationId', APP_INDIVIDUAL)
             .field('slotId', slotId)
             .field('stepKey', 'documents')
             .attach('file', realisticPdf(), { filename: 'deed.pdf', contentType: 'application/pdf' });
@@ -866,8 +871,7 @@ describe('POST /draft-documents — the pre-check hook', () => {
     beforeEach(() => {
         draftDocuments = [];
         applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-        applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
-        applicationService.findLatestOpenDraftForHealth.mockImplementation(async () => ({
+        applicationService.findApplicationByIdForHealth.mockImplementation(async () => ({
             id: APP_INDIVIDUAL,
             applicationNumber: 'APP-2026-000001',
             status: 'DRAFT',

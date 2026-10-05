@@ -43,6 +43,15 @@ const mockFindForPaymentOwnership = jest.fn();
 jest.mock('../../services/application-service', () => ({
     findForPaymentOwnership: (...a) => mockFindForPaymentOwnership(...a),
     resolveHealthIdentity: jest.fn(async () => ({ healthId: 'health-1' })),
+    // R2 Task 9 (merged with main d889cd44): both doors ask the holder gate first.
+    findApplicationHolderForHealth: jest.fn(async (id) => ({ id, entityId: 'ent-1' })),
+}));
+
+// The SUBMIT_APPLICATION gate passes here; this suite is about the price-lock refusal.
+// The gate itself is proven on real Postgres (holder-scope-real-postgres Q3 cases).
+jest.mock('../../services/holder-access', () => ({
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] })),
+    assertHolderCapability: jest.fn(async () => undefined),
 }));
 
 const mockGate = jest.fn(async () => ({ quotation: { id: 'qt-1' }, phase: 'PHASE_1', snapshot: null }));

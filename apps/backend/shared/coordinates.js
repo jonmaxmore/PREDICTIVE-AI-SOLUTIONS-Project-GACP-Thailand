@@ -7,7 +7,7 @@
  *   Two writers of Farm.latitude/longitude were found on 2026-08-27, and neither said
  *   "missing" honestly:
  *
- *     parseFloat(farmData.gpsLat || 0)      — application-submission-methods.js
+ *     parseFloat(farmData.gpsLat || 0)      — application-submission-methods.js (deleted, R2 Task 10)
  *
  *   turns an absent coordinate into 0, and 0°N 0°E is a real point in the Gulf of Guinea.
  *   Every reader downstream — the GPS check-in tolerance, the per-photo distance the

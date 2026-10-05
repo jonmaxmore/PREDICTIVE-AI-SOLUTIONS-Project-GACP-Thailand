@@ -10,7 +10,7 @@
  * ('off' | 'shadow' (default) | 'throw'), read once and cached.
  *
  * These unit tests call the REAL tenantInjectExtension hooks directly, under the
- * REAL tenant/entity AsyncLocalStorage, with the original args. They pin the
+ * REAL tenant AsyncLocalStorage, with the original args. They pin the
  * logic only: Prisma 5.22 clones args before its hooks, and the proof that the
  * witness works on those clones is holder-read-witness-real-postgres.test.js.
  * Pinned here:
@@ -18,8 +18,8 @@
  *   - throw mode rejects with code HEALTH_READ_UNSCOPED before the query runs;
  *   - a registered fragment, a staff principal, no tenant context,
  *     withoutTenantScope, an unwatched model and mode 'off' are all silent;
- *   - the witness reads the where before applyReadScopes rewrites entityId from
- *     the entity ALS (a rewritten where no longer equals the registered fragment);
+ *   - the witness reads the where before applyReadScopes (R2 Task 12: nothing
+ *     rewrites entityId any more; the fragment reaches the query as built);
  *   - canonical form: `in` order ignored, override/deletion/foreign id not;
  *     BigInt handled;
  *   - a fragment built outside the request (or in another) is not registered;
@@ -49,7 +49,6 @@ jest.mock('../../shared/logger', () => {
 });
 
 const { runWithTenantContext, withoutTenantScope, getTenantContext } = require('../../services/tenant-context');
-const { runWithEntityContext } = require('../../services/entity-context');
 const { tenantInjectExtension } = require('../../services/tenant-prisma-extension');
 const { holderReadWhere } = require('../../services/holder-access');
 const { buildFarmAccessWhere } = require('../../services/farm-access');
@@ -284,23 +283,20 @@ describe('value registration', () => {
     });
 });
 
-describe('the witness reads the caller where, before applyReadScopes (entity ALS rewrite)', () => {
-    test.each(['shadow', 'throw'])('%s: a marked Application read under an active entity context counts as scoped', async (mode) => {
+describe('the witness reads the caller where, before applyReadScopes', () => {
+    test.each(['shadow', 'throw'])('%s: a marked Application read counts as scoped, and its entityId reaches the query unchanged', async (mode) => {
         setMode(mode);
         const before = await counterValue('Application', 'findMany');
         const { calls, query } = capture();
-        await health(() => runWithEntityContext(
-            { entityId: 'E1', role: 'OWNER', personal: false },
-            () => hooks.findMany({
-                model: 'Application',
-                args: { where: { ...holderReadWhere(SCOPE, 'Application'), status: 'DRAFT' } },
-                query,
-            }),
-        ));
-        // The extension really rewrote entityId (the ALS dimension is on) ...
+        await health(() => hooks.findMany({
+            model: 'Application',
+            args: { where: { ...holderReadWhere(SCOPE, 'Application'), status: 'DRAFT' } },
+            query,
+        }));
+        // R2 Task 12: no entity dimension rewrites entityId any more ...
         expect(calls).toHaveLength(1);
-        expect(calls[0].where.entityId).toBe('E1');
-        // ... and the witness had already matched the registered fragment.
+        expect(calls[0].where.entityId).toEqual({ in: [...SCOPE.readIds] });
+        // ... and the witness matched the registered fragment.
         expect(await counterValue('Application', 'findMany')).toBe(before);
         expect(witnessLogs()).toHaveLength(0);
     });

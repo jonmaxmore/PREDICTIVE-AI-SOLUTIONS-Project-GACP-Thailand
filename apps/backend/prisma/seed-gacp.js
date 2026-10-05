@@ -694,9 +694,9 @@ async function main() {
         let workspaceNote = '';
         try {
             const { entity, fresh } = await ensurePersonalIndividualEntity({ user: repaired.user });
-            workspaceNote = ` — พื้นที่ทำงานส่วนบุคคล ${entity.id}${fresh ? ' (สร้างใหม่)' : ''}`;
+            workspaceNote = ` — ผู้ถือส่วนบุคคล ${entity.id}${fresh ? ' (สร้างใหม่)' : ''}`;
         } catch (entityError) {
-            workspaceNote = ` — [ข้าม] สร้างพื้นที่ทำงานส่วนบุคคลไม่สำเร็จ: ${entityError.message}`;
+            workspaceNote = ` — [ข้าม] สร้างผู้ถือส่วนบุคคลไม่สำเร็จ: ${entityError.message}`;
         }
         console.log(
             `ผู้ยื่นคำขอ: ${repaired.user.firstName} ${repaired.user.lastName} (${a.healthId})`

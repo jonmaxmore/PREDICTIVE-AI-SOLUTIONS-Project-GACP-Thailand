@@ -2,10 +2,10 @@
  * x6-b.test.tsx — X6-B (Iter X6) regression suite.
  *
  * Pins the contract for the 22 → 0 ESLint warning closure shipped by X6-B
- * across 11 source files. Categories:
+ * across the source files. Categories:
  *
- *   - W5-C `<button>` backdrop + `<div role="dialog">` split on 3 sites
- *       (entity-switcher pending modal, health/payments invoice detail,
+ *   - W5-C `<button>` backdrop + `<div role="dialog">` split
+ *       (health/payments invoice detail,
  *        admin force-status revert modal)
  *   - <div onClick> rows promoted to <button> or augmented with
  *       role=button + onKeyDown (notification-bell, health/notifications)
@@ -44,7 +44,6 @@ function readSource(...segments: string[]): string {
 
 // Source loads — cached at module level.
 
-const ENTITY_SWITCHER_SRC = readSource('components', 'layout', 'entity-switcher.tsx');
 // NOTE: components/ui/notification-bell.tsx was removed — the old bell-dropdown
 // (with per-notification clickable rows) was replaced by a simple
 // navigate-to-/notifications header button in components/layout/dashboard-layout.tsx.
@@ -63,23 +62,6 @@ const AUDIT_LOG_SRC = readSource('app', 'admin', 'audit-log', 'page.tsx');
 // 1. W5-C backdrop split — 3 sites
 
 describe('X6-B / W5-C backdrop split', () => {
-    it('entity-switcher pending-confirmation modal: <button aria-label> backdrop precedes <div role="dialog">', () => {
-        // Outer container is plain (no role, no onClick).
-        expect(ENTITY_SWITCHER_SRC).toMatch(
-            /fixed inset-0 z-\[100\] flex items-center justify-center px-4/,
-        );
-        // Backdrop is a native button with aria-label.
-        expect(ENTITY_SWITCHER_SRC).toMatch(
-            /aria-label="ปิดหน้าต่าง"[\s\S]*className="absolute inset-0 cursor-default bg-black\/60"/,
-        );
-        // Dialog body retains role + aria attributes.
-        expect(ENTITY_SWITCHER_SRC).toMatch(
-            /role="dialog"[\s\S]*aria-modal="true"[\s\S]*aria-labelledby="entity-switch-title"/,
-        );
-        // X6-B annotation tag present.
-        expect(ENTITY_SWITCHER_SRC).toContain('X6-B');
-    });
-
     it('health/payments invoice detail modal: <button> backdrop precedes <div role="dialog">', () => {
         expect(HEALTH_PAY_SRC).toMatch(
             /aria-label="ปิดหน้าต่างรายละเอียดใบแจ้งหนี้"[\s\S]*className="absolute inset-0 cursor-default bg-slate-900\/45"/,

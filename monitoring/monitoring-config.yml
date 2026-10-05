@@ -23,11 +23,6 @@ scrape_configs:
     metrics_path: '/api/metrics'
     scrape_interval: 15s
 
-  # MongoDB Metrics
-  - job_name: 'mongodb'
-    static_configs:
-      - targets: ['mongodb-exporter:9216']
-
   # System Metrics
   - job_name: 'node-exporter'
     static_configs:
@@ -74,7 +69,6 @@ dashboards:
         targets:
           - expr: up{job="gacp-backend"}
           - expr: up{job="gacp-frontend"}
-          - expr: up{job="mongodb"}
 
       # Application Performance
       - title: 'Response Time (95th percentile)'
@@ -127,16 +121,6 @@ groups:
         annotations:
           summary: 'GACP Backend service is down'
           description: 'GACP Backend service has been down for more than 1 minute'
-
-      - alert: GACPDatabaseDown
-        expr: up{job="mongodb"} == 0
-        for: 2m
-        labels:
-          severity: critical
-          service: database
-        annotations:
-          summary: 'GACP Database is unreachable'
-          description: 'MongoDB database has been unreachable for more than 2 minutes'
 
       # Performance Alerts
       - alert: GACPHighResponseTime

@@ -9,10 +9,9 @@
  * page read `._id`, and a previous version that read `.id` got undefined, a
  * permanent spinner and colliding React keys.
  *
- * But the lock was holding the WRONG NAME in place. `_id` is MongoDB's primary
- * key convention; this application stores nothing in MongoDB. The database has
- * no `_id` column anywhere (checked: information_schema, 0 rows) and neither does
- * the Prisma schema — the name existed only on the wire, and only because five
+ * But the lock was holding the WRONG NAME in place. Every record's key is `id`.
+ * The PostgreSQL database has no `_id` column anywhere (checked:
+ * information_schema, 0 rows) and neither does the Prisma schema — the name existed only on the wire, and only because five
  * route handlers spelled it that way. Operator ordered it removed root and branch
  * on 2026-09-05.
  *
@@ -26,7 +25,7 @@
 
 const { mapHealthApplication } = require('../../routes/api/helpers/applications-helpers');
 
-describe('mapHealthApplication emits `id`, and never MongoDB\'s `_id`', () => {
+describe('mapHealthApplication emits `id`, and never `_id`', () => {
     const row = {
         id: 'app-uuid-123',
         applicationNumber: 'GACP-2569-0001',
@@ -47,7 +46,7 @@ describe('mapHealthApplication emits `id`, and never MongoDB\'s `_id`', () => {
         expect(mapped.id).toBe('app-uuid-123');
     });
 
-    test('does NOT expose `_id` — the Mongo name is gone, not aliased', () => {
+    test('does NOT expose `_id` — the old name is gone, not aliased', () => {
         // Emitting BOTH is what let the wrong name survive for months: every
         // consumer picked one at random and the duplicate looked harmless.
         const mapped = mapHealthApplication(row);

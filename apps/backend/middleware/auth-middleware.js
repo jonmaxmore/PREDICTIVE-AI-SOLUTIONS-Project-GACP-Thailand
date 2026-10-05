@@ -20,7 +20,6 @@ const logger = createLogger('auth-middleware');
 const jwtConfig = require('../config/jwt-security');
 const { normalizeRole, isProviderRole, CANONICAL_ROLES } = require('../shared/canonical-rbac');
 const { tenantContextMiddleware } = require('./tenant-context-middleware');
-const { activeEntityMiddleware } = require('./active-entity-middleware');
 const { isAccessTokenBlocklisted } = require('../services/token-revocation-service');
 // Sprint 6 B-C1: middleware fetches healthId/providerId from DB after JWT
 // verify (those columns were removed from the JWT payload). Use the named
@@ -38,14 +37,10 @@ const { isTokenBeforeSessionEpoch } = require('../utils/session-epoch');
 // tenant scope for the rest of the request. See ADR-014.
 const bindTenant = tenantContextMiddleware();
 
-// Wave C — runs AFTER bindTenant. Binds the active-entity scope from
-// the `x-active-entity-id` header (or falls back to the user's personal
-// INDIVIDUAL Entity). Powers the read-side Prisma extension that
-// auto-filters Application/Farm queries by entityId.
-const bindActiveEntity = activeEntityMiddleware();
-function bindScopes(req, res, next) {
-  return bindTenant(req, res, () => bindActiveEntity(req, res, next));
-}
+// The only per-request scope is the tenant. There is no active workspace:
+// health reads follow the caller's holder memberships, computed per request
+// by services/holder-access.js (spec 2026-09-30-remove-workspace-mode, R2 Task 12).
+const bindScopes = bindTenant;
 
 // Safe load of JWT configuration
 let JWT_CONFIG;

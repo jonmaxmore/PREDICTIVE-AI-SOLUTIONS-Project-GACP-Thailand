@@ -41,7 +41,6 @@ jest.mock('../../services/application-service', () => ({
     deleteDraft: jest.fn(),
     findApplicationByIdForHealth: jest.fn(),
     findLatestOpenDraftForHealth: jest.fn(),
-    findPersonalEntityForHealthIdentity: jest.fn(),
     healDraftEntityColumns: jest.fn(),
     createDraftForHealth: jest.fn(),
     updateApplicantDraftColumns: jest.fn(),
@@ -50,6 +49,11 @@ jest.mock('../../services/application-service', () => ({
     findUserOrganizationId: jest.fn(),
     getApplicantReadinessSnapshot: jest.fn(),
     getLatestOpenDraftForApplicant: jest.fn(),
+}));
+// R2 Task 8: every draft write names its draft, and the caller edits for its holder.
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['ent-1'], editIds: ['ent-1'] })),
 }));
 
 jest.mock('../../services/entity-service', () => ({
@@ -173,8 +177,7 @@ function captureNewFiles(before) {
 beforeEach(() => {
     jest.clearAllMocks();
     applicationService.resolveHealthIdentity.mockResolvedValue({ userId: 'user-1', healthId: 'health-1' });
-    applicationService.findApplicationByIdForHealth.mockResolvedValue(null);
-    applicationService.findLatestOpenDraftForHealth.mockResolvedValue({
+    applicationService.findApplicationByIdForHealth.mockResolvedValue({
         id: 'app-1',
         applicationNumber: 'APP-2026-000001',
         status: 'DRAFT',
@@ -197,6 +200,7 @@ describe('POST /draft-documents — the walk pixel', () => {
         const before = listDraftDir();
         const res = await request(buildApp())
             .post('/api/applications/draft-documents')
+            .field('applicationId', 'app-1')
             .field('slotId', 'LICENCE_PT11')
             .field('stepKey', 'documents')
             .attach('file', WALK_PIXEL_PNG, { filename: 'pixel.png', contentType: 'image/png' });
@@ -215,6 +219,7 @@ describe('POST /draft-documents — the walk pixel', () => {
         const before = listDraftDir();
         const res = await request(buildApp())
             .post('/api/applications/draft-documents')
+            .field('applicationId', 'app-1')
             .field('slotId', 'EXTERIOR_PHOTOS')
             .attach('file', WALK_PIXEL_PNG, { filename: 'pixel.png', contentType: 'image/png' });
 
@@ -234,6 +239,7 @@ describe('POST /draft-documents — a sender who lies about the file', () => {
         const bigPng = Buffer.concat([WALK_PIXEL_PNG, Buffer.alloc(60000, 0x00)]);
         const res = await request(buildApp())
             .post('/api/applications/draft-documents')
+            .field('applicationId', 'app-1')
             .field('slotId', 'LICENCE_PT11')
             .attach('file', bigPng, { filename: 'deed.pdf', contentType: 'application/pdf' });
 
@@ -247,6 +253,7 @@ describe('POST /draft-documents — a sender who lies about the file', () => {
         const exe = Buffer.concat([Buffer.from('MZ\x90\x00', 'latin1'), Buffer.alloc(40000, 0x41)]);
         const res = await request(buildApp())
             .post('/api/applications/draft-documents')
+            .field('applicationId', 'app-1')
             .field('slotId', 'LICENCE_PT11')
             .attach('file', exe, { filename: 'permit.pdf', contentType: 'application/pdf' });
 
@@ -265,6 +272,7 @@ describe('POST /draft-documents — a sender who lies about the file', () => {
         const oversize = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(21 * 1024 * 1024, 0x20)]);
         const res = await request(buildApp())
             .post('/api/applications/draft-documents')
+            .field('applicationId', 'app-1')
             .field('slotId', 'LICENCE_PT11')
             .attach('file', oversize, { filename: 'huge-scan.pdf', contentType: 'application/pdf' });
 
@@ -281,6 +289,7 @@ describe('POST /draft-documents — a sender who lies about the file', () => {
         const before = listDraftDir();
         const res = await request(buildApp())
             .post('/api/applications/draft-documents')
+            .field('applicationId', 'app-1')
             .field('slotId', 'LICENCE_PT11')
             .attach('file', Buffer.alloc(0), { filename: 'scan.pdf', contentType: 'application/pdf' });
 
@@ -295,6 +304,7 @@ describe('POST /draft-documents — the legitimate case still works', () => {
         const before = listDraftDir();
         const res = await request(buildApp())
             .post('/api/applications/draft-documents')
+            .field('applicationId', 'app-1')
             .field('slotId', 'LICENCE_PT11')
             .field('stepKey', 'documents')
             .attach('file', realisticPdf(), { filename: 'ภท.11.pdf', contentType: 'application/pdf' });
@@ -313,6 +323,7 @@ describe('POST /draft-documents — the legitimate case still works', () => {
         const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(40000, 0x11)]);
         const res = await request(buildApp())
             .post('/api/applications/draft-documents')
+            .field('applicationId', 'app-1')
             .field('slotId', 'EXTERIOR_PHOTOS')
             .attach('file', jpeg, { filename: 'IMG_0431.jpg', contentType: 'image/jpeg' });
 

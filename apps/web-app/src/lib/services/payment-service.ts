@@ -968,8 +968,8 @@ export const PaymentService = {
      * under the checkout rail the first invoice is minted by the checkout this page
      * starts, so invoice rows cannot be the only way to find the application.
      */
-    async getMyApplications(): Promise<Array<{ id: string; status?: string | null; applicationNumber?: string | null }>> {
-        const res = await api.get<Array<{ id: string; status?: string; applicationNumber?: string | null }>>('/applications/my');
+    async getMyApplications(): Promise<Array<{ id: string; status?: string | null; applicationNumber?: string | null; entityId?: string | null }>> {
+        const res = await api.get<Array<{ id: string; status?: string; applicationNumber?: string | null; entityId?: string | null }>>('/applications/my');
         return res.success && Array.isArray(res.data) ? res.data : [];
     },
 
@@ -1241,7 +1241,7 @@ export const PaymentService = {
     },
 
     // Open the per-phase quotation PDF (?phase=1|2) in a new tab. Uses getBlob
-    // so the bearer token + active-entity headers ride along, then hands the
+    // so the bearer token rides along, then hands the
     // browser an object URL. Mirrors downloadInvoicePdf's auth approach but
     // opens inline (the backend sends Content-Disposition: inline).
     async viewQuotationPdf(

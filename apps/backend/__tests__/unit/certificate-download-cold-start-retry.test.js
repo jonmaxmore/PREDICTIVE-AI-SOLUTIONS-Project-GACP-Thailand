@@ -35,7 +35,15 @@ jest.mock('../../services/certificate-service', () => ({
     getCertificatePdf: (...args) => mockGetCertificatePdf(...args),
 }));
 
-jest.mock('../../services/entity-service', () => ({ assertCapability: jest.fn() }));
+// R2 Task 11 (spec §3.4, B14): the door asks the permission engine for
+// PRINT_QR on the certificate's holder (certificate.application.entityId),
+// never the active workspace's role. The engine is mocked open here so these
+// cases keep pinning the cold-start retry budget; the gate's own cases are at
+// the bottom of this file and on real Postgres (holder-scope-real-postgres).
+const mockAssertEntityActionPermission = jest.fn();
+jest.mock('../../services/entity-effective-permissions-service', () => ({
+    assertEntityActionPermission: (...args) => mockAssertEntityActionPermission(...args),
+}));
 
 // Spec 2026-09-30 §3.1 (Task 4): the health branch passes the caller's holder
 // scope instead of a bare userId.
@@ -108,7 +116,13 @@ describe('F-PDF-COLD-START-TIMEOUT — /api/certificates/:id/download retry budg
     beforeEach(() => {
         jest.clearAllMocks();
         jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
-        mockGetCertificateForUser.mockResolvedValue({ id: 'cert-1', certificateNumber: 'GACP-TH-2569-AAA' });
+        mockGetCertificateForUser.mockResolvedValue({
+            id: 'cert-1', certificateNumber: 'GACP-TH-2569-AAA', application: { entityId: 'entity-holder' },
+        });
+        mockAssertEntityActionPermission.mockResolvedValue({ allowed: true, via: 'ENTITY_PERMISSION' });
+        // clearAllMocks keeps an earlier test's implementation (one hangs forever).
+        mockGetCertificatePdf.mockReset();
+        mockGetCertificatePdf.mockResolvedValue(Buffer.from('%PDF-1.4 default'));
     });
 
     afterEach(() => {
@@ -124,6 +138,11 @@ describe('F-PDF-COLD-START-TIMEOUT — /api/certificates/:id/download retry budg
         expect(res.statusCode).toBe(200);
         expect(mockGetCertificatePdf).toHaveBeenCalledTimes(1);
         expect(logger.warn).not.toHaveBeenCalled();
+        // The gate ran once, on the holder, before the render.
+        expect(mockAssertEntityActionPermission).toHaveBeenCalledTimes(1);
+        expect(mockAssertEntityActionPermission).toHaveBeenCalledWith(
+            { entityId: 'entity-holder', userId: 'user-health-1', permission: 'PRINT_QR' },
+        );
     });
 
     test('genuine render/data error (not cold-start) → NO retry, called exactly once, 500', async () => {
@@ -227,5 +246,72 @@ describe('F-PDF-COLD-START-TIMEOUT — /api/certificates/:id/download retry budg
         // window above was never consumed because the retry's own deadline
         // fired first and the handler had already written its response.
         expect(totalElapsedMs).toBe(2_000 + PDF_ATTEMPT_TIMEOUT_MS);
+    });
+
+    // ── R2 Task 11: the gate in front of the render ─────────────────────────
+    function deniedError() {
+        const err = new Error('denied');
+        err.code = 'ENTITY_PERMISSION_DENIED';
+        err.statusCode = 403;
+        err.permission = 'PRINT_QR';
+        return err;
+    }
+
+    test('engine denies PRINT_QR on the holder → 403 ENTITY_PERMISSION_DENIED, the PDF is never rendered', async () => {
+        mockAssertEntityActionPermission.mockRejectedValue(deniedError());
+        const { req, res } = buildReqRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(403);
+        expect(res.body).toEqual(require('../../shared/entity-permission-denied').entityPermissionDeniedBody('PRINT_QR'));
+        expect(mockGetCertificatePdf).not.toHaveBeenCalled();
+    });
+
+    test('an OWNER role on the active workspace does not stand in for the holder: the engine still decides (403)', async () => {
+        mockAssertEntityActionPermission.mockRejectedValue(deniedError());
+        const { req, res } = buildReqRes();
+        req.activeEntity = { entityId: 'entity-personal', role: 'OWNER', personal: true };
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(403);
+        expect(res.body.code).toBe('ENTITY_PERMISSION_DENIED');
+        expect(mockAssertEntityActionPermission).toHaveBeenCalledWith(
+            { entityId: 'entity-holder', userId: 'user-health-1', permission: 'PRINT_QR' },
+        );
+        expect(mockGetCertificatePdf).not.toHaveBeenCalled();
+    });
+
+    test('a certificate whose application has no holder → 403 without asking the engine (fail closed)', async () => {
+        mockGetCertificateForUser.mockResolvedValue({ id: 'cert-1', certificateNumber: 'X', application: { entityId: null } });
+        const { req, res } = buildReqRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(403);
+        expect(res.body.code).toBe('ENTITY_PERMISSION_DENIED');
+        expect(mockAssertEntityActionPermission).not.toHaveBeenCalled();
+        expect(mockGetCertificatePdf).not.toHaveBeenCalled();
+    });
+
+    test('an engine failure that is not a denial → 500, no PDF (never a silent pass)', async () => {
+        mockAssertEntityActionPermission.mockRejectedValue(new Error('engine exploded'));
+        const { req, res } = buildReqRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(500);
+        expect(mockGetCertificatePdf).not.toHaveBeenCalled();
+    });
+
+    test('not in the caller\'s scope → 404 before the gate', async () => {
+        mockGetCertificateForUser.mockResolvedValue(null);
+        const { req, res } = buildReqRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(404);
+        expect(mockAssertEntityActionPermission).not.toHaveBeenCalled();
     });
 });

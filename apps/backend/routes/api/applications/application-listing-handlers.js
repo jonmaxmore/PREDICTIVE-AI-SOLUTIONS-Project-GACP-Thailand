@@ -36,14 +36,8 @@ const {
 } = require('../helpers/application-payload-builders');
 const { respondError } = require('../../../shared/api-response');
 // Spec 2026-09-30 §3.1: every health read spreads the holder fragment, called
-// inside the handler (after authentication and the active-entity middleware).
-const { holderScope, r1HolderOrLegacy, r1ApplicationHolderOrPin } = require('../../../services/holder-access'); // R1-legacy-pin: removed in Task 12
-
-// R1-legacy-pin: removed in Task 12. Adds one AND member beside the pin's own AND.
-function withAndMember(where, member) {
-    const and = where.AND === undefined ? [] : [].concat(where.AND);
-    return { ...where, AND: [...and, member] };
-}
+// inside the handler (after authentication).
+const { holderScope, holderReadWhere } = require('../../../services/holder-access');
 
 // LISTING & TRACKING
 
@@ -99,8 +93,7 @@ router.get('/', authenticateHealth, async (req, res) => {
             });
             return res.json({ success: true, data: allApps.map(mapHealthApplication), viewType: 'provider' });
         }
-        // R1-legacy-pin: removed in Task 12 — getHealthScopeOptions feeds the pre-R1 where.
-        const applications = await applicationService.getHealthApplications(req.user.id, { ...getHealthScopeOptions(req.user), holderScope: await holderScope(req) });
+        const applications = await applicationService.getHealthApplications(req.user.id, { holderScope: await holderScope(req) });
         res.json({ success: true, data: applications.map(mapHealthApplication) });
     } catch (error) {
         logger.error('[Applications List] Error:', error);
@@ -112,9 +105,7 @@ router.get('/my', authenticateHealth, async (req, res) => {
     try {
         if (!String(req.user?.healthId || '').trim()) { return res.status(403).json({ success: false, error: 'Health healthId is required' }); }
         const limit = Number.parseInt(String(req.query.limit || ''), 10);
-        // R1-legacy-pin: removed in Task 12 — getHealthScopeOptions feeds the pre-R1 where.
-        const scopeOptions = getHealthScopeOptions(req.user);
-        const applications = await applicationService.getHealthApplications(req.user.id, { take: Number.isFinite(limit) && limit > 0 ? limit : undefined, ...scopeOptions, holderScope: await holderScope(req) });
+        const applications = await applicationService.getHealthApplications(req.user.id, { take: Number.isFinite(limit) && limit > 0 ? limit : undefined, holderScope: await holderScope(req) });
         res.json({
             success: true,
             // round 4: no `fees` — see applications-helpers.mapMyApplication
@@ -129,15 +120,17 @@ router.get('/my', authenticateHealth, async (req, res) => {
 router.get('/my/statuses', authenticateHealth, async (req, res) => {
     try {
         if (!String(req.user?.healthId || '').trim()) { return res.status(403).json({ success: false, error: 'Health healthId is required' }); }
-        const identity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
+        // The identity check stays (an unresolvable caller is refused as before).
+        await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
         const limit = Number.parseInt(String(req.query.limit || ''), 10);
         const take = Number.isFinite(limit) && limit > 0 ? limit : undefined;
 
+        // Review Focus 4 (R2 Task 9 fix round 1): the statuses of the list are the
+        // list's rows. The where is exactly GET /my's (getHealthApplications):
+        // the holder fragment and isDeleted false, nothing else.
         const applications = await prisma.application.findMany({
             where: {
-                // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(await holderScope(req), 'Application')).
-                // OR form: neutral also when no entity context is bound (final review C1).
-                ...r1ApplicationHolderOrPin(await holderScope(req), { healthId: identity.healthId }),
+                ...holderReadWhere(await holderScope(req), 'Application'),
                 isDeleted: false,
             },
             orderBy: { createdAt: 'desc' },
@@ -155,18 +148,12 @@ router.get('/my/statuses', authenticateHealth, async (req, res) => {
 
 router.get('/:id/status', authenticateHealth, async (req, res) => {
     try {
-        const identity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
+        await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
         const idOrNumber = String(req.params.id || '').trim();
         const application = await prisma.application.findFirst({
             where: {
-                // R1-legacy-pin: removed in Task 12 (→ OR: [id, applicationNumber],
-                // ...holderReadWhere(await holderScope(req), 'Application')).
-                // The holder OR takes the top-level OR key, so the id-or-number OR sits in AND
-                // beside the pin. OR form: neutral also when no entity context is bound (final review C1).
-                ...withAndMember(
-                    r1ApplicationHolderOrPin(await holderScope(req), { healthId: identity.healthId }),
-                    { OR: [{ id: idOrNumber }, { applicationNumber: idOrNumber }] },
-                ),
+                OR: [{ id: idOrNumber }, { applicationNumber: idOrNumber }],
+                ...holderReadWhere(await holderScope(req), 'Application'),
                 isDeleted: false,
             },
             select: { id: true, applicationNumber: true, status: true, phase1Status: true, phase2Status: true, formData: true },
@@ -189,7 +176,7 @@ router.get('/:id/status', authenticateHealth, async (req, res) => {
 // — because they paid for both).
 router.get('/:applicationId/statement', authenticateHealth, async (req, res) => {
     try {
-        const identity = await applicationService.resolveHealthIdentity(
+        await applicationService.resolveHealthIdentity(
             req.user.id,
             getHealthScopeOptions(req.user),
         );
@@ -202,15 +189,11 @@ router.get('/:applicationId/statement', authenticateHealth, async (req, res) => 
         // here first means the audit trail records a clean 404 for
         // cross-applicant attempts.
         const scope = await holderScope(req);
-        // R1-legacy-pin: removed in Task 12 (→ const applicationWhere = holderReadWhere(scope,
-        // 'Application'), used for this read too). The statement service reads the filing this
-        // gate resolved, so its legacy branch is the id. OR form: neutral also when no entity
-        // context is bound (final review C1).
-        const applicationWhere = r1HolderOrLegacy(scope, 'Application', { id: applicationId });
+        const applicationWhere = holderReadWhere(scope, 'Application');
         const application = await prisma.application.findFirst({
             where: {
                 id: applicationId,
-                ...r1ApplicationHolderOrPin(scope, { healthId: identity.healthId }),
+                ...applicationWhere,
                 isDeleted: false,
             },
             select: { id: true, organizationId: true },
@@ -237,12 +220,10 @@ router.get('/:applicationId/statement', authenticateHealth, async (req, res) => 
 
 router.get('/:id/history', authenticateHealth, async (req, res) => {
     try {
-        const identity = await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
+        await applicationService.resolveHealthIdentity(req.user.id, getHealthScopeOptions(req.user));
         const where = {
             id: req.params.id,
-            // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(await holderScope(req), 'Application')).
-            // OR form: neutral also when no entity context is bound (final review C1).
-            ...r1ApplicationHolderOrPin(await holderScope(req), { healthId: identity.healthId }),
+            ...holderReadWhere(await holderScope(req), 'Application'),
             isDeleted: false,
         };
         let application;

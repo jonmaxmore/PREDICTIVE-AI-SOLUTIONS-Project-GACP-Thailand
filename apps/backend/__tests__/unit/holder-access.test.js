@@ -11,7 +11,7 @@
  *   - fail closed on an empty set;
  *   - the exact fragment per watched model;
  *   - the marker survives spread and one level of AND/OR;
- *   - the R1 intersection with the active entity (operator ruling C1);
+ *   - no workspace narrows the scope (R2 Task 12 removed the R1 intersection);
  *   - one membership query per request;
  *   - the destructive-grade owner-or-creator rule (spec §3.3).
  */
@@ -270,32 +270,51 @@ describe('holder-access — the marker', () => {
     });
 });
 
-describe('holder-access — R1 intersection with the active entity (ruling C1)', () => {
+describe('holder-access — no workspace narrows the scope (R2 Task 12)', () => {
     beforeEach(() => memberships([
         { entityId: 'e-a', role: 'OWNER' },
         { entityId: 'e-c', role: 'VIEWER' },
     ]));
 
-    test('with activeEntityId: readIds = R ∩ {C}', async () => {
+    test('holderScopeForUser: R, whatever else is passed', async () => {
         const scope = await holderScopeForUser(U, { activeEntityId: 'e-c' });
-        expect(scope.readIds).toEqual(['e-c']);
-        expect(scope.editIds).toEqual([]);
-    });
-
-    test('an active entity outside R yields []', async () => {
-        const scope = await holderScopeForUser(U, { activeEntityId: 'e-other' });
-        expect(scope.readIds).toEqual([]);
-    });
-
-    test('with no activeEntityId: R', async () => {
-        const scope = await holderScopeForUser(U);
         expect([...scope.readIds].sort()).toEqual(['e-a', 'e-c']);
         expect(scope.editIds).toEqual(['e-a']);
     });
 
-    test('holderScope(req) reads req.activeEntity.entityId', async () => {
-        const scope = await holderScope({ user: { id: U }, activeEntity: { entityId: 'e-a' } });
-        expect(scope).toEqual({ userId: U, readIds: ['e-a'], editIds: ['e-a'] });
+    test('holderScope(req) ignores a req.activeEntity left by anything (the middleware is gone)', async () => {
+        const scope = await holderScope({ user: { id: U }, activeEntity: { entityId: 'e-c' } });
+        expect({ ...scope, readIds: [...scope.readIds].sort() }).toEqual({ userId: U, readIds: ['e-a', 'e-c'], editIds: ['e-a'] });
+    });
+
+    test('the R1 pin helpers are gone', () => {
+        const access = require('../../services/holder-access');
+        for (const name of ['r1LegacyApplicantPin', 'r1LegacyFilerFragment', 'r1HolderOrLegacy',
+            'r1HolderOrLegacyWhenScoped', 'r1ApplicationHolderOrPin']) {
+            expect(access[name]).toBeUndefined();
+        }
+    });
+});
+
+describe('holder-access — holderReadWhereIfScoped and dataSubjectReadWhere', () => {
+    const { holderReadWhereIfScoped, dataSubjectReadWhere } = require('../../services/holder-access');
+
+    test('no scope → {} (staff, jobs keep their where); a scope → the marked fragment', () => {
+        expect(holderReadWhereIfScoped(null, 'Application')).toEqual({});
+        expect(holderReadWhereIfScoped({ userId: U }, 'Application')).toEqual({});
+        const where = holderReadWhereIfScoped({ userId: U, readIds: ['e-a'] }, 'Application');
+        expect(JSON.parse(JSON.stringify(where))).toEqual({ entityId: { in: ['e-a'] } });
+        expect(hasHolderMarker(where)).toBe(true);
+    });
+
+    test('dataSubjectReadWhere: a marked copy of the subject key; an empty key matches nothing; unwatched models throw', () => {
+        const key = { healthId: 'hid-1' };
+        const where = dataSubjectReadWhere('Application', key);
+        expect(JSON.parse(JSON.stringify(where))).toEqual({ healthId: 'hid-1' });
+        expect(where).not.toBe(key);
+        expect(hasHolderMarker(where)).toBe(true);
+        expect(JSON.parse(JSON.stringify(dataSubjectReadWhere('Invoice', {})))).toEqual({ id: { in: [] } });
+        expect(() => dataSubjectReadWhere('User', key)).toThrow(/not a holder-bearing model/);
     });
 });
 

@@ -7,14 +7,10 @@ const { resolveFarmAccess } = require('../../../services/farm-access');
 // CYCLE_CREATE (plan mapping) for workspace co-members; owner always passes.
 const { assertFarmActionPermission } = require('../../../services/entity-effective-permissions-service');
 const { authenticateHealth } = require('../../../middleware/auth-middleware');
+const { entityPermissionDeniedBody } = require('../../../shared/entity-permission-denied');
 
 function respondPermissionDenied(res, error, fallbackPermission) {
-  return res.status(403).json({
-    success: false,
-    code: 'ENTITY_PERMISSION_DENIED',
-    permission: error?.permission || fallbackPermission,
-    message: 'คุณไม่มีสิทธิ์ดำเนินการรายการนี้ในพื้นที่ทำงาน',
-  });
+  return res.status(403).json(entityPermissionDeniedBody(error?.permission || fallbackPermission));
 }
 
 /**

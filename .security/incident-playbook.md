@@ -122,7 +122,7 @@
    docker logs gacp-backend > incident_logs_$(date +%Y%m%d_%H%M%S).txt
    
    # Export database state
-   mongodump --out=incident_backup_$(date +%Y%m%d)
+   pg_dump "$DATABASE_URL" -Fc -f incident_backup_$(date +%Y%m%d).dump
    ```
 
 3. **Investigate**
@@ -148,20 +148,20 @@
 **Response Team:** Backend Lead
 
 #### ขั้นตอน:
-1. **Check MongoDB status**
+1. **Check PostgreSQL status**
    ```bash
-   mongo --eval "db.serverStatus()"
-   mongo --eval "db.stats()"
+   psql "$DATABASE_URL" -c "SELECT state, count(*) FROM pg_stat_activity GROUP BY state;"
+   psql "$DATABASE_URL" -c "SELECT pg_size_pretty(pg_database_size(current_database()));"
    ```
 
 2. **Check slow queries**
    ```bash
-   mongo --eval "db.currentOp({secs_running: {\$gt: 5}})"
+   psql "$DATABASE_URL" -c "SELECT pid, now() - query_start AS runtime, query FROM pg_stat_activity WHERE state = 'active' AND now() - query_start > interval '5 seconds';"
    ```
 
-3. **Kill problematic queries** (if needed)
+3. **Cancel problematic queries** (if needed)
    ```bash
-   mongo --eval "db.killOp(<opid>)"
+   psql "$DATABASE_URL" -c "SELECT pg_cancel_backend(<pid>);"
    ```
 
 4. **Scale if needed**
@@ -197,7 +197,7 @@
    git checkout HEAD~1 -- <deleted-file>
    
    # Restore database
-   mongorestore --drop ./backups/latest
+   pg_restore --clean --if-exists -d "$DATABASE_URL" ./backups/latest.dump
    ```
 
 4. **Update guardrails**

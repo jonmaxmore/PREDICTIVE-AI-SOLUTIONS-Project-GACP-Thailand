@@ -254,7 +254,7 @@ router.post('/:id/accept', authenticateHealth, async (req, res) => {
             return res.status(401).json({ success: false, message: 'Unauthorized' });
         }
 
-        // Spec 2026-09-30 §3.1 (R1): the quote read carries the holder scope.
+        // Spec 2026-09-30 §3.1: the quote read carries the holder scope.
         const quote = await quoteService.findByIdWithApplicationSlim(id, {
             holderScope: await require('../../../services/holder-access').holderScope(req),
         });
@@ -320,7 +320,7 @@ router.post('/:id/reject', authenticateHealth, async (req, res) => {
             return res.status(401).json({ success: false, message: 'Unauthorized' });
         }
 
-        // Spec 2026-09-30 §3.1 (R1): the quote read carries the holder scope.
+        // Spec 2026-09-30 §3.1: the quote read carries the holder scope.
         const quote = await quoteService.findByIdWithApplicationSlim(id, {
             holderScope: await require('../../../services/holder-access').holderScope(req),
         });

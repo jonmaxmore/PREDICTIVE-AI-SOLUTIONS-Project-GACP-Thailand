@@ -24,18 +24,6 @@ describe('Deep QA: Data Integrity', () => {
   
   // 1. ID Format Validation
   describe('ID Format Validation', () => {
-    it('should validate MongoDB ObjectId format', () => {
-      const isValidObjectId = (id) => {
-        return /^[0-9a-fA-F]{24}$/.test(id);
-      };
-
-      expect(isValidObjectId('507f1f77bcf86cd799439011')).toBe(true);
-      expect(isValidObjectId('invalid-id')).toBe(false);
-      expect(isValidObjectId('')).toBe(false);
-      expect(isValidObjectId('507f1f77bcf86cd79943901')).toBe(false); // Too short
-      expect(isValidObjectId('507f1f77bcf86cd7994390111')).toBe(false); // Too long
-    });
-
     it('should validate UUID format', () => {
       const isValidUUID = (uuid) => {
         return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid);

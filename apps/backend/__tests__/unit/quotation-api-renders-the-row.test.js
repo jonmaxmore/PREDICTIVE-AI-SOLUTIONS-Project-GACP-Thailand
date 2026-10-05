@@ -44,6 +44,13 @@ jest.mock('../../middleware/auth-middleware', () => ({
     authenticateProvider: (req, _res, next) => next(),
 }));
 
+// R2 Task 12: accepting asks SUBMIT_APPLICATION on the holder; the caller holds it here
+// (the gate itself is proven on a real Postgres in holder-scope-real-postgres.test.js).
+jest.mock('../../services/entity-effective-permissions-service', () => ({
+    ...jest.requireActual('../../services/entity-effective-permissions-service'),
+    assertEntityActionPermission: async () => ({ allowed: true }),
+}));
+
 const mockGetApplicationSlice = jest.fn();
 const mockEnsurePhaseInvoices = jest.fn(async () => ({ skipped: 'CHECKOUT_RAIL' }));
 jest.mock('../../services/application-service', () => ({
@@ -52,7 +59,7 @@ jest.mock('../../services/application-service', () => ({
     // แทนการเทียบ healthId ซึ่งอาจถูก redact ตามผู้เช่า
     // Spec 2026-09-30 §3.1: the lookup takes the caller's holder scope, not an id.
     findOwnedApplicationForApplicant: jest.fn(async (id, options) => (
-        options?.holderScope?.userId === 'user-1' ? { id, isDeleted: false } : null
+        options?.holderScope?.userId === 'user-1' ? { id, isDeleted: false, entityId: 'ent-1' } : null
     )),
     resolveHealthIdentity: jest.fn(async () => ({ healthId: 'h-1', userId: 'user-1' })),
     ensurePhaseInvoices: (...a) => mockEnsurePhaseInvoices(...a),

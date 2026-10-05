@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Agent S3 — Workflow State Machine
- * Tests: application lifecycle states, wizard flow, config consistency
+ * Tests: application lifecycle states, config consistency
  */
 const { JourneyRunner, api, loginHealth, generateThaiId, waitMs } = require('./journey-helper');
 
@@ -10,7 +10,7 @@ async function main() {
     console.log(`\n ${j.name}\n`);
 
     try {
-        // Step 1: Wizard draft lifecycle
+        // Step 1: login
         const healthId = generateThaiId('110000000000');
         const token = await (async () => {
             const login = await api('POST', '/auth/health/login', {
@@ -23,30 +23,8 @@ async function main() {
 
         await waitMs(300);
 
-        // Step 2: Create wizard draft (start workflow)
-        const draft = await api('POST', '/wizard/draft', {
-            token,
-            body: { stepData: { applicantType: 'INDIVIDUAL' }, currentStep: 1 },
-        });
-        if (draft.ok) {
-            const draftId = draft.data?.data?.id || draft.data?.data?.draftId;
-            j.pass('Create wizard draft', `id: ${draftId || 'created'}`);
-            j.context.draftId = draftId;
-        } else {
-            j.fail('Create wizard draft', `status: ${draft.status}`);
-        }
-
-        // Step 3: Update draft (progress workflow)
-        const update = await api('POST', '/wizard/draft', {
-            token,
-            body: {
-                draftId: j.context.draftId,
-                stepData: { applicantType: 'INDIVIDUAL', farmName: 'StateMachine Farm' },
-                currentStep: 2,
-            },
-        });
-        if (update.ok) j.pass('Update draft to step 2', `status: ${update.status}`);
-        else j.fail('Update draft', `status: ${update.status}`);
+        // Steps 2-3 (wizard draft create/update on /api/wizard/draft) were removed with that
+        // door in R2 Task 10.
 
         // Step 4: Verify applications list has entries
         const apps = await api('GET', '/applications/my', { token });

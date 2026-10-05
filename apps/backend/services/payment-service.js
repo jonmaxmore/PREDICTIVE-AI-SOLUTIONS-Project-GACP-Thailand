@@ -45,11 +45,22 @@ const {
   buildWorkflowEvent,
 } = require('./payment-utils');
 
-async function getInvoiceSettlementsForApplication(applicationId) {
+// Lazy: holder-access pulls the permission engine; payment-service is required
+// early by many rails.
+const holderAccess = () => require('./holder-access');
+
+/**
+ * The invoices of one application. A health door passes `options.holderScope`:
+ * the read then carries the holder fragment beside `applicationId` (the
+ * application the door's gate already authorised). Staff, jobs and the webhook
+ * pass nothing and keep their where byte for byte.
+ */
+async function getInvoiceSettlementsForApplication(applicationId, options = {}) {
   const invoices = await prisma.invoice.findMany({
     where: {
       applicationId,
       isDeleted: false,
+      ...holderAccess().holderReadWhereIfScoped(options.holderScope, 'Invoice'),
     },
     select: {
       id: true,
@@ -95,8 +106,15 @@ function getLatestPaidTimestamp(settlement) {
   return paidAtValues[0];
 }
 
-async function syncPhaseStatusesFromInvoices(applicationId) {
-  const application = await prisma.application.findUnique({
+async function syncPhaseStatusesFromInvoices(applicationId, options = {}) {
+  // A health door passes its holder scope: the read is findFirst({ id, ...fragment }),
+  // the one row the door's gate authorised. No scope (staff, jobs, webhook) →
+  // findUnique({ id }) as before.
+  const scoped = holderAccess().holderReadWhereIfScoped(options.holderScope, 'Application');
+  const read = Object.keys(scoped).length > 0
+    ? (args) => prisma.application.findFirst({ ...args, where: { id: applicationId, ...scoped } })
+    : (args) => prisma.application.findUnique(args);
+  const application = await read({
     where: { id: applicationId },
     select: {
       id: true,
@@ -110,7 +128,7 @@ async function syncPhaseStatusesFromInvoices(applicationId) {
     return null;
   }
 
-  const settlements = await getInvoiceSettlementsForApplication(applicationId);
+  const settlements = await getInvoiceSettlementsForApplication(applicationId, options);
   const phase1Paid = settlements.phase1.phasePaid;
   const phase2Paid = settlements.phase2.phasePaid;
   const phase1PaidAt = getLatestPaidTimestamp(settlements.phase1);

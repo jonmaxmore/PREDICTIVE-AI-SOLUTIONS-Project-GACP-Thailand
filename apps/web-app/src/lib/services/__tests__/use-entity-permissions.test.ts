@@ -23,29 +23,11 @@ import {
     computeHas,
     entityPermissionsCacheKey,
     evictEntityPermissionsOnDenial,
-    isPersonalWorkspaceMembership,
     peekEntityPermissionsSnapshot,
     resolveFetchOutcome,
     revalidateEntityPermissions,
     type EntityPermissionState,
 } from '../use-entity-permissions';
-
-describe('isPersonalWorkspaceMembership — the Wave-A S1 predicate (role OWNER on INDIVIDUAL)', () => {
-    it('OWNER on INDIVIDUAL → personal (solo farmer)', () => {
-        expect(isPersonalWorkspaceMembership({ role: 'OWNER', type: 'INDIVIDUAL' })).toBe(true);
-    });
-    it('OWNER on JURISTIC → workspace', () => {
-        expect(isPersonalWorkspaceMembership({ role: 'OWNER', type: 'JURISTIC' })).toBe(false);
-    });
-    it('worker (MANAGER/VIEWER) on someone else\'s INDIVIDUAL entity → workspace (by design, Wave-B)', () => {
-        expect(isPersonalWorkspaceMembership({ role: 'MANAGER', type: 'INDIVIDUAL' })).toBe(false);
-        expect(isPersonalWorkspaceMembership({ role: 'VIEWER', type: 'INDIVIDUAL' })).toBe(false);
-    });
-    it('null membership (no active entity resolved) → treated as personal (legacy solo paths)', () => {
-        expect(isPersonalWorkspaceMembership(null)).toBe(true);
-        expect(isPersonalWorkspaceMembership(undefined)).toBe(true);
-    });
-});
 
 describe('computeHas — failure policy', () => {
     const perm = 'HARVEST_RECORD';
@@ -70,48 +52,12 @@ describe('computeHas — failure policy', () => {
 });
 
 /**
- * Gap 25 (audit batch-2 FE cluster) — ASSESSED: BY-DESIGN, verified-safe,
- * NO code change. The audit flagged "personal:true → all buttons enabled
- * when activeEntity is null". Tracing active-entity-provider.tsx, a null
- * activeEntity occurs during (a) the load window (activeId set but
- * /entities/mine not yet resolved), (b) signed-out / provider-not-mounted,
- * (c) no ACTIVE membership resolved, and (d) a FAILED /entities/mine fetch.
- *
- * In EVERY one of those, the null → personal → has()==true outcome is the
- * SAME fail-OPEN-to-visible the module's documented policy already
- * prescribes for `personal`, `loading`, AND `error` (computeHas returns
- * true for all three). It is NOT an incorrect fail-open:
- *   - FE gating is UX-only; the BE re-checks every gated endpoint and
- *     answers 403 ENTITY_PERMISSION_DENIED (LIVE prod, Wave-B REVOKE-wins).
- *   - Even the desync window (localStorage points at a workspace but
- *     activeEntity is momentarily null) self-heals: refresh() overwrites
- *     localStorage on success, and a click in the window still carries the
- *     real x-active-entity-id header → BE 403 → F2 pass-through +
- *     reportPermissionDenial evicts the cache → next mount refetches & hides.
- *   - Flipping null → fail-CLOSED (hide) would recreate the very false
- *     lockout on a flaky fetch that the Wave-C error policy exists to prevent.
- *
- * This block PINS the intended behaviour so a future regression that turns
- * null-activeEntity into a lockout (not-member / false) trips a test.
+ * Gap 25 — personal / loading / error all fail OPEN to visible (FE gating is
+ * UX-only; the BE re-checks and answers 403 ENTITY_PERMISSION_DENIED).
+ * R2: the hook's "no entity id given" case is pinned in
+ * use-entity-permissions-hook.test.tsx.
  */
-describe('Gap 25 — null activeEntity is BY-DESIGN fail-open (personal → has() all-true; BE authoritative)', () => {
-    it('null / undefined membership → personal (the load / no-workspace / degraded state), NOT a lockout', () => {
-        expect(isPersonalWorkspaceMembership(null)).toBe(true);
-        expect(isPersonalWorkspaceMembership(undefined)).toBe(true);
-    });
-
-    it('the full null → personal → has() chain stays fail-OPEN for ANY permission', () => {
-        // What the hook computes when activeEntity is null:
-        //   personal = isPersonalWorkspaceMembership(null) = true
-        //   effectiveState = { kind: 'personal' }  (see hook line ~290)
-        const personal = isPersonalWorkspaceMembership(null);
-        expect(personal).toBe(true);
-        const effectiveState: EntityPermissionState = personal ? { kind: 'personal' } : { kind: 'loading' };
-        for (const perm of ['HARVEST_RECORD', 'UNIT_MANAGE', 'ACTIVITY_IRRIGATION', 'FARM_CREATE']) {
-            expect(computeHas(effectiveState, perm)).toBe(true);
-        }
-    });
-
+describe('Gap 25 — fail-open states are one outcome (BE authoritative)', () => {
     it('personal / loading / error ALL resolve to the same fail-OPEN (so re-labelling null cannot change the outcome)', () => {
         const perm = 'HARVEST_RECORD';
         expect(computeHas({ kind: 'personal' }, perm)).toBe(true);
@@ -179,7 +125,7 @@ describe('activityPermissionFor — the 7 per-type codes', () => {
 
 describe('tooltip text', () => {
     it('is the exact owner-facing Thai copy', () => {
-        expect(NO_PERMISSION_TOOLTIP_TH).toBe('ไม่มีสิทธิ์ ติดต่อเจ้าของ workspace');
+        expect(NO_PERMISSION_TOOLTIP_TH).toBe('ไม่มีสิทธิ์ ขอให้เจ้าของมอบสิทธิ์ให้คุณ');
     });
 });
 
@@ -327,9 +273,8 @@ describe('evict-on-denial — evictEntityPermissionsOnDenial (F1(b))', () => {
  *
  * Note the polarity: a hired worker (MANAGER) on the owner's INDIVIDUAL
  * entity is, BY DESIGN, a "workspace" context for THAT worker
- * (isPersonalWorkspaceMembership({role:'MANAGER', type:'INDIVIDUAL'}) is
- * false — see line 40-41 above) — so the hook fetches /my-permissions and
- * gates on the real `effective` array instead of the personal fast-path.
+ * (the server answers personal:false for them) — so the hook fetches
+ * /my-permissions and gates on the real `effective` array.
  */
 describe('W8 — MANAGER in a PERSONAL (INDIVIDUAL) workspace: reaches planting/harvest, not application/financial', () => {
     // Mirrors entity-service.js:204-207 (MANAGER = PRINT_QR +
@@ -341,10 +286,6 @@ describe('W8 — MANAGER in a PERSONAL (INDIVIDUAL) workspace: reaches planting/
         'ACTIVITY_WEED_CONTROL', 'ACTIVITY_INSPECTION', 'ACTIVITY_INCIDENT', 'ACTIVITY_OTHER',
         'HARVEST_RECORD', 'QR_GENERATE', 'RECORDS_MANAGE', 'REPORT_SUBMIT',
     ];
-
-    it('a MANAGER on their owner\'s own INDIVIDUAL entity is classified as a workspace context, not personal', () => {
-        expect(isPersonalWorkspaceMembership({ role: 'MANAGER', type: 'INDIVIDUAL' })).toBe(false);
-    });
 
     it('the /my-permissions envelope for that MANAGER resolves to loaded+effective (not the personal fast-path)', () => {
         const state = resolveFetchOutcome({

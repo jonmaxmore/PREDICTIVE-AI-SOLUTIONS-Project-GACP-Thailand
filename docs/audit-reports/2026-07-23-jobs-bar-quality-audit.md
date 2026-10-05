@@ -106,7 +106,7 @@
 
 ### 6. Code quality & architecture — 5.5/10
 
-- **[major]** error framework กลาง (`shared/errors.js`) เป็น dead code — 0/179 route ใช้ `asyncHandler`; envelope 2 แบบแข่งกัน; มี branch จัดการ Mongo error ทั้งที่ระบบใช้ Prisma/Postgres
+- **[major]** error framework กลาง (`shared/errors.js`) เป็น dead code — 0/179 route ใช้ `asyncHandler`; envelope 2 แบบแข่งกัน; มี branch จัดการ error ของฐานข้อมูลที่ระบบไม่ได้ใช้ ทั้งที่ระบบใช้ Prisma/Postgres (branch นั้นถอดแล้ว 2026-10-06)
 - **[major]** `requireAdmin` ถูกเขียนซ้ำใน 6+ route file และ drift จาก middleware กลาง
 - **[major]** 61/179 route import Prisma ตรง ข้าม service layer
 - **[major]** backend JS ~75k บรรทัดไม่มี type ข้าง frontend strict-TS; god service (`entity-service.js` 1,707 บรรทัด)

@@ -1,6 +1,7 @@
 const { maskThaiId } = require('../../utils/field-encryption');
 const { localYear } = require('../../utils/working-days');
-const { holderReadWhere, r1ApplicationHolderOrPin } = require('../holder-access');
+const { holderReadWhere, resolveHolderOwnerOrCreator } = require('../holder-access');
+const { ENTITY_PERMISSION_DENIED_EN } = require('../../shared/entity-permission-denied');
 
 /**
  * The holder fragment for an applicant-side Application read (spec
@@ -12,12 +13,9 @@ const { holderReadWhere, r1ApplicationHolderOrPin } = require('../holder-access'
  * @param {{ holderScope?: { userId: string, readIds: string[] } }} [options]
  * @returns {object|null}
  */
-// R1 (Task 3 fix round 1, ruling C1): every method below ALSO keeps its pre-R1
-// filer where, so R1 returns exactly the pre-R1 rows. Final review C1
-// (2026-10-03): the fragment and the pin are combined as
-// r1ApplicationHolderOrPin = { OR: [fragment, pin], AND: [pin] }, never as
-// fragment AND pin, which narrowed when no entity context is bound (a user with
-// no personal entity). Each such line is marked `R1-legacy-pin: removed in Task 12`.
+// Every applicant read below carries the holder fragment alone (R2 Task 12
+// removed the R1 filer pins). What the caller may DO with a row it can read is
+// decided by the submit guard, the capability gates and §3.3 (deleteDraft).
 function applicationHolderWhere(options) {
     const scope = options && typeof options === 'object' ? options.holderScope : null;
     if (!scope || typeof scope !== 'object' || !Array.isArray(scope.readIds)) {
@@ -205,15 +203,11 @@ function createApplicationDraftQueryMethods({
             if (!holderWhere) {
                 return null;
             }
-            // R1-legacy-pin: removed in Task 12 (pre-R1 where, relaxed in a company workspace).
-            const healthWhere = this.buildHealthWhereClause(identityRef, options);
-            if (!healthWhere) {
-                return null;
-            }
 
+            // R2 Task 9: the fragment alone (buildHealthWhereClause is deleted).
             return prisma.application.findFirst({
                 where: {
-                    ...r1ApplicationHolderOrPin(options.holderScope, healthWhere), // R1-legacy-pin: removed in Task 12 (→ ...holderWhere)
+                    ...holderWhere,
                     status: 'DRAFT',
                     isDeleted: false,
                 },
@@ -222,20 +216,22 @@ function createApplicationDraftQueryMethods({
         },
 
         /**
-         * Soft-delete current draft by id (health-owned only).
+         * Soft-delete a draft by id (spec 2026-09-30 §3.3, R2 Task 9).
          *
-         * Wave A fix M2 (adversarial-verify 2026-07-02): the lookup uses the
-         * STRICT applicant pin (`strictApplicantPin: true`), never the
-         * workspace-relaxed `{ entityId }` where — a workspace co-member must
-         * not be able to soft-delete the owner's draft (destructive + no
-         * per-person revoke exists pre-Wave-B).
-         *
-         * R1 (spec 2026-09-30, Task 3): the lookup carries BOTH the strict
-         * filer pin and the holder fragment, so it can only narrow. Task 9
-         * replaces the pin with the §3.3 owner-or-creator rule.
-         * @param {string} identityRef
+         * The draft is read within the caller's holder scope (a draft the caller
+         * cannot see → null, nothing written). Deleting is destructive-grade: only
+         * the draft's creator (`submitterId`) with an ACTIVE non-VIEWER membership
+         * on its holder, or the holder's ACTIVE OWNER, may delete it
+         * (resolveHolderOwnerOrCreator, the rule farm delete already applies).
+         * Anyone else who can see it → 403 ENTITY_PERMISSION_DENIED, nothing written.
+         * This replaces the strict filer pin (`strictApplicantPin`), which let a
+         * holder OWNER delete nothing of a co-member's and let a filer delete a
+         * draft after losing the holder.
+         * @param {string} identityRef — kept for the call shape
          * @param {string} draftId
          * @param {{ holderScope?: object }} [options]
+         * @returns {Promise<{ id: string }|null>}
+         * @throws {Error} 403 ENTITY_PERMISSION_DENIED
          */
         async deleteDraft(identityRef, draftId, options = {}) {
             const normalizedDraftId = String(draftId || '').trim();
@@ -247,27 +243,27 @@ function createApplicationDraftQueryMethods({
             if (!holderWhere) {
                 return null;
             }
-            // R1-legacy-pin: removed in Task 12 — Task 9 replaces this strict pin with §3.3.
-            const healthWhere = this.buildHealthWhereClause(identityRef, {
-                ...options,
-                strictApplicantPin: true,
-            });
-            if (!healthWhere) {
-                return null;
-            }
 
             const existingDraft = await prisma.application.findFirst({
                 where: {
-                    ...r1ApplicationHolderOrPin(options.holderScope, healthWhere), // R1-legacy-pin: removed in Task 12 (Task 9: §3.3)
+                    ...holderWhere,
                     id: normalizedDraftId,
                     status: 'DRAFT',
                     isDeleted: false,
                 },
-                select: { id: true },
+                select: { id: true, entityId: true, submitterId: true },
             });
 
             if (!existingDraft) {
                 return null;
+            }
+
+            if (!(await resolveHolderOwnerOrCreator(existingDraft, options.holderScope.userId))) {
+                // Only the draft creator or the holder OWNER may delete it (spec §3.3).
+                const err = new Error(ENTITY_PERMISSION_DENIED_EN);
+                err.statusCode = 403;
+                err.code = 'ENTITY_PERMISSION_DENIED';
+                throw err;
             }
 
             return prisma.application.update({
@@ -292,11 +288,6 @@ function createApplicationDraftQueryMethods({
             if (!holderWhere) {
                 return [];
             }
-            // R1-legacy-pin: removed in Task 12 (pre-R1 where, relaxed in a company workspace).
-            const healthWhere = this.buildHealthWhereClause(identityRef, options);
-            if (!healthWhere) {
-                return [];
-            }
 
             const take = Number.isFinite(options.take) && Number(options.take) > 0
                 ? Number(options.take)
@@ -304,7 +295,7 @@ function createApplicationDraftQueryMethods({
 
             return prisma.application.findMany({
                 where: {
-                    ...r1ApplicationHolderOrPin(options.holderScope, healthWhere), // R1-legacy-pin: removed in Task 12 (→ ...holderWhere)
+                    ...holderWhere, // R2 Task 9: the fragment alone (buildHealthWhereClause is deleted)
                     isDeleted: false,
                 },
                 orderBy: { createdAt: 'desc' },
@@ -344,13 +335,8 @@ function createApplicationDraftQueryMethods({
          */
         async getById(id, identityRef, options = {}) {
             const holderWhere = applicationHolderWhere(options);
-            let where = { id };
-            if (holderWhere) {
-                // R1-legacy-pin: removed in Task 12 (→ { id, ...holderWhere }) — the pre-R1
-                // where, or the id alone when there was none.
-                const healthWhere = this.buildHealthWhereClause(identityRef, options);
-                where = { id, ...r1ApplicationHolderOrPin(options.holderScope, healthWhere || { id }) };
-            }
+            // R2 Task 9: the fragment alone (buildHealthWhereClause is deleted).
+            const where = holderWhere ? { id, ...holderWhere } : { id };
 
             return prisma.application.findFirst({
                 where,
@@ -378,17 +364,16 @@ function createApplicationDraftQueryMethods({
          * (notably finance/payments.js) only need the status to decide which
          * phase invoice to create, and shrinking the result surface keeps PII
          * from accidentally being logged or echoed back.
-         * R1: `filerHealthId` is the pre-R1 healthId pin (removed in Task 12).
          * @param {string} applicationId
-         * @param {{ holderScope?: object, filerHealthId?: string }} [options]
+         * @param {{ holderScope?: object }} [options]
          */
         async findForPaymentOwnership(applicationId, options = {}) {
             const holderWhere = applicationHolderWhere(options);
-            if (!applicationId || !holderWhere || !options.filerHealthId) {return null;}
+            if (!applicationId || !holderWhere) {return null;}
             return prisma.application.findFirst({
                 where: {
                     id: applicationId,
-                    ...r1ApplicationHolderOrPin(options.holderScope, { healthId: options.filerHealthId }), // R1-legacy-pin: removed in Task 12 (→ ...holderWhere)
+                    ...holderWhere,
                     isDeleted: false,
                 },
                 select: { id: true, status: true },
@@ -398,24 +383,19 @@ function createApplicationDraftQueryMethods({
         /**
          * Applicant-side by-id lookup with the full record (formData, workflow
          * history), used by the revision, CAR and quotation doors. It carries the
-         * holder fragment (spec 2026-09-30 §3.1). In R2 the fragment replaces the
-         * `applicant: { id }` pin, and what the caller may DO with the row stays
-         * with the submit guard (revision PUT, CAR) or Task 9's gates. No scope → null.
-         *
-         * R1: `filerUserId` is the pre-R1 `applicant: { id }` pin, kept on every
-         * caller (revision, CAR, quotations) so R1 reads the same rows; a missing
-         * filerUserId → null. Removed in Task 12 (R1-legacy-pin).
+         * holder fragment alone (spec 2026-09-30 §3.1): any ACTIVE member of the
+         * holder reads it, and what the caller may DO with the row stays with the
+         * submit guard (revision PUT, CAR) or the doors' own gates. No scope → null.
          * @param {string} applicationId
-         * @param {{ holderScope?: object, filerUserId?: string }} [options]
+         * @param {{ holderScope?: object }} [options]
          */
         async findOwnedApplicationForApplicant(applicationId, options = {}) {
             const holderWhere = applicationHolderWhere(options);
-            const filerUserId = String(options.filerUserId || '').trim();
-            if (!applicationId || !holderWhere || !filerUserId) {return null;}
+            if (!applicationId || !holderWhere) {return null;}
             return prisma.application.findFirst({
                 where: {
                     id: applicationId,
-                    ...r1ApplicationHolderOrPin(options.holderScope, { applicant: { id: filerUserId } }), // R1-legacy-pin: removed in Task 12 (→ ...holderWhere)
+                    ...holderWhere,
                 },
             });
         },

@@ -27,7 +27,6 @@ jest.mock('../../services/application-service', () => ({
   // so the test assertions only swap the target.
   findApplicationByIdForHealth: jest.fn(),
   findLatestOpenDraftForHealth: jest.fn(),
-  findPersonalEntityForHealthIdentity: jest.fn(),
   healDraftEntityColumns: jest.fn(),
   createDraftForHealth: jest.fn(),
   updateApplicantDraftColumns: jest.fn(),
@@ -36,6 +35,11 @@ jest.mock('../../services/application-service', () => ({
   findUserOrganizationId: jest.fn(),
   getApplicantReadinessSnapshot: jest.fn(),
   getLatestOpenDraftForApplicant: jest.fn(),
+}));
+// R2 Task 8: the caller's holder scope (editIds) — the draft door checks it.
+jest.mock('../../services/holder-access', () => ({
+    ...jest.requireActual('../../services/holder-access'),
+    holderScope: jest.fn(async () => ({ userId: 'user-1', readIds: ['entity-1'], editIds: ['entity-1'] })),
 }));
 
 jest.mock('../../services/prisma-database', () => ({
@@ -122,6 +126,10 @@ jest.mock('../../routes/api/applications/application-workflow-handlers', () => {
 const applicationService = require('../../services/application-service');
 const applicationsRouter = require('../../routes/api/applications/applications');
 
+// R2 Task 8 (spec 2026-09-30 §3.2): a draft write without an id names its holder;
+// the caller edits for entity-1 (the resume path finds the mocked draft).
+const named = (body) => ({ entityId: 'entity-1', ...body });
+
 function makeDraft(overrides = {}) {
   const now = new Date('2026-04-21T00:00:00.000Z');
   return {
@@ -158,10 +166,9 @@ describe('Applications draft API contract', () => {
       userId: 'user-1',
       healthId: 'health-1',
     });
-    applicationService.findPersonalEntityForHealthIdentity.mockResolvedValue(null);
   });
 
-  it('POST /draft returns the canonical id alongside draftId, and no Mongo `_id`', async () => {
+  it('POST /draft returns the canonical id alongside draftId, and no `_id`', async () => {
     const existingDraft = makeDraft();
     const updatedDraft = makeDraft({
       formData: {
@@ -178,14 +185,14 @@ describe('Applications draft API contract', () => {
 
     const response = await request(app)
       .post('/api/applications/draft')
-      .send({
+      .send(named({
         serviceType: 'new_application',
         areaType: 'OUTDOOR',
         step: 1,
         steps: {
           '1': { plantId: 'cannabis' },
         },
-      });
+      }));
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
@@ -208,12 +215,12 @@ describe('Applications draft API contract', () => {
 
     const response = await request(app)
       .post('/api/applications/draft')
-      .send({
+      .send(named({
         serviceType: 'new_application',
         areaType: 'OUTDOOR',
         step: 1,
         certificationPurposes: [], // empty — must be ignored in favour of the saved value
-      });
+      }));
 
     expect(response.status).toBe(200);
     const savedArg = applicationService.updateApplicantDraftColumns.mock.calls[0][1];
@@ -229,7 +236,7 @@ describe('Applications draft API contract', () => {
 
     await request(app)
       .post('/api/applications/draft')
-      .send({ serviceType: 'new_application', areaType: 'OUTDOOR', certificationPurposes: ['EXPORT', 'RESEARCH'] });
+      .send(named({ serviceType: 'new_application', areaType: 'OUTDOOR', certificationPurposes: ['EXPORT', 'RESEARCH'] }));
 
     const savedArg = applicationService.updateApplicantDraftColumns.mock.calls[0][1];
     expect(savedArg.certificationPurposes).toEqual(['EXPORT', 'RESEARCH']);
@@ -248,9 +255,19 @@ describe('Applications draft API contract', () => {
     // Spec 2026-09-30 §3.1: the caller's holder scope, not the filer's healthId.
     expect(applicationService.getLatestOpenDraftForApplicant).toHaveBeenCalledWith({
       holderScope: expect.objectContaining({ userId: expect.any(String), readIds: expect.any(Array) }),
-      // R1-legacy-pin (removed in Task 12): the pre-R1 filer healthId still pins the read.
-      filerHealthId: 'health-1',
+      // R2 Task 8 (spec §3.2 resume): only the caller's own draft, on a holder it may edit.
+      submitterId: 'user-1',
+      editIds: ['entity-1'],
     });
+  });
+
+  it('GET /draft carries the holder (entityId) of the resumed draft - R2 task 15 fix 1', async () => {
+    applicationService.getLatestOpenDraftForApplicant.mockResolvedValue({ ...makeDraft(), entityId: 'entity-1' });
+
+    const response = await request(app).get('/api/applications/draft');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.entityId).toBe('entity-1');
   });
 
   it('GET /draft returns success with null data when no draft exists', async () => {

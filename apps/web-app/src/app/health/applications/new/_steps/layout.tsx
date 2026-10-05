@@ -11,6 +11,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import { useApplicationFlowStore } from './hooks/use-application-flow-store';
 import { useAutoSave } from './hooks/use-auto-save';
+import { ConnectedHolderChip } from './holder-chip-connected';
 import { FLOW_STEPS, PAYMENT_STEPS, resolveStepLabel } from './application-flow-config';
 
 interface EditModeInfo {
@@ -271,6 +272,7 @@ export default function ApplicationFlowLayout({ children }: { children: React.Re
             <p>{autoSave.detachNotice}</p>
           </div>
         ) : null}
+        <ConnectedHolderChip step={activeStep} />
         {children}
       </main>
 

@@ -48,9 +48,12 @@ d('a renewal draft save with a save clock works on a pool of one connection (rea
         const canonicalId = `one-conn-canon-${s}`;
         const user = await raw.user.create({ data: { canonicalId, password: 'x', organizationId: org.id, authType: 'EMAIL_LEGACY' } });
         const entity = await raw.entity.create({ data: { type: 'INDIVIDUAL', displayName: 'ทดสอบ ต่ออายุ', organizationId: org.id } });
-        // A renewal needs SUBMIT_APPLICATION on the certificate's holder (operator ruling
-        // 2026-10-03): the filer owns their own entity.
-        await raw.entityMembership.create({ data: { userId: user.id, entityId: entity.id, role: 'OWNER', status: 'ACTIVE', organizationId: org.id } });
+        // R2 Task 8 (spec 2026-09-30 §3.2): a draft write needs the caller's ACTIVE,
+        // non-VIEWER membership on the draft's holder (holderScope(req).editIds); a renewal
+        // also needs SUBMIT_APPLICATION on the certificate's holder (operator ruling 2026-10-03).
+        await raw.entityMembership.create({
+            data: { userId: user.id, entityId: entity.id, role: 'OWNER', status: 'ACTIVE', organizationId: org.id },
+        });
         const farm = await raw.farm.create({
             data: {
                 ownerId: user.id, organizationId: org.id, farmName: `สวนต่ออายุ ${s}`, farmType: 'CULTIVATION', address: '1 หมู่ 1',
@@ -90,7 +93,6 @@ d('a renewal draft save with a save clock works on a pool of one connection (rea
         app = express();
         app.use(express.json());
         app.use((req, _res, next) => {
-            req.activeEntity = { entityId: fx.entityId };
             runWithTenantContext({ organizationId: fx.orgId }, () => next());
         });
         app.use('/api/applications', router);

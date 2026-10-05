@@ -32,6 +32,7 @@ import { getCertBadgeKind, getCertCounters, getDaysRemaining } from './cert-stat
 import { useLanguage } from '@/lib/i18n/language-context';
 import { AREA_UNIT_LABEL, formatAreaSqm, legacyAreaToSqm } from '@/lib/area';
 import { certificateValidityYears } from './validity-years';
+import { HolderFilterChips, HolderLine, useHolderFilter } from '@/components/holder/holder-list';
 
 interface CertFarm {
   name: string;
@@ -61,6 +62,10 @@ interface Certificate {
   expiryDate: string;
   status: string;
   qrCode?: string;
+  /** Server truth (C5): may the caller print this certificate's QR. false = hide the QR action. */
+  canPrintQr?: boolean;
+  /** The certificate's holder, when the list says it. */
+  entityId?: string | null;
   farm?: CertFarm | null;
   crops?: string[];
   audit?: CertAudit | null;
@@ -117,6 +122,7 @@ export default function HealthCertificatesPage() {
   const certDict = dict.certificates;
   const dateLocale = language === 'en' ? 'en-US' : 'th-TH';
   const [certs, setCertificates] = useState<Certificate[]>([]);
+  const holder = useHolderFilter();
   const [loading, setLoading] = useState(true);
   // V1-C / D9 — explicit error state.
   //
@@ -189,12 +195,14 @@ export default function HealthCertificatesPage() {
           // state. These three tiles were left out of it and still counted a list
           // nobody could read: '0 ใบรับรองที่ใช้งานได้' is a statement about a
           // farmer's certificate, made on a failed GET.
-          { label: certDict.active, value: fetchError ? '—' : activeCount.toLocaleString(dateLocale), icon: '✅' },
-          { label: certDict.expiring, value: fetchError ? '—' : expiringCount.toLocaleString(dateLocale), icon: '⏰' },
-          { label: certDict.expired, value: fetchError ? '—' : expiredCount.toLocaleString(dateLocale), icon: '❌' },
+          { label: certDict.active, value: fetchError ? '—' : activeCount.toLocaleString(dateLocale) },
+          { label: certDict.expiring, value: fetchError ? '—' : expiringCount.toLocaleString(dateLocale) },
+          { label: certDict.expired, value: fetchError ? '—' : expiredCount.toLocaleString(dateLocale) },
         ]}
       />
 
+
+      <HolderFilterChips entities={certs.some((c) => holder.holderOf(c)) ? holder.entities : []} selectedId={holder.selectedId} onSelect={holder.setSelectedId} />
 
       {/* V1-C / D9 — Certificate cards.
           Three distinct states (per RFC):
@@ -238,7 +246,7 @@ export default function HealthCertificatesPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          {certs.map((cert, idx) => {
+          {certs.filter(holder.matches).map((cert, idx) => {
             const daysLeft = getDaysRemaining(cert.expiryDate);
             const statusInfo = getStatusLabel(cert.status, daysLeft, { active: certDict.active, expiring: certDict.expiring, expired: certDict.expired });
             const progress = getProgressPercent(cert.issuedDate, cert.expiryDate);
@@ -291,7 +299,10 @@ export default function HealthCertificatesPage() {
                         {cert.plantType && (
                           <p className="mt-0.5 text-sm text-muted-foreground">{cert.plantType}</p>
                         )}
+                        <HolderLine name={holder.holderOf(cert)} />
                       </div>
+                      {/* C5: no QR action for a caller who may not print it. */}
+                      {cert.canPrintQr !== false && (
                       <button
                         type="button"
                         onClick={() => setSelectedCert(cert)}
@@ -300,6 +311,7 @@ export default function HealthCertificatesPage() {
                       >
                         <QrCode className="h-10 w-10" strokeWidth={1.2} />
                       </button>
+                      )}
                     </div>
 
                     {/* Location + Area */}

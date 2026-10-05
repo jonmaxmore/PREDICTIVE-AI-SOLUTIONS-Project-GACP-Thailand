@@ -77,7 +77,6 @@ jest.mock('../../services/application-document-requirements', () => {
 });
 
 jest.mock('../../services/application-service', () => ({
-    findPersonalEntityForHealthIdentity: jest.fn(async () => null),
     healDraftEntityColumns: jest.fn(),
 }));
 
@@ -179,7 +178,11 @@ jest.mock('../../services/prisma-database', () => {
         applicationBundle,
         // holder-access (spec 2026-09-30 §3.1): the caller is an ACTIVE OWNER of
         // the entity every seeded case is filed under.
-        entityMembership: { findMany: jest.fn(async () => [{ entityId: 'ent-1', role: 'OWNER' }]) },
+        entityMembership: {
+            findMany: jest.fn(async () => [{ entityId: 'ent-1', role: 'OWNER' }]),
+            // §3.3 (C8, R2 Task 12): linking asks owner-or-creator of each case.
+            findFirst: jest.fn(async () => ({ role: 'OWNER' })),
+        },
         $transaction: jest.fn(async (fn) => {
             const snapshot = {
                 applications: clone([...mockStore.applications.entries()]),

@@ -294,6 +294,9 @@ export const NOT_SENT_KEYS: readonly string[] = Object.freeze([
   ...HASH_EXEMPT_KEYS,
   'currentStep',
   'milestone1',
+  // R2: the holder travels as `entityId` at the top of the first save, never inside
+  // formData (the server refuses a body entityId in formData, B11).
+  'holderEntityId',
 ]);
 
 
@@ -350,6 +353,10 @@ export function buildDraftPayload(
     // none yet; the first save returns it and every later save carries it. Still kept
     // out of the change hash and out of formData (HASH_EXEMPT_KEYS / NOT_SENT_KEYS).
     applicationId: state.applicationId || undefined,
+    // R2 (spec §3.2): a save that CREATES the draft names the holder; the server answers
+    // 400 APPLICATION_HOLDER_REQUIRED without it and never defaults. A save of an
+    // existing application sends none: the holder is fixed once the draft exists.
+    entityId: state.applicationId ? undefined : (state.holderEntityId || undefined),
     plantId: state.plantId,
     serviceType: state.serviceType,
     areaType: state.siteTypes?.[0] || 'OUTDOOR',

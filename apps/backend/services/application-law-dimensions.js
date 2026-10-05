@@ -87,14 +87,14 @@ function oneOf(value, allowed) {
 /**
  * @param {object}   args
  * @param {object}   args.prisma        client (only `certificate.findFirst` is used)
- * @param {string}   args.actorUserId   the caller — a certificate must belong to them
+ * @param {string}   args.actorUserId   the caller — must hold SUBMIT_APPLICATION on the certificate's holder
  * @param {object}   args.claimed       what the applicant's payload says (untrusted)
  * @param {object}   [args.stored]      the filing's current formData (unused except for shape)
  * @param {?string}  [args.filingEntityId] the holder the filing is made for (Application.entityId).
  *                                      A RENEWAL is granted only when the previous certificate's
  *                                      holder is this entity AND the caller holds
  *                                      SUBMIT_APPLICATION on it (operator ruling 2026-10-03).
- * @param {object}   [args.holderScope] the door's holder scope (R1 reads); none from other callers
+ * @param {object}   [args.holderScope] the door's holder scope; none from other callers
  * @returns {Promise<{dimensions: object, notice: ?{code: string, messageTh: string}}>}
  *          `dimensions` holds ONLY the keys that should change. An empty object means the
  *          applicant said nothing about the law and the filing keeps what it had.
@@ -143,13 +143,12 @@ async function resolveLawDimensions({
             where: {
                 certificateNumber: number,
                 isDeleted: false,
-                // R1-legacy-pin: removed in Task 12. The legacy branch is the number itself,
-                // beside the same key, so the rows are the pre-R1 rows: the holder filter
-                // cannot hide the certificate from the holder check below.
-                ..._holderAccess().r1HolderOrLegacyWhenScoped(holderScope, 'Certificate', { certificateNumber: number }),
+                // A health caller passes its holder scope: a certificate outside it is
+                // not found here (spec 2026-09-30 §3.1).
+                ..._holderAccess().holderReadWhereIfScoped(holderScope, 'Certificate'),
             },
             select: {
-                id: true, certificateNumber: true, userId: true, status: true, expiryDate: true,
+                id: true, certificateNumber: true, status: true, expiryDate: true,
                 // พืชที่ใบเดิมรับรอง — อ่านจากคำขอที่ออกใบนั้น (plantId เป็น slug เดียวกับ
                 // ที่ทะเบียนกฎใช้) ไม่ใช่จาก cropType ที่เป็นชื่อไทยบนกระดาษ
                 // entityId คือผู้ถือใบเดิม ใช้ตัดสินว่าคำขอนี้ต่ออายุในนามผู้ถือเดียวกันหรือไม่
@@ -180,18 +179,8 @@ async function resolveLawDimensions({
         };
     }
 
-    if (cert.userId !== actorUserId) {
-        // Deliberately the same wording as NOT_FOUND would give a stranger no more than a
-        // 404 does — but the code differs so the log can tell the two apart.
-        return {
-            dimensions: { ...dimensions, ...AS_NEW },
-            notice: notice(
-                'PREVIOUS_CERTIFICATE_NOT_YOURS',
-                'เลขที่ใบรับรองนี้ไม่ได้เป็นของบัญชีที่กำลังยื่นคำขอ กรุณาตรวจสอบเลขที่อีกครั้ง '
-                + 'หรือเข้าสู่ระบบด้วยบัญชีที่ถือใบรับรองใบนั้น',
-            ),
-        };
-    }
+    // Operator ruling 2026-10-03: who filed the previous certificate does not matter;
+    // the holder rule and SUBMIT_APPLICATION below decide (no filer match).
 
     if (String(cert.status || '').toLowerCase() !== CERT_ACTIVE) {
         return {
@@ -245,7 +234,7 @@ async function resolveLawDimensions({
                 notice: notice(
                     'PREVIOUS_CERTIFICATE_NO_SUBMIT_RIGHT',
                     'บัญชีของคุณไม่มีสิทธิ์ยื่นคำขอในนามผู้ถือใบรับรองใบนี้ จึงต่ออายุหรือขอใบแทนไม่ได้ '
-                    + 'กรุณาให้เจ้าของพื้นที่ทำงานมอบสิทธิ์ยื่นคำขอก่อน',
+                    + 'ขอให้เจ้าของมอบสิทธิ์ยื่นคำขอให้คุณก่อน แล้วลองอีกครั้ง',
                 ),
             };
         }
@@ -307,46 +296,8 @@ async function resolveLawDimensions({
     };
 }
 
-/**
- * A draft whose holder changes (POST /prepare re-points Application.entityId to the active
- * entity) must not carry a RENEWAL or REPLACEMENT judged for the previous holder (review
- * round 2, operator ruling 2026-10-03). The stored claim is judged again, by the same rules
- * as the draft door, against the NEW holder. A claim that fails comes back as NEW with the
- * links cleared and a notice; a filing with no such claim changes nothing.
- *
- * The claim is read the way the requirement engine reads it: the requestType word, or a
- * renewalOf / replacementOf link. The certificate is found by the number the draft door
- * stored beside the link (renewalOfCertificateNumber, written for both claims).
- *
- * @param {object} args
- * @param {object} args.prisma
- * @param {string} args.actorUserId
- * @param {object} args.formData      the draft's stored formData
- * @param {?string} args.toEntityId   the holder the draft is moving to
- * @param {object} [args.holderScope]
- * @returns {Promise<{dimensions: object, notice: ?{code: string, messageTh: string}}>}
- */
-async function rejudgeClaimForHolder({ prisma, actorUserId, formData, toEntityId, holderScope = null } = {}) {
-    const fd = formData && typeof formData === 'object' ? formData : {};
-    const word = oneOf(fd.requestType, REQUEST_TYPES);
-    const kind = fd.replacementOf ? 'REPLACEMENT'
-        : (fd.renewalOf ? 'RENEWAL' : (word === 'RENEWAL' || word === 'REPLACEMENT' ? word : null));
-    if (!kind) {
-        return { dimensions: {}, notice: null };
-    }
-    return resolveLawDimensions({
-        prisma,
-        actorUserId,
-        claimed: { requestType: kind, previousCertificateNumber: fd.renewalOfCertificateNumber || '' },
-        stored: fd,
-        filingEntityId: toEntityId || null,
-        holderScope,
-    });
-}
-
 module.exports = {
     resolveLawDimensions,
-    rejudgeClaimForHolder,
     LAW_DIMENSION_KEYS,
     REQUEST_TYPES,
     CERT_SCOPES,

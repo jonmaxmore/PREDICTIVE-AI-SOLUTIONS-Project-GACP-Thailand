@@ -15,21 +15,9 @@
  * Every health read spreads `holderReadWhere(scope, model)`. The fragment
  * carries the HOLDER_SCOPED marker, which the read witness looks for.
  *
- * R1 (operator ruling C1): while the active-entity middleware still exists,
- * holderScope intersects R with req.activeEntity. That one line is the only
- * place this module touches the workspace mode; Task 12 deletes it.
- *
- * R1 caveat — no fail-closed claim for Application/Farm top-level spreads:
- * with an entity context bound, tenantInjectExtension's entity dimension
- * overwrites a top-level `where.entityId` with the active entity AFTER the
- * witness has passed the read. A fragment `{ entityId: { in: [] } }` (empty
- * R ∩ active, e.g. a personal entity found by citizen-id hash without a
- * membership row) therefore reads as `entityId = active` in R1, not as an
- * empty set. The empty-set guarantee holds only where no entity context is
- * bound, and for relation fragments (`application: { entityId: … }`), which
- * the extension does not rewrite. It becomes unconditional when Task 12
- * removes the entity dimension. R1 also keeps each door's pre-R1 filer pin
- * (r1LegacyApplicantPin), so R1 rows equal the pre-R1 rows.
+ * There is no active workspace and no filer pin (R2 Task 12 removed the R1
+ * intersection with the workspace header and every filer branch R1 kept):
+ * the membership set alone decides what a health user reads.
  *
  * Capability gating (which member may do WHICH action) stays with the
  * per-permission engine; assertHolderCapability only delegates to it.
@@ -78,19 +66,13 @@ const uniq = (values) => [...new Set(values)];
 /**
  * The membership set for a user.
  * @param {string} userId
- * @param {{ activeEntityId?: string|null }} [options] — R1 only: intersect with this entity
  * @returns {Promise<{ userId: string, readIds: string[], editIds: string[] }>}
  */
-async function holderScopeForUser(userId, options = {}) {
+async function holderScopeForUser(userId) {
     const uid = String(userId || '').trim();
     const memberships = await listActiveMemberships(uid);
-    let readIds = uniq(memberships.map((m) => m.entityId));
-    let editIds = uniq(memberships.filter((m) => m.role !== 'VIEWER').map((m) => m.entityId));
-    const active = options.activeEntityId ? String(options.activeEntityId) : '';
-    if (active) {
-        readIds = readIds.filter((id) => id === active);
-        editIds = editIds.filter((id) => id === active);
-    }
+    const readIds = uniq(memberships.map((m) => m.entityId));
+    const editIds = uniq(memberships.filter((m) => m.role !== 'VIEWER').map((m) => m.entityId));
     return { userId: uid, readIds, editIds };
 }
 
@@ -100,7 +82,7 @@ const scopeByRequest = new WeakMap();
  * The membership set for this request's user, computed once per request.
  * A missing request rejects (never throws synchronously); a request with no
  * user resolves to the empty scope (fail closed).
- * @param {object} req — Express request (req.user.id; R1: req.activeEntity)
+ * @param {object} req — Express request (req.user.id)
  * @returns {Promise<{ userId: string, readIds: string[], editIds: string[] }>}
  */
 function holderScope(req) {
@@ -109,10 +91,7 @@ function holderScope(req) {
     }
     const cached = scopeByRequest.get(req);
     if (cached) { return cached; }
-    const pending = holderScopeForUser(req.user?.id, {
-        // R1 intersection (ruling C1) — deleted in Task 12.
-        activeEntityId: req.activeEntity?.entityId,
-    });
+    const pending = holderScopeForUser(req.user?.id);
     scopeByRequest.set(req, pending);
     return pending;
 }
@@ -140,120 +119,39 @@ function holderReadWhere(scope, model) {
 }
 
 /**
- * R1-legacy-pin: removed in Task 12.
- *
- * Operator ruling C1 (controller ruling, Task 3 fix round 1): R1 returns
- * exactly what the pre-R1 code returned. Every applicant read therefore keeps
- * its pre-R1 filer where — verbatim, per door — as one extra AND member beside
- * the unchanged holder fragment. The fragment is what the read witness looks
- * for; the pin is what keeps the rows the same. R2 widens reads by deleting
- * every call of this helper (Task 12, together with the R1 intersection in
- * holderScope); the call sites carry the same `R1-legacy-pin` marker.
- *
- * Where a door's old where relaxed to the workspace entity (buildHealthWhereClause
- * with personal:false → { entityId }), the caller passes that relaxed where as
- * the pin; it sits inside AND, so it never overwrites the fragment's entityId.
- *
- * A missing pin (the old code would have had no filer to pin on) matches
- * nothing.
- * @param {object|null|undefined} pin — the door's pre-R1 filer where
- * @returns {{ AND: object[] }} spread into the where
+ * holderReadWhere for a caller that may or may not be a health door: a health
+ * door passes its holder scope and gets the marked fragment; staff, jobs and
+ * system callers pass no scope and get `{}`, so their where stays byte for byte.
+ * @param {{ userId: string, readIds: string[] }|null|undefined} scope
+ * @param {string} model — one of WATCHED_MODELS
+ * @returns {object} the fragment, or `{}`
  */
-function r1LegacyApplicantPin(pin) {
-    if (!pin || typeof pin !== 'object' || Object.keys(pin).length === 0) {
-        return { AND: [{ id: { in: [] } }] };
-    }
-    return { AND: [pin] };
+function holderReadWhereIfScoped(scope, model) {
+    if (!scope || !Array.isArray(scope.readIds)) { return {}; }
+    return holderReadWhere(scope, model);
 }
 
 /**
- * R1-legacy-pin: removed in Task 12.
- *
- * The door's pre-R1 where (its filer pin, or the id the door's gate already
- * resolved), marked and REGISTERED for the request as a holder fragment of
- * `model`, so the read witness accepts it as one OR branch. A copy is marked:
- * the caller's object is never frozen. A missing or empty pin matches nothing.
- *
- * Why (Task 4 fix round 1, controller ruling on C1): `fragment AND pin` can only
- * narrow. Where the pre-R1 read was decided by the pin alone (models outside the
- * ALS entity dimension, and child reads behind an Application gate), a filer
- * whose membership was revoked, or a personal entity with no membership row
- * (readIds = []), lost rows. `{ OR: [fragment, legacy] }` beside the same pin
- * gives (F ∪ P) ∩ P = P: exactly the pre-R1 rows, with every OR branch
- * registered.
+ * The one health read that the holder scope does NOT decide: a PDPA s.30
+ * export of the data subject's own rows (pdpa-service), keyed by law on the
+ * filer / owner column, not on the holder. The where is copied, marked and
+ * registered for the request, so the read witness accepts it as scoped.
+ * Nothing else may use it: every other health read spreads holderReadWhere.
+ * A missing or empty where matches nothing.
  * @param {string} model — one of WATCHED_MODELS
- * @param {object|null|undefined} pin — the pre-R1 where, verbatim
+ * @param {object} where — the data subject's own key, e.g. { healthId }
  * @returns {object} a frozen, marked, registered where
  */
-function r1LegacyFilerFragment(model, pin) {
+function dataSubjectReadWhere(model, where) {
     if (!isWatchedModel(model)) {
-        throw new Error(`r1LegacyFilerFragment: ${model} is not a holder-bearing model`);
+        throw new Error(`dataSubjectReadWhere: ${model} is not a holder-bearing model`);
     }
-    const body = pin && typeof pin === 'object' && Object.keys(pin).length > 0
-        ? JSON.parse(JSON.stringify(pin))
+    const body = where && typeof where === 'object' && Object.keys(where).length > 0
+        ? JSON.parse(JSON.stringify(where))
         : { id: { in: [] } };
-    const where = markHolderScoped(body);
-    registerHolderFragment(model, where);
-    return where;
-}
-
-/**
- * R1-legacy-pin: removed in Task 12 (each call becomes holderReadWhere(scope, model)).
- *
- * `{ OR: [holderReadWhere(scope, model), r1LegacyFilerFragment(model, legacy)] }`.
- * Spread it into a where that ALSO carries the pre-R1 pin (as its own key, e.g.
- * `applicationId`, `id`, or via r1LegacyApplicantPin), so the OR can never widen.
- * A where that already has a top-level OR must move that OR into AND first.
- * @param {{ readIds: string[] }} scope
- * @param {string} model
- * @param {object} legacy — the pre-R1 where the door's rows were decided by
- * @returns {{ OR: object[] }}
- */
-function r1HolderOrLegacy(scope, model, legacy) {
-    return { OR: [holderReadWhere(scope, model), r1LegacyFilerFragment(model, legacy)] };
-}
-
-/**
- * R1-legacy-pin: removed in Task 12 (each call becomes ...holderReadWhere(scope, 'Application')).
- *
- * An applicant Application read beside the door's pre-R1 filer pin:
- * `{ OR: [fragment, legacy(pin)], AND: [pin] }` = exactly the pin's rows.
- *
- * Why not `fragment AND pin` (final review C1, 2026-10-03): that form relied on
- * tenantInjectExtension overwriting the top-level entityId with the active
- * entity, which happens only when an entity context is bound. A user with no
- * personal entity, or any user when the active-entity middleware's resolution
- * fails, has no context, so `entityId IN R` stayed in the where and dropped
- * the filings whose holder is null or outside R. With a context bound both
- * forms read `pin AND entityId = active`; without one this form reads the pin,
- * as the pre-R1 code did.
- *
- * The result owns the top-level OR and AND keys: a door with its own OR moves
- * it into AND. A missing or empty pin matches nothing.
- * @param {{ readIds: string[] }} scope
- * @param {object|null|undefined} pin — the door's pre-R1 filer where, verbatim
- * @returns {{ OR: object[], AND: object[] }}
- */
-function r1ApplicationHolderOrPin(scope, pin) {
-    return { ...r1HolderOrLegacy(scope, 'Application', pin), ...r1LegacyApplicantPin(pin) };
-}
-
-/**
- * R1-legacy-pin: removed in Task 12 (each call becomes holderReadWhere(scope, model)).
- *
- * r1HolderOrLegacy when the caller is a health door that passed its scope, and
- * nothing otherwise: staff, jobs and system callers pass no scope and keep their
- * where byte for byte. For reads behind a gate the door already passed (child
- * rows of an application or farm it resolved, the door's own id), so the legacy
- * branch is the read's own key and the rows stay exactly the pre-R1 rows.
- * @param {{ readIds: string[] }|null|undefined} scope
- * @param {string} model
- * @param {object} legacy — the pre-R1 where, which the caller ALSO keeps beside it
- * @returns {object} `{ OR: [...] }` or `{}`
- */
-function r1HolderOrLegacyWhenScoped(scope, model, legacy) {
-    if (!scope || !Array.isArray(scope.readIds)) { return {}; }
-    return r1HolderOrLegacy(scope, model, legacy);
+    const marked = markHolderScoped(body);
+    registerHolderFragment(model, marked);
+    return marked;
 }
 
 /**
@@ -304,13 +202,10 @@ module.exports = {
     holderScope,
     holderScopeForUser,
     holderReadWhere,
+    holderReadWhereIfScoped,
+    dataSubjectReadWhere,
     hasHolderMarker,
     markHolderScoped,
     assertHolderCapability,
     resolveHolderOwnerOrCreator,
-    r1LegacyApplicantPin, // R1-legacy-pin: removed in Task 12
-    r1LegacyFilerFragment, // R1-legacy-pin: removed in Task 12
-    r1HolderOrLegacy, // R1-legacy-pin: removed in Task 12
-    r1HolderOrLegacyWhenScoped, // R1-legacy-pin: removed in Task 12
-    r1ApplicationHolderOrPin, // R1-legacy-pin: removed in Task 12
 };

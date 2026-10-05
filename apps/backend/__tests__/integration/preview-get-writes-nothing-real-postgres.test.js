@@ -53,6 +53,7 @@ d('GET /applications/:id/preview writes nothing, on a real Postgres (P-GET)', ()
     let app;
     let orgId;
     let user;
+    let holder;
     const appIds = [];
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -67,6 +68,12 @@ d('GET /applications/:id/preview writes nothing, on a real Postgres (P-GET)', ()
             data: { canonicalId: `pget-canon-${suffix}`, password: 'x', organizationId: orgId, authType: 'EMAIL_LEGACY' },
         });
         mockCurrentUser = { id: user.id, canonicalId: user.canonicalId, role: 'HEALTH_USER', canonicalRole: 'health' };
+        // R2 Task 12: the preview reads by holder membership (no filer fallback), so the
+        // rows are held by an entity the user is an ACTIVE OWNER of.
+        holder = await prisma.entity.create({ data: { type: 'INDIVIDUAL', displayName: `P-GET ${suffix}`, organizationId: orgId } });
+        await prisma.entityMembership.create({
+            data: { userId: user.id, entityId: holder.id, role: 'OWNER', status: 'ACTIVE', organizationId: orgId },
+        });
 
         const previewRouter = require('../../routes/api/preview/preview');
         app = express();
@@ -78,6 +85,10 @@ d('GET /applications/:id/preview writes nothing, on a real Postgres (P-GET)', ()
         for (const id of appIds) {
             await prisma.invoice.deleteMany({ where: { applicationId: id } }).catch(() => {});
             await prisma.application.deleteMany({ where: { id } }).catch(() => {});
+        }
+        if (holder) {
+            await prisma.entityMembership.deleteMany({ where: { entityId: holder.id } }).catch(() => {});
+            await prisma.entity.deleteMany({ where: { id: holder.id } }).catch(() => {});
         }
         if (user) { await prisma.user.deleteMany({ where: { id: user.id } }).catch(() => {}); }
         if (orgId) { await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {}); }
@@ -101,6 +112,7 @@ d('GET /applications/:id/preview writes nothing, on a real Postgres (P-GET)', ()
                 healthId: user.canonicalId,
                 areaType: 'OUTDOOR',
                 organizationId: orgId,
+                entityId: holder.id,
                 status,
                 formData: FORM_DATA[shape],
                 // Stale on purpose: no computed figure equals these, so a write would show.

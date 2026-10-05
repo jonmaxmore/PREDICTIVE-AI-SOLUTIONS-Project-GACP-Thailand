@@ -26,7 +26,7 @@ const {
 
 const SUBMITTABLE = ['DRAFT', 'REVISION_REQUESTED', 'CAR_PENDING'];
 // Spec 2026-09-30 §3.1 (Task 4): the lookup reads within the caller's holder
-// scope; R1 keeps the pre-R1 healthId pin as the AND member.
+// scope; R2 Task 12: the id-less fallback is the caller's own filing (submitterId).
 const SCOPE = { userId: 'U1', readIds: ['entity-1'], editIds: ['entity-1'] };
 
 describe('Bug 8.3 — findDraftForSubmit status filter', () => {
@@ -38,8 +38,10 @@ describe('Bug 8.3 — findDraftForSubmit status filter', () => {
 
         expect(findFirst).toHaveBeenCalledTimes(1);
         const { where } = findFirst.mock.calls[0][0];
-        expect(where.AND).toEqual([{ healthId: 'H1' }]);
-        expect(JSON.parse(JSON.stringify(where.OR))).toEqual([{ entityId: { in: ['entity-1'] } }, { healthId: 'H1' }]);
+        expect(where.entityId).toEqual({ in: ['entity-1'] });
+        expect(where.submitterId).toBe('U1');
+        expect(where.OR).toBeUndefined();
+        expect(where.AND).toBeUndefined();
         expect(where.isDeleted).toBe(false);
         expect(where.status).toEqual({ in: SUBMITTABLE });
     });

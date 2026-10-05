@@ -95,10 +95,10 @@ async function syncApplicationDocument(prisma, {
     if (!prisma?.applicationDocument || !applicationId || !fileUrl) { return null; }
     // The upload door passes the applicant's holder scope (spec 2026-09-30 §3.1):
     // the three reads below carry its fragment. The backfill script passes none.
-    // R1-legacy-pin: removed in Task 12 (→ holderReadWhere): the application the door
-    // resolved decides (OR-registered beside the fragment), exactly as pre-R1.
+    // Lazy, and only for a scoped caller: holder-access loads prisma-database,
+    // farm-access and the permission engine, which the backfill never needs.
     const scoped = holderScope && Array.isArray(holderScope.readIds)
-      ? require('./holder-access').r1HolderOrLegacy(holderScope, 'ApplicationDocument', { applicationId })
+      ? require('./holder-access').holderReadWhere(holderScope, 'ApplicationDocument')
       : {};
     const documentType = deriveDocumentType(slotId);
     const isImage = typeof mimeType === 'string' && mimeType.startsWith('image/');

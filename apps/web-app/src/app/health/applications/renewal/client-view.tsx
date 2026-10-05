@@ -251,7 +251,7 @@ function RenewalContent() {
                     {
                         FORBIDDEN_NOT_OWNER: renewalCopy.errorNotOriginalFiler,
                         ENTITY_PERMISSION_DENIED: renewalCopy.errorNoSubmitRight,
-                        APPLICANT_ENTITY_MISSING: renewalCopy.errorNoHolder,
+                        APPLICATION_HOLDER_REQUIRED: renewalCopy.errorNoHolder,
                     },
                     renewalCopy.errorCreateFailed,
                 ));

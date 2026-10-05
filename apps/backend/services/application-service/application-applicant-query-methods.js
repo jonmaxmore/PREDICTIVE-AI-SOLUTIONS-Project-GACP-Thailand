@@ -21,13 +21,11 @@
  * tests can stub the client).
  */
 
-const crypto = require('crypto');
-const { computeLookupHmac } = require('../../utils/field-encryption');
 const { applicationHolderWhere } = require('./application-draft-query-methods');
-const { r1LegacyApplicantPin, r1LegacyFilerFragment, r1ApplicationHolderOrPin, r1HolderOrLegacyWhenScoped: r1ScopedOrLegacy } = require('../holder-access'); // R1-legacy-pin: removed in Task 12
+const { holderReadWhereIfScoped } = require('../holder-access');
 
 /**
- * Final review I1 (2026-10-03): the R1 options-object lookups refuse the pre-R1
+ * Final review I1 (2026-10-03): the options-object lookups refuse the pre-R1
  * positional call (a filer healthId where the options belong). Without this a
  * caller written against the old shape (e.g. a branch merged after R1) gets a
  * silent null and the draft door refuses or mints instead of saving.
@@ -37,7 +35,7 @@ const { r1LegacyApplicantPin, r1LegacyFilerFragment, r1ApplicationHolderOrPin, r
 function assertOptionsObject(method, options) {
     if (options === null || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError(
-            `${method}: expected an options object { holderScope, filerHealthId } (R1), got ${options === null ? 'null' : Array.isArray(options) ? 'an array' : typeof options}`
+            `${method}: expected an options object { holderScope, submitterId, editIds }, got ${options === null ? 'null' : Array.isArray(options) ? 'an array' : typeof options}`
             + ' — the pre-R1 positional healthId form is gone',
         );
     }
@@ -46,98 +44,53 @@ function assertOptionsObject(method, options) {
 function createApplicationApplicantQueryMethods({ prisma }) {
     return {
         /**
-         * Replaces applications.js:98 prisma.entity.findFirst
-         *
-         * Look up the user's personal INDIVIDUAL entity. Returns `{ id }` or
-         * null. Wave B Phase 68 invariant: every health user has a personal
-         * INDIVIDUAL entity (created at register in Phase 67 or backfilled) with
-         * an OWNER membership. Tolerates absent entity by returning null so the
-         * legacy healthId path keeps working.
-         *
-         * STAGE B2 (detokenize RFC) — PRIMARY path resolves via the stable
-         * EntityMembership(userId, OWNER, INDIVIDUAL) link. `resolveHealthIdentity`
-         * always returns `{ userId, healthId }`, so the non-PII UUID is available
-         * here and the per-request national-ID-hash dependency is removed (the
-         * unkeyed `thaiCitizenIdHash` was brute-forceable from a dump with NO key).
-         *
-         * FALLBACK (pre-Phase-68 rows with no membership link): the national-ID
-         * hash lookup, using the keyed `thaiCitizenIdHmac` when
-         * AUTH_LOOKUP_USE_HMAC is on (else the legacy unkeyed `thaiCitizenIdHash`
-         * — byte-for-byte today's behaviour).
-         */
-        async findPersonalEntityForHealthIdentity(healthIdentity) {
-            // Primary: stable userId → OWNER membership on an INDIVIDUAL entity.
-            // Wave B chunk 6 (drill-flagged): findFirst over a non-unique
-            // candidate set — stable ordering (oldest wins) so duplicate
-            // candidates always resolve the SAME personal entity, matching
-            // active-entity-middleware.findPersonalEntity.
-            if (healthIdentity?.userId) {
-                const ownerMembership = await prisma.entityMembership.findFirst({
-                    where: {
-                        userId: healthIdentity.userId,
-                        role: 'OWNER',
-                        entity: { type: 'INDIVIDUAL', isDeleted: false },
-                    },
-                    select: { entityId: true },
-                    orderBy: { createdAt: 'asc' },
-                });
-                if (ownerMembership?.entityId) {
-                    return { id: ownerMembership.entityId };
-                }
-            }
-
-            // Fallback: legacy national-ID hash lookup for rows with no
-            // membership link.
-            if (!healthIdentity?.healthId) {
-                return null;
-            }
-            if (process.env.AUTH_LOOKUP_USE_HMAC === 'true') {
-                const idHmac = computeLookupHmac(healthIdentity.healthId);
-                if (idHmac) {
-                    const byHmac = await prisma.entity.findFirst({
-                        where: { type: 'INDIVIDUAL', thaiCitizenIdHmac: idHmac, isDeleted: false },
-                        select: { id: true },
-                        orderBy: { createdAt: 'asc' },
-                    });
-                    if (byHmac) {return byHmac;}
-                }
-            }
-            const idHash = crypto
-                .createHash('sha256')
-                .update(String(healthIdentity.healthId))
-                .digest('hex');
-            return prisma.entity.findFirst({
-                where: { type: 'INDIVIDUAL', thaiCitizenIdHash: idHash, isDeleted: false },
-                select: { id: true },
-                orderBy: { createdAt: 'asc' },
-            });
-        },
-
-        /**
          * Replaces applications.js:112 prisma.application.findFirst (by id + healthId)
          *
          * Locate an application by id within the caller's holders (spec
          * 2026-09-30 §3.1: findFirst({ where: { id, ...fragment } })), filtered
          * for soft-deletes. Used by the draft/prepare/upload flows when the
          * client supplies an explicit applicationId or draftId. No scope → null.
-         * R1: `filerHealthId` is the pre-R1 healthId pin; a missing one → null
-         * (R1-legacy-pin: removed in Task 12, which adds the editIds rule).
+         * R2 Task 9 (spec §3.2 draft edits): the fragment alone, so a co-member
+         * who may edit the holder reaches the draft whoever filed it. The editIds
+         * rule is the caller's (findOrCreateApplicationForHealth: not readable →
+         * 404, readable but not editable → 403).
          * @param {string} applicationId
-         * @param {{ holderScope?: object, filerHealthId?: string }} [options]
+         * @param {{ holderScope?: object }} [options]
          */
         async findApplicationByIdForHealth(applicationId, options) {
             assertOptionsObject('findApplicationByIdForHealth', options);
             const holderWhere = applicationHolderWhere(options);
-            if (!applicationId || !holderWhere || !options.filerHealthId) {
+            if (!applicationId || !holderWhere) {
                 return null;
             }
             return prisma.application.findFirst({
                 where: {
                     id: applicationId,
-                    // R1-legacy-pin: removed in Task 12 (→ ...holderWhere). OR form (final review C1).
-                    ...r1ApplicationHolderOrPin(options.holderScope, { healthId: options.filerHealthId }),
+                    ...holderWhere,
                     isDeleted: false,
                 },
+            });
+        },
+
+        /**
+         * The holder of one application the caller can read (spec 2026-09-30 §3.1:
+         * findFirst({ where: { id, ...fragment } })), for a door that then asks
+         * the permission engine what the caller may DO on that holder (R2 Task 9:
+         * the checkout gate, operator Q3). Returns `{ id, entityId }` or null;
+         * no scope → null, no query.
+         * @param {string} applicationId
+         * @param {{ holderScope?: object }} options
+         * @returns {Promise<{ id: string, entityId: string|null }|null>}
+         */
+        async findApplicationHolderForHealth(applicationId, options) {
+            assertOptionsObject('findApplicationHolderForHealth', options);
+            const holderWhere = applicationHolderWhere(options);
+            if (!applicationId || !holderWhere) {
+                return null;
+            }
+            return prisma.application.findFirst({
+                where: { id: applicationId, ...holderWhere, isDeleted: false },
+                select: { id: true, entityId: true },
             });
         },
 
@@ -148,21 +101,23 @@ function createApplicationApplicantQueryMethods({ prisma }) {
          * ordered by `updatedAt desc`. Used as a fallback when the client did not
          * supply an explicit applicationId (the wizard auto-resumes the last
          * draft). No scope → null, no query.
-         * R1: `filerHealthId` is the pre-R1 healthId pin; a missing one → null.
-         * Task 8 replaces it with `submitterId = me` (spec §3.2 resume);
-         * R1-legacy-pin: removed in Task 12.
-         * @param {{ holderScope?: object, filerHealthId?: string }} [options]
+         * Task 8 (spec §3.2 resume): only the caller's own draft (`submitterId`)
+         * on a holder in `editIds`; a missing submitterId or editIds → null.
+         * @param {{ holderScope?: object, submitterId?: string, editIds?: string[] }} [options]
          */
         async findLatestOpenDraftForHealth(options) {
             assertOptionsObject('findLatestOpenDraftForHealth', options);
             const holderWhere = applicationHolderWhere(options);
-            if (!holderWhere || !options.filerHealthId) {
+            const submitterId = String(options.submitterId || '').trim();
+            if (!holderWhere || !submitterId || !Array.isArray(options.editIds)) {
                 return null;
             }
             return prisma.application.findFirst({
                 where: {
-                    // R1-legacy-pin: removed in Task 12 (→ ...holderWhere). OR form (final review C1).
-                    ...r1ApplicationHolderOrPin(options.holderScope, { healthId: options.filerHealthId }),
+                    ...holderWhere,
+                    // Task 8 (spec §3.2 resume): the caller's own draft, on a holder it may
+                    // edit. Inside AND, so it can never widen the fragment.
+                    AND: [{ submitterId, entityId: { in: [...options.editIds] } }],
                     isDeleted: false,
                     status: { in: ['DRAFT'] },
                 },
@@ -171,30 +126,28 @@ function createApplicationApplicantQueryMethods({ prisma }) {
         },
 
         /**
-         * Replaces applications.js:139 prisma.application.update (auto-heal entity columns)
-         *
-         * Lazy-backfill `entityId` / `submitterId` on a draft that pre-dates
-         * Phase 66 (or somehow slipped through the backfill). Cheap (one
-         * indexed lookup), and the alternative is forever-null columns.
-         * Returns the updated row.
-         */
-        async healDraftEntityColumns(applicationId, { entityId, submitterId }) {
-            return prisma.application.update({
-                where: { id: applicationId },
-                data: { entityId, submitterId },
-            });
-        },
-
-        /**
          * Replaces applications.js:160 prisma.application.create (new draft)
          *
-         * Create a brand-new DRAFT row for a health user. Wave C PR-5: the
-         * `entityId` should be seeded from the active workspace (header) or
-         * fall back to the user's personal INDIVIDUAL entity — the caller
-         * resolves the precedence and passes the final value here.
+         * Create a brand-new DRAFT row for a health user. The caller passes the
+         * holder the applicant chose (`entityId`, spec 2026-09-30 §3.2); there is
+         * no default holder.
          */
         async createDraftForHealth(data) {
             return prisma.application.create({ data });
+        },
+
+        /**
+         * Task 8 (spec 2026-09-30 §3.2): the holder a new draft is filed for —
+         * `{ id, type }` of a live (not deleted) Entity, or null. The draft door
+         * has already checked the caller may edit for it (scope.editIds).
+         * @param {string} entityId
+         */
+        async findHolderEntity(entityId) {
+            if (!entityId) { return null; }
+            return prisma.entity.findFirst({
+                where: { id: entityId, isDeleted: false },
+                select: { id: true, type: true },
+            });
         },
 
         /**
@@ -237,13 +190,22 @@ function createApplicationApplicantQueryMethods({ prisma }) {
          * extension, which under RLS_SHADOW_GUC=true runs it in its own batch transaction on
          * another connection; that one waits for the lock held here and the save dies (P2028).
          *
+         * `options.editIds` is required (Task 8): a row whose holder is not in it is
+         * 404 APPLICATION_NOT_FOUND under the lock, nothing written.
+         *
          * Returns `{ built }` when compute refused (nothing written), else `{ built, row }`.
          */
-        async saveApplicantDraftInOrder(applicationId, clock, compute) {
+        async saveApplicantDraftInOrder(applicationId, clock, compute, options) {
+            // Task 8: the raw-SQL write must not bypass the holder rule. The caller
+            // passes its scope's editIds; the row's holder is re-checked under the lock.
+            const editIds = options && Array.isArray(options.editIds) ? options.editIds : null;
+            if (!editIds) {
+                throw new TypeError('saveApplicantDraftInOrder: options.editIds (holderScope(req).editIds) is required');
+            }
             return prisma.$transaction(async (tx) => {
-                const rows = await tx.$queryRaw`SELECT "formData", "workflowHistory", "serviceType", "areaType" FROM applications WHERE id = ${applicationId} FOR UPDATE`;
+                const rows = await tx.$queryRaw`SELECT "formData", "workflowHistory", "serviceType", "areaType", "entityId" FROM applications WHERE id = ${applicationId} FOR UPDATE`;
                 const fresh = rows && rows[0];
-                if (!fresh) {
+                if (!fresh || !editIds.includes(fresh.entityId)) {
                     const err = new Error('Application not found');
                     err.statusCode = 404;
                     err.code = 'APPLICATION_NOT_FOUND';
@@ -287,35 +249,42 @@ function createApplicationApplicantQueryMethods({ prisma }) {
          */
         async findDraftForSubmit({ applicationId, healthId, holderScope } = {}) {
             // Spec 2026-09-30 §3.1: within the caller's holder scope (no scope =
-            // closed, no query). R1 (C1, Task 4 fix round 1): the pre-R1 filer pin
-            // { healthId } decides — OR-registered beside the fragment and AND
-            // (Task 9's submit gate replaces it).
+            // closed, no query). By id: the fragment alone (R2 Task 9). Id-less:
+            // the caller's own latest filing (submitterId = the scope's user) within
+            // the fragment, the same "own draft" rule as resume (§3.2; R2 Task 12).
             const fragment = applicationHolderWhere({ holderScope });
-            if (!healthId || !fragment) {
+            if (!fragment) {
                 return null;
             }
-            const where = {
-                // R1-legacy-pin: removed in Task 12 (→ ...fragment)
-                OR: [fragment, r1LegacyFilerFragment('Application', { healthId })],
-                ...r1LegacyApplicantPin({ healthId }),
-                isDeleted: false,
-            };
             if (applicationId) {
                 // Exact application requested — look it up by id. The /submit
                 // handler then validates THAT application's status (idempotent
                 // return for SUBMITTED/PENDING_DOC_FEE, 409 for anything the
                 // state machine can't submit from), so no status filter here.
-                where.id = applicationId;
-            } else {
-                // Bug 8.3: id-less fallback picks the applicant's most-recently
-                // updated application. Without a status filter it could return a
-                // CERTIFIED / EXPIRED / in-review application (touched more
-                // recently than the working DRAFT) → a confusing 409 or a wrong
-                // idempotent response instead of submitting the actual draft.
-                // Restrict to the SOURCE states /submit can transition from
-                // (RESUBMIT_TARGET keys in applications.js).
-                where.status = { in: ['DRAFT', 'REVISION_REQUESTED', 'CAR_PENDING'] };
+                // R2 Task 9 (spec §3.2 Submit): the fragment alone; who may submit
+                // is the submit guard's question (SUBMIT_APPLICATION on the holder).
+                return prisma.application.findFirst({
+                    where: { id: applicationId, ...fragment, isDeleted: false },
+                    orderBy: { updatedAt: 'desc' },
+                });
             }
+            const submitterId = String(holderScope?.userId || '').trim();
+            if (!healthId || !submitterId) {
+                return null;
+            }
+            const where = {
+                ...fragment,
+                submitterId,
+                isDeleted: false,
+            };
+            // Bug 8.3: id-less fallback picks the applicant's most-recently
+            // updated application. Without a status filter it could return a
+            // CERTIFIED / EXPIRED / in-review application (touched more
+            // recently than the working DRAFT) → a confusing 409 or a wrong
+            // idempotent response instead of submitting the actual draft.
+            // Restrict to the SOURCE states /submit can transition from
+            // (RESUBMIT_TARGET keys in applications.js).
+            where.status = { in: ['DRAFT', 'REVISION_REQUESTED', 'CAR_PENDING'] };
             return prisma.application.findFirst({
                 where,
                 orderBy: { updatedAt: 'desc' },
@@ -337,10 +306,8 @@ function createApplicationApplicantQueryMethods({ prisma }) {
             // pass none and keep findUnique.
             const fragment = applicationHolderWhere({ holderScope });
             if (fragment) {
-                // R1-legacy-pin: removed in Task 12 (→ ...fragment). The id the door's
-                // gate resolved decides, as the pre-R1 findUnique did.
                 const scoped = {
-                    where: { id: applicationId, OR: [fragment, r1LegacyFilerFragment('Application', { id: applicationId })] },
+                    where: { id: applicationId, ...fragment },
                 };
                 if (select) {
                     scoped.select = select;
@@ -418,11 +385,11 @@ function createApplicationApplicantQueryMethods({ prisma }) {
                     select: { firstName: true, lastName: true, idCard: true, accountType: true },
                 }),
                 prisma.farm.findMany({
-                    where: {
-                        ownerId: userId,
-                        // R1-legacy-pin: removed in Task 12 — the pre-R1 owner where decides.
-                        ...r1ScopedOrLegacy(holderScope, 'Farm', { ownerId: userId }),
-                    },
+                    // A health door passes its holder scope: the farms of its holders
+                    // (spec 2026-09-30 §3.1). Without one the owner where stays.
+                    where: holderScope && Array.isArray(holderScope.readIds)
+                        ? holderReadWhereIfScoped(holderScope, 'Farm')
+                        : { ownerId: userId },
                     select: { id: true, farmName: true },
                 }),
                 establishmentsPromise,
@@ -432,10 +399,10 @@ function createApplicationApplicantQueryMethods({ prisma }) {
                 canonicalHealthId
                     ? prisma.application.findMany({
                         where: {
-                            healthId: canonicalHealthId,
+                            ...(holderScope && Array.isArray(holderScope.readIds)
+                                ? holderReadWhereIfScoped(holderScope, 'Application')
+                                : { healthId: canonicalHealthId }),
                             status: { not: 'EXPIRED' },
-                            // R1-legacy-pin: removed in Task 12 — the pre-R1 filer pin decides.
-                            ...r1ScopedOrLegacy(holderScope, 'Application', { healthId: canonicalHealthId }),
                         },
                         select: { id: true, status: true },
                         take: 5,

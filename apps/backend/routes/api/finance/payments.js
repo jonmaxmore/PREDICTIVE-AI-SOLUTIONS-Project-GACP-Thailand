@@ -29,7 +29,8 @@ const {
 // applicationService.resolveHealthIdentity instead of an ad-hoc file-local
 // prisma.user.findFirst query.
 const applicationService = require('../../../services/application-service');
-const { holderScope } = require('../../../services/holder-access');
+const { holderScope, assertHolderCapability } = require('../../../services/holder-access');
+const { entityPermissionDeniedBody } = require('../../../shared/entity-permission-denied');
 const { ERROR_CODES } = require('../../../shared/error-codes');
 
 /**
@@ -114,6 +115,34 @@ const PHASE_FROM_STATUS = Object.freeze({
  * @param {{id: string, status: string}} application ownership already proved
  * @returns {Promise<{status: number, body: object}|null>}
  */
+/**
+ * Who may start a payment for an application (spec 2026-09-30 §3.3, operator Q3):
+ * a member holding SUBMIT_APPLICATION on its holder. The legacy invoice doors
+ * (/create, /phase1/:applicationId) ask it before any service call, exactly as
+ * /checkout does. An authz gate only: amounts, statuses, invoice numbering and
+ * settlement are untouched. Answers the request and returns true when it refused.
+ * @returns {Promise<boolean>}
+ */
+async function refuseUnlessMayPay(req, res, applicationId, scope, refusedAction) {
+  const target = await applicationService.findApplicationHolderForHealth(applicationId, { holderScope: scope });
+  if (!target) {
+    res.status(404).json({ success: false, error: 'Application not found' });
+    return true;
+  }
+  try {
+    await assertHolderCapability(req.user?.id, target.entityId, 'SUBMIT_APPLICATION');
+    return false;
+  } catch (error) {
+    if (error?.code !== 'ENTITY_PERMISSION_DENIED') { throw error; }
+    await logPaymentEvent(req, refusedAction, AuditSeverity.WARNING, {
+      applicationId,
+      reason: 'ENTITY_PERMISSION_DENIED',
+    });
+    res.status(403).json(entityPermissionDeniedBody(error.permission));
+    return true;
+  }
+}
+
 async function refusalForPhase1Mint(application) {
   const { PAYABLE_STATES } = require('../../../services/checkout/stripe-checkout-service');
   if (!PAYABLE_STATES.M1.includes(application.status)) {
@@ -245,14 +274,13 @@ router.post('/create', authenticateHealth, async (req, res) => {
       });
     }
 
-    // Holder-scoped lookup (spec 2026-09-30 §3.1). The service-level method
-    // enforces the holder fragment + isDeleted=false, so this endpoint cannot
-    // be tricked into creating a payment for an application outside the
-    // caller's holders; in R1 it also keeps the pre-R1 healthId pin. Who may pay
-    // (SUBMIT_APPLICATION, Q3) is Task 9.
+    // Who may pay (SUBMIT_APPLICATION on the holder, Q3) is asked first (R2 Task 9
+    // fix round 1). Then the holder-scoped lookup (spec 2026-09-30 §3.1): the
+    // service-level method enforces the holder fragment + isDeleted=false.
+    const createScope = await holderScope(req);
+    if (await refuseUnlessMayPay(req, res, applicationId, createScope, 'PAYMENT_INITIATE_REFUSED')) { return undefined; }
     const application = await applicationService.findForPaymentOwnership(applicationId, {
-      holderScope: await holderScope(req),
-      filerHealthId: healthId, // R1-legacy-pin: removed in Task 12
+      holderScope: createScope,
     });
     if (!application) {
       return res.status(404).json({
@@ -298,7 +326,7 @@ router.post('/create', authenticateHealth, async (req, res) => {
       return res.status(refusal.status).json(refusal.body);
     }
 
-    const result = await createPhase1Payment(applicationId, healthId);
+    const result = await createPhase1Payment(applicationId, healthId, { holderScope: createScope });
     const breakdown = result.breakdown || { serviceFee: null, vat: null, total: null };
     const total = breakdown.total;
 
@@ -393,9 +421,11 @@ router.post('/phase1/:applicationId', authenticateHealth, async (req, res) => {
     // Ownership-scoped lookup, the same one /create uses — this door had none
     // of its own and relied on createPhase1Payment's internal filter, which left
     // it with no application to gate on and no 404 of its own.
+    // Who may pay (Q3), asked before any service call (R2 Task 9 fix round 1).
+    const phase1Scope = await holderScope(req);
+    if (await refuseUnlessMayPay(req, res, applicationId, phase1Scope, 'PAYMENT_PHASE1_INITIATE_REFUSED')) { return undefined; }
     const application = await applicationService.findForPaymentOwnership(applicationId, {
-      holderScope: await holderScope(req),
-      filerHealthId: healthId, // R1-legacy-pin: removed in Task 12
+      holderScope: phase1Scope,
     });
     if (!application) {
       return res.status(404).json({ success: false, error: 'Application not found' });
@@ -410,8 +440,8 @@ router.post('/phase1/:applicationId', authenticateHealth, async (req, res) => {
       return res.status(refusal.status).json(refusal.body);
     }
 
-    const result = await createPhase1Payment(applicationId, healthId);
-    const settlements = await getInvoiceSettlementsForApplication(applicationId);
+    const result = await createPhase1Payment(applicationId, healthId, { holderScope: phase1Scope });
+    const settlements = await getInvoiceSettlementsForApplication(applicationId, { holderScope: phase1Scope });
 
     await logPaymentEvent(req, 'PAYMENT_PHASE1_INITIATED', AuditSeverity.INFO, {
       applicationId,
@@ -549,6 +579,18 @@ router.post('/checkout', authenticateHealth, async (req, res) => {
       return res.status(400).json({ success: false, error: 'APPLICATION_ID_REQUIRED' });
     }
 
+    // Who may start a checkout (spec 2026-09-30 §3.3, operator Q3): a member
+    // holding SUBMIT_APPLICATION on the application's holder, the same people who
+    // may file. An authz gate only: it runs before the service, so a refusal
+    // mints no order, invoice or payment and never reaches the gateway. Amounts,
+    // statuses and settlement stay the service's and the webhook's.
+    const checkoutScope = await holderScope(req);
+    const target = await applicationService.findApplicationHolderForHealth(applicationId, { holderScope: checkoutScope });
+    if (!target) {
+      throw Object.assign(new Error('Application not found'), { statusCode: 404, code: 'APPLICATION_NOT_FOUND' });
+    }
+    await assertHolderCapability(req.user?.id, target.entityId, 'SUBMIT_APPLICATION');
+
     const result = await createCheckoutForApplication({
       applicationId,
       milestone: String(milestone || 'M1').toUpperCase(),
@@ -558,8 +600,7 @@ router.post('/checkout', authenticateHealth, async (req, res) => {
       // different actor than the other.
       actor: {
         id: req.user?.id,
-        holderScope: await holderScope(req),
-        healthId, // R1-legacy-pin: removed in Task 12
+        holderScope: checkoutScope,
         role: req.user?.canonicalRole || req.user?.role || 'UNKNOWN',
       },
     });
@@ -576,6 +617,9 @@ router.post('/checkout', authenticateHealth, async (req, res) => {
       applicationId: req.body?.applicationId,
       error: error.code || error.message,
     });
+    if (error?.code === 'ENTITY_PERMISSION_DENIED') {
+      return res.status(403).json(entityPermissionDeniedBody(error.permission));
+    }
     const status = error.statusCode || error.status || 500;
     return res.status(status).json({
       success: false,

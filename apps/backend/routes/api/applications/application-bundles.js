@@ -30,16 +30,23 @@ const logger = require('../../../shared/logger');
 // CERTIFIED / EXPIRED / CANCEL_EXPIRED) can never be re-linked or resurrected
 // back to SUBMITTED via a bundle. Never re-declare state names here.
 const { writeApplicationStatus, TERMINAL_STATUSES } = require('../../../services/application-status-writer');
+// Spec 2026-09-30 §3.1 + ruling C8: a bundle stays owned by its filer
+// (ApplicationBundle.healthId, no holder column). Every application read here
+// carries the holder fragment alone (R2 Task 12), and linking an application
+// into a bundle, unlinking it, or deleting the bundle that holds it follows
+// spec §3.3 for each application (its creator with a non-VIEWER membership, or
+// the holder OWNER).
+const {
+    holderScope,
+    holderReadWhere,
+    resolveHolderOwnerOrCreator,
+} = require('../../../services/holder-access');
 // M1 (2026-08-15) — until now this door asked NOTHING about the entity behind
 // each linked case, so enforcing the rule on POST /applications/submit alone
 // would just move the traffic here (plan D4). Same guard, once per linked case.
-const applicationService = require('../../../services/application-service');
-// Spec 2026-09-30 §3.1 + ruling C8: a bundle stays owned by its filer
-// (ApplicationBundle.healthId, no holder column). The by-id application lookup
-// carries the holder fragment next to its filer pin; the included filings of
-// a bundle read are left as they were in R1 (Task 9).
-const { holderScope, r1ApplicationHolderOrPin, r1LegacyApplicantPin, r1HolderOrLegacy } = require('../../../services/holder-access');
-const { assertSubmitAllowed, SubmitGuardError } = require('../../../services/application-submit-guard');
+const {
+    assertSubmitAllowed, SubmitGuardError, lockCertificateSuccessions, lockAndAssertNoSuccessionInFlight,
+} = require('../../../services/application-submit-guard');
 // M2a (2026-08-15) — every linked case is a first filing of its own, so each one
 // is asked the document law separately (operator ruling G2, spec §3).
 const {
@@ -50,6 +57,7 @@ const {
     MODE_FIRST_SUBMIT,
 } = require('../../../services/application-document-requirements');
 const { auditLogger, AuditCategory, AuditSeverity, ResourceType } = require('../../../middleware/audit-logger');
+const { ENTITY_PERMISSION_DENIED_EN } = require('../../../shared/entity-permission-denied');
 
 // Per-application fee (THB). TRIPLE = 3 × 30,000 = 90,000.
 const FEE_PER_APPLICATION = 30000;
@@ -113,19 +121,37 @@ async function getOwnedBundle(id, healthId, include = undefined) {
     });
 }
 
-// The add/remove doors write the application's bundleId, so in R1 the lookup
-// keeps its filer pin AND carries the holder fragment (it can only narrow);
-// Task 9 replaces the pin with the spec §3.3 owner-or-creator rule (C8).
-async function getOwnedApplication(applicationId, healthId, scope) {
+// The application the add door would link, read within the caller's holders
+// (the fragment alone); §3.3 then decides whether the caller may link it.
+async function getVisibleApplication(applicationId, scope) {
     return prisma.application.findFirst({
         where: {
             id: applicationId,
-            // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere(scope, 'Application')).
-            // OR form: neutral also when no entity context is bound (final review C1).
-            ...r1ApplicationHolderOrPin(scope, { healthId }),
+            ...holderReadWhere(scope, 'Application'),
             isDeleted: false,
         },
     });
+}
+
+/**
+ * Spec §3.3 for every application a bundle write would link or unlink (C8): the caller
+ * must be each one's creator with an ACTIVE non-VIEWER membership on its holder,
+ * or the holder's ACTIVE OWNER. One refusal refuses the whole request before
+ * anything is written.
+ * @param {Array<{ entityId?: string|null, submitterId?: string|null }>} applications
+ * @param {string} userId
+ * @throws {Error} 403 ENTITY_PERMISSION_DENIED
+ */
+async function assertOwnerOrCreatorOfEach(applications, userId) {
+    for (const appRow of applications) {
+        if (!(await resolveHolderOwnerOrCreator(appRow, userId))) {
+            // Only the creator or the holder OWNER may link or unlink it (spec §3.3); the copy is the catalogue's.
+            const err = new Error(ENTITY_PERMISSION_DENIED_EN);
+            err.statusCode = 403;
+            err.code = 'ENTITY_PERMISSION_DENIED';
+            throw err;
+        }
+    }
 }
 
 // R1a terminal-integrity gate. A bundle is an applicant-facing (authenticateHealth)
@@ -165,8 +191,8 @@ function respondBundleRefusal(res, req, catalogKey) {
     });
 }
 
-// M1 — the audit context handed to the guard (see applications.js for the full
-// note on why activeEntityId is recorded next to the entity actually checked).
+// M1 — the audit context handed to the guard. The row names the application's
+// holder (onBehalfOfEntityId), never a workspace (R2 Task 9, spec §3.2 Submit).
 function buildSubmitAuditContext(req) {
     return {
         actorType: 'USER',
@@ -174,24 +200,8 @@ function buildSubmitAuditContext(req) {
         ipAddress: req.ip || null,
         userAgent: typeof req.get === 'function' ? req.get('user-agent') : null,
         organizationId: req.user?.organizationId || null,
-        activeEntityId: req.activeEntity?.entityId || null,
         route: `${req.method} ${req.baseUrl || ''}${req.path || ''}`,
     };
-}
-
-// M1 (review M2) — a linked case that pre-dates Phase 66 carries a null
-// entityId. Heal it from the caller's personal entity exactly as the /draft
-// path does, then let the guard decide; otherwise those rows become
-// permanently un-submittable through any door.
-async function healLinkedApplicationEntityId(linkedApp, healthIdentity) {
-    if (!linkedApp || linkedApp.entityId) { return linkedApp; }
-    const personalEntity = await applicationService.findPersonalEntityForHealthIdentity(healthIdentity);
-    if (!personalEntity?.id) { return linkedApp; }
-    const healed = await applicationService.healDraftEntityColumns(linkedApp.id, {
-        entityId: personalEntity.id,
-        submitterId: healthIdentity?.userId || null,
-    });
-    return { ...linkedApp, entityId: healed?.entityId || personalEntity.id };
 }
 
 // M1 AC3 — the accepted act and the entity it was made for. Standalone
@@ -216,7 +226,6 @@ async function logBundleSubmitAccepted({ req, bundleId, applicationId, entityId,
             result: 'SUCCESS',
             metadata: {
                 onBehalfOfEntityId: entityId || null,
-                activeEntityId: ctx.activeEntityId,
                 permission: 'SUBMIT_APPLICATION',
                 applicationId,
                 bundleId,
@@ -236,8 +245,8 @@ router.get('/my', authenticateHealth, async (req, res) => {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
 
-        // R1: the included filings are not narrowed (the pre-R1 include was never
-        // entity-scoped). Task 9 decides the bundle read (ruling C8).
+        // The bundle is its filer's (ruling C8): the included filings are the
+        // bundle's own children, listed as the bundle holds them.
         const bundles = await prisma.applicationBundle.findMany({
             where: { healthId },
             include: { applications: { select: APPLICATION_SUMMARY_SELECT } },
@@ -298,29 +307,31 @@ router.post('/', authenticateHealth, async (req, res) => {
             return res.status(400).json({ success: false, error: 'TRIPLE bundle requires exactly 3 applications' });
         }
 
-        // Resolve the caller's OWN candidates first so the terminal gate can
+        // Resolve the candidates the caller may link first, so the terminal gate can
         // reject the whole request BEFORE any row is written (no orphan bundle).
-        let ownedCandidates = [];
+        // Spec §3.1: only filings the caller can see; spec §3.3 (C8): of those, only
+        // the ones it created (non-VIEWER) or whose holder it OWNS. Ids that fail
+        // either are ignored, as foreign ids always were at this door.
+        const ownedCandidates = [];
         if (requestedApplicationIds.length > 0) {
-            ownedCandidates = await prisma.application.findMany({
+            const visible = await prisma.application.findMany({
                 where: {
                     id: { in: requestedApplicationIds },
-                    // Spec 2026-09-30 §3.1; the bundle stays the filer's (ruling C8),
-                    // so R1 keeps the pre-R1 healthId pin beside the fragment.
-                    // R1-legacy-pin: removed in Task 12 (→ ...holderReadWhere): the pre-R1 pin decides.
-                    ...r1HolderOrLegacy(await holderScope(req), 'Application', { healthId }),
-                    ...r1LegacyApplicantPin({ healthId }),
+                    ...holderReadWhere(await holderScope(req), 'Application'),
                     isDeleted: false,
                 },
-                select: { id: true, status: true },
+                select: { id: true, status: true, entityId: true, submitterId: true },
             });
             // R1a link-time gate: never fold a finished case into a fresh bundle.
-            if (findTerminalApplication(ownedCandidates)) {
+            if (findTerminalApplication(visible)) {
                 return respondBundleRefusal(res, req, 'BUNDLE_TERMINAL_APPLICATION');
             }
             // ARCH-01 link-time gate: nor a live case that has left DRAFT.
-            if (findNonDraftApplication(ownedCandidates)) {
+            if (findNonDraftApplication(visible)) {
                 return respondBundleRefusal(res, req, 'BUNDLE_APPLICATION_NOT_DRAFT');
+            }
+            for (const row of visible) {
+                if (await resolveHolderOwnerOrCreator(row, req.user?.id)) { ownedCandidates.push(row); }
             }
         }
 
@@ -332,10 +343,11 @@ router.post('/', authenticateHealth, async (req, res) => {
             },
         });
 
-        // Link only applications the caller actually owns (ignores foreign ids).
+        // Link exactly the candidates read and checked above (visible to the caller,
+        // spec §3.3 passed for each).
         if (ownedCandidates.length > 0) {
             await prisma.application.updateMany({
-                where: { id: { in: ownedCandidates.map((row) => row.id) }, healthId, isDeleted: false },
+                where: { id: { in: ownedCandidates.map((row) => row.id) }, isDeleted: false },
                 data: { bundleId: bundle.id },
             });
         }
@@ -377,7 +389,7 @@ router.post('/:id/applications', authenticateHealth, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Bundle is full (max 3 applications)' });
         }
 
-        const application = await getOwnedApplication(applicationId, healthId, await holderScope(req));
+        const application = await getVisibleApplication(applicationId, await holderScope(req));
         if (!application) {
             return res.status(404).json({ success: false, error: 'Application not found' });
         }
@@ -389,6 +401,8 @@ router.post('/:id/applications', authenticateHealth, async (req, res) => {
         if (findNonDraftApplication([application])) {
             return respondBundleRefusal(res, req, 'BUNDLE_APPLICATION_NOT_DRAFT');
         }
+        // Spec §3.3 (C8): only the application's creator or its holder OWNER may link it.
+        await assertOwnerOrCreatorOfEach([application], req.user?.id);
 
         const updatedApp = await prisma.application.update({
             where: { id: applicationId },
@@ -419,10 +433,17 @@ router.delete('/:id/applications/:applicationId', authenticateHealth, async (req
             return res.status(400).json({ success: false, error: 'Cannot modify submitted bundle' });
         }
 
-        const application = await getOwnedApplication(applicationId, healthId, await holderScope(req));
+        // R2 Task 9 (C8): the application is read within the caller's holders (the
+        // fragment alone; the bundle's filer gate above already passed), then
+        // spec §3.3 decides who may unlink it.
+        const application = await prisma.application.findFirst({
+            where: { id: applicationId, ...holderReadWhere(await holderScope(req), 'Application'), isDeleted: false },
+            select: { id: true, bundleId: true, entityId: true, submitterId: true },
+        });
         if (!application || application.bundleId !== id) {
             return res.status(404).json({ success: false, error: 'Application not found in bundle' });
         }
+        await assertOwnerOrCreatorOfEach([application], req.user?.id);
 
         await prisma.application.update({
             where: { id: applicationId },
@@ -495,12 +516,11 @@ router.post('/:id/submit', authenticateHealth, async (req, res) => {
         // anything. Refusing one case refuses the whole bundle: a bundle is one
         // act, and half a submitted bundle is the split state the transaction
         // below exists to prevent.
-        const healthIdentity = { userId: req.user?.id || null, healthId };
         const submitEntityByApplicationId = new Map();
         try {
             for (let i = 0; i < bundle.applications.length; i += 1) {
-                const linkedApp = await healLinkedApplicationEntityId(bundle.applications[i], healthIdentity);
-                bundle.applications[i] = linkedApp;
+                // A null holder is refused by the guard, never healed (spec 2026-09-30 §3.2 + C3: a null holder is never healed to the caller's personal entity; heal-null-holders.js places legacy rows).
+                const linkedApp = bundle.applications[i];
                 const { entityId } = await assertSubmitAllowed({
                     userId: actorId,
                     application: linkedApp,
@@ -569,6 +589,16 @@ router.post('/:id/submit', authenticateHealth, async (req, res) => {
         // whole submit before anything is written, and a bundle is a handful of
         // linked applications, so the transaction stays short.
         const updatedBundle = await prisma.$transaction(async (tx) => {
+            // FIRST: every certificate any linked case claims to succeed, locked in one
+            // ascending order (the renewal door's keys), then the in-flight check per case.
+            await lockCertificateSuccessions(tx, bundle.applications.flatMap((a) => [a.formData?.renewalOf, a.formData?.replacementOf]));
+            for (const linkedApp of bundle.applications) {
+                // eslint-disable-next-line no-await-in-loop -- one case at a time, inside the lock
+                await lockAndAssertNoSuccessionInFlight(tx, {
+                    application: linkedApp, userId: req.user?.id, holderScope: await holderScope(req),
+                    auditContext: { ...buildSubmitAuditContext(req), bundleId: id },
+                });
+            }
             const bundleRow = await tx.applicationBundle.update({
                 where: { id },
                 data: { status: 'SUBMITTED' },
@@ -653,6 +683,14 @@ router.delete('/:id', authenticateHealth, async (req, res) => {
         if (bundle.status !== 'DRAFT') {
             return res.status(400).json({ success: false, error: 'Cannot delete submitted bundle' });
         }
+
+        // R2 Task 9 (C8): every application the delete would unlink passes spec §3.3,
+        // including one whose holder the caller can no longer read: the list is the
+        // filer's own bundle's children (ruling C8), so nothing is unlinked unchecked.
+        const { applications: linked = [] } = await getOwnedBundle(id, healthId, {
+            applications: { select: { id: true, entityId: true, submitterId: true } },
+        });
+        await assertOwnerOrCreatorOfEach(linked, req.user?.id);
 
         await prisma.application.updateMany({
             where: { bundleId: id },
