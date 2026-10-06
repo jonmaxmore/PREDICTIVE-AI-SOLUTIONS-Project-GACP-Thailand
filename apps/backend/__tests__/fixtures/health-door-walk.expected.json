@@ -50,8 +50,10 @@
  "A /api/applications": {
   "status": 200,
   "labels": [
+   "C",
    "D",
    "D2",
+   "PA",
    "X",
    "Y"
   ]
@@ -79,6 +81,7 @@
  "A /api/applications/:id": {
   "status": 200,
   "labels": [
+   "C",
    "X"
   ]
  },
@@ -149,8 +152,10 @@
  "A /api/applications/my": {
   "status": 200,
   "labels": [
+   "C",
    "D",
    "D2",
+   "PA",
    "X",
    "Y"
   ]
@@ -770,6 +775,7 @@
  "B /api/applications": {
   "status": 200,
   "labels": [
+   "C",
    "D",
    "D2",
    "X"
@@ -798,6 +804,7 @@
  "B /api/applications/:id": {
   "status": 200,
   "labels": [
+   "C",
    "X"
   ]
  },
@@ -861,6 +868,7 @@
  "B /api/applications/my": {
   "status": 200,
   "labels": [
+   "C",
    "D",
    "D2",
    "X"
@@ -1921,6 +1929,7 @@
  "V /api/applications": {
   "status": 200,
   "labels": [
+   "C",
    "D",
    "D2",
    "X"
@@ -1949,6 +1958,7 @@
  "V /api/applications/:id": {
   "status": 200,
   "labels": [
+   "C",
    "X"
   ]
  },
@@ -2011,6 +2021,7 @@
  "V /api/applications/my": {
   "status": 200,
   "labels": [
+   "C",
    "D",
    "D2",
    "X"

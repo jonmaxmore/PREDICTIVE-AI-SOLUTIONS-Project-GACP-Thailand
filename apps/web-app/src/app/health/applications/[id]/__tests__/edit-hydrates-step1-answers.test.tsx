@@ -84,6 +84,7 @@ const DRAFT_WITH_STEP1_ANSWERS = {
     id: 'app-1',
     applicationNumber: 'APP-2569-MUJZVOTO-80E5FE',
     status: 'DRAFT',
+    entityId: 'e-company',
     formData: {
         plantId: 'cannabis',
         serviceType: 'NEW',
@@ -149,5 +150,7 @@ describe('EditApplicationPage — hydrates step 1 (request type + applicant type
         expect(merged.requestType).toBe('NEW');
         expect(merged.applicantType).toBe('JURISTIC');
         expect(merged.certScope).toBe('PLANTING');
+        // D2 (staging 2026-10-06): the holder is the row's entityId, never a leftover.
+        expect(merged.holderEntityId).toBe('e-company');
     });
 });

@@ -97,6 +97,31 @@ describe('step 1 holder question', () => {
     });
 });
 
+describe('step 1 of a draft that already exists (D2, staging 2026-10-06)', () => {
+    const holderButton = (name: string) => Array.from(container.querySelectorAll('button')).find((b) => (b.textContent ?? '').includes(name));
+
+    it('states the holder as a fact and offers no other holder to pick', () => {
+        mockEntities = [PERSONAL, COMPANY, COMMUNITY];
+        mockState = { ...mockState, applicationId: 'draft-1', requestType: 'NEW', holderEntityId: 'e-company', applicantType: 'JURISTIC' };
+        mount();
+        const text = container.textContent ?? '';
+        expect(text).toContain(`ยื่นในนาม ${COMPANY.displayName}`);
+        expect(text).toContain('ใบรับรองจะออกในนามที่คุณเลือก และเปลี่ยนภายหลังไม่ได้');
+        expect(holderButton(PERSONAL.displayName)).toBeUndefined();
+        expect(holderButton(COMMUNITY.displayName)).toBeUndefined();
+        expect(text).not.toContain(PERSONAL.displayName);
+        expect(mockUpdateState).not.toHaveBeenCalledWith(expect.objectContaining({ holderEntityId: expect.anything() }));
+    });
+
+    it('never writes a holder from ?holder= or a single entity once the draft exists', () => {
+        mockEntities = [PERSONAL];
+        mockSearch = 'holder=e-personal';
+        mockState = { ...mockState, applicationId: 'draft-1', requestType: 'NEW', holderEntityId: null };
+        mount();
+        expect(mockUpdateState).not.toHaveBeenCalledWith(expect.objectContaining({ holderEntityId: expect.anything() }));
+    });
+});
+
 describe('restartFromStep1 (the only way to change a wrong holder)', () => {
     it('deletes the draft, clears the wizard, and returns to step 1 with no holder', async () => {
         const order: string[] = [];

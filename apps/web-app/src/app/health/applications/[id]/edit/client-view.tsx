@@ -20,6 +20,7 @@ interface ApplicationForEdit {
   id: string;
   applicationNumber: string;
   status: string;
+  entityId?: string | null;
   reviewComment?: string;
   // Backend whitelisted formData (apps/backend/routes/api/helpers/
   // application-payload-builders.js). Every field below is read by
@@ -301,6 +302,8 @@ export default function EditApplicationPage() {
       ...(isSupportedRequestType(application.formData?.requestType) ? { requestType: application.formData.requestType } : {}),
       ...(isSupportedApplicantHolderType(application.formData?.applicantType) ? { applicantType: application.formData.applicantType } : {}),
       ...(isSupportedCertScope(application.formData?.certScope) ? { certScope: application.formData.certScope } : {}),
+      // The holder is the row's own entityId (fixed at create); resetWizard above cleared any other.
+      ...(typeof application.entityId === 'string' ? { holderEntityId: application.entityId } : {}),
       // Use saved consent values — hard-coding `true` here meant we
       // silently flipped consent on for any draft that hadn't accepted
       // it yet, which was both incorrect and a compliance footgun.

@@ -85,7 +85,10 @@ function Step1RequestTypeComponent() {
     const impliedHolder =
         fileable.find((e) => e.id === holderParam)
         ?? (fileable.length === 1 ? fileable[0] : undefined);
-    const holderEntityId = state?.holderEntityId ?? impliedHolder?.id ?? null;
+    // Once the draft exists on the server its holder is fixed (spec §3.2): the store
+    // takes it from the server, never from a pick or an implied default on this screen.
+    const holderLocked = Boolean(state?.applicationId);
+    const holderEntityId = state?.holderEntityId ?? (holderLocked ? null : impliedHolder?.id ?? null);
     const plantId = state?.plantId ?? null;
     // Only the plants whose law is actually filed can be chosen; the register decides,
     // the screen only shows what it holds.
@@ -112,6 +115,7 @@ function Step1RequestTypeComponent() {
     }, [requestType, onlyPlantCode, plantId, updateState]);
 
     const chooseHolder = (entityId: string) => {
+        if (holderLocked) { return; }
         const holder = entities.find((e) => e.id === entityId);
         if (!holder) { return; }
         // The type is the entity's own, so it cannot disagree with the holder.
@@ -191,6 +195,7 @@ function Step1RequestTypeComponent() {
                 value={holderEntityId}
                 onChange={chooseHolder}
                 purpose="file"
+                locked={holderLocked}
             />
 
             {/* ชนิดพืช — ย้ายมาจากขั้น 4 (F-QA-04, มติ operator 2026-09-06). กฎหมายยื่นเป็นรายพืช

@@ -464,10 +464,12 @@ router.post(
         `[org-user-create] org=${org.slug} userId=${created.id} role=${created.role} by=${req.user?.id}`,
       );
 
-      // Strip secrets from response — never echo password or hash.
-      const { password: _pw, idCardHash: _ich, healthIdHash: _hh, providerIdHash: _ph, taxIdHash: _th,
-        twoFactorSecret: _tfs, twoFactorBackupCodes: _tfb, emailVerificationToken: _evt,
-        passwordResetToken: _prt, ...safeUser } = created;
+      // An allowlist, never the row: the admin dialog reads providerId (the number the
+      // admin just typed, which is also the login id) and organizationId.
+      const safeUser = Object.fromEntries(
+        ['id', 'email', 'firstName', 'lastName', 'role', 'accountType', 'status', 'organizationId', 'providerId']
+          .map((field) => [field, created[field]]),
+      );
 
       return res.status(201).json({
         success: true,

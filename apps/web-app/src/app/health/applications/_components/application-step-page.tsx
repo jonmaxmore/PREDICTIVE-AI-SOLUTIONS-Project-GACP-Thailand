@@ -197,7 +197,7 @@ function answersChangedSince(before: WizardState, now: WizardState): Partial<Wiz
 export default function ApplicationStepPage() {
   const params = useParams();
   const router = useRouter();
-  const { state, setCurrentStep, hydrateDraft, setResumePending } = useApplicationFlowStore();
+  const { state, setCurrentStep, hydrateDraft, setResumePending, updateState } = useApplicationFlowStore();
   const { language, dict } = useLanguage();
   const [stepConfig, setStepConfig] = useState<(FlowStep | PaymentStep) | null>(null);
   const [loading, setLoading] = useState(true);
@@ -319,6 +319,21 @@ export default function ApplicationStepPage() {
       // earlier page's unanswered fetch would drop every save from here on.
       if (latestStateRef.current.resumePending) setResumePending(false);
       setDraftSettled(true);
+      // The holder of a draft the server already holds is the server's (D2, staging
+      // 2026-10-06): a stored holder that disagrees is replaced, never shown.
+      const storedApplicationId = latestStateRef.current.applicationId;
+      if (storedApplicationId) {
+        void api.get<{ entityId?: string | null; formData?: { applicantType?: WizardState['applicantType'] } }>(`/applications/${storedApplicationId}`)
+          .then((response) => {
+            const entityId = response.success ? response.data?.entityId : null;
+            const current = latestStateRef.current;
+            if (typeof entityId !== 'string' || current.applicationId !== storedApplicationId) return;
+            const applicantType = response.data?.formData?.applicantType ?? current.applicantType;
+            if (current.holderEntityId !== entityId || current.applicantType !== applicantType) {
+              updateState({ holderEntityId: entityId, applicantType });
+            }
+          });
+      }
       return;
     }
     const stateAtFetch = { ...latestStateRef.current };
@@ -454,7 +469,7 @@ export default function ApplicationStepPage() {
         // unexpected rejection like any other transport failure.
         setUnavailable(true);
       });
-  }, [state.plantId, hydrateDraft, setResumePending, retryNonce, persistSettled]);
+  }, [state.plantId, hydrateDraft, setResumePending, updateState, retryNonce, persistSettled]);
 
   useEffect(() => {
     const fetchConfig = async () => {

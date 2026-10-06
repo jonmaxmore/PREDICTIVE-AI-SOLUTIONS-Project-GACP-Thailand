@@ -229,6 +229,14 @@ describe('PATCH /api/platform-admin/organizations/:id', () => {
   });
 });
 
+function everyUserColumn() {
+  const { Prisma } = jest.requireActual('@prisma/client');
+  const model = Prisma.dmmf.datamodel.models.find((m) => m.name === 'User');
+  return Object.fromEntries(
+    model.fields.filter((f) => f.kind === 'scalar').map((f) => [f.name, `value-of-${f.name}`]),
+  );
+}
+
 describe('POST /api/platform-admin/organizations/:id/users', () => {
   const baseOrg = {
     id: 'org-1',
@@ -250,12 +258,9 @@ describe('POST /api/platform-admin/organizations/:id/users', () => {
 
   it('creates a user with auto-generated password and returns it once', async () => {
     mockOrganization.findUnique.mockResolvedValueOnce(baseOrg);
+    // What Prisma hands back: every column of the row, not only the ones written.
     mockUser.create.mockImplementationOnce(({ data }) =>
-      Promise.resolve({
-        id: 'u-1',
-        ...data,
-        // password is hashed; tests should not see plaintext
-      }),
+      Promise.resolve({ ...everyUserColumn(), id: 'u-1', ...data }),
     );
 
     const res = await request(buildApp())
@@ -275,6 +280,12 @@ describe('POST /api/platform-admin/organizations/:id/users', () => {
     expect(res.body.data.user.role).toBe('system_admin_dtam');
     expect(res.body.data.user.organizationId).toBe('org-1');
     expect(res.body.data.loginHint.portal).toBe('PROVIDER');
+    // Security review of 4985b4ce: the echo is an allowlist (what the admin dialog
+    // reads, plus who was created), never the row; the row the mock returns carries
+    // every column the create writes, lookup hashes included.
+    expect(Object.keys(res.body.data.user).sort()).toEqual(
+      ['accountType', 'email', 'firstName', 'id', 'lastName', 'organizationId', 'providerId', 'role', 'status'],
+    );
 
     const createArgs = mockUser.create.mock.calls[0][0];
     // password must be hashed, not the same as generated

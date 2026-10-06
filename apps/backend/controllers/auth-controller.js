@@ -7,6 +7,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { getRequestIp } = require('../utils/client-ip');
 const { isSecureCookie } = require('../utils/cookie-security');
+const { maskThaiId } = require('../utils/field-encryption');
 const { consentManager, RequiredConsents } = require('../middleware/consent-manager');
 const { createHealthAuthProfileHandlers } = require('./auth-controller/health-auth-profile-handlers');
 const { createAuthSessionSecurityHandlers } = require('./auth-controller/auth-session-security-handlers');
@@ -59,31 +60,32 @@ function setAuthCookies(res, token, refreshToken) {
     return setCsrfCookie(res, isSecure);
 }
 
+// What a health client gets of its own account: the fields the web and mobile read,
+// nothing else. National-ID-class values go out masked (as the provider doors mask
+// providerId); the laser code, tax/registration numbers, lookup hashes, the canonical
+// id and account-lock or retention state stay on the server. The PDPA data export
+// (/me/export) is the door for the full record.
+const CLIENT_USER_FIELDS = Object.freeze([
+    'id', 'uuid', 'email', 'firstName', 'lastName', 'phoneNumber', 'role', 'accountType',
+    'authType', 'status', 'accountTier', 'ministryVerified', 'ministryVerifiedAt',
+    'address', 'province', 'district', 'subdistrict', 'zipCode',
+    'companyName', 'representativeName', 'representativePosition', 'communityName',
+    'isEmailVerified', 'twoFactorEnabled', 'twoFactorMethod', 'privacySettings', 'notificationSettings',
+    'createdAt', 'lastLoginAt',
+]);
+const MASKED_USER_FIELDS = Object.freeze(['healthId', 'idCard']);
+
 function sanitizeUserPayload(user) {
     if (!user || typeof user !== 'object') {
         return user;
     }
-
-    const safeUser = { ...user };
-    const sensitiveFields = [
-        'password',
-        'idCardHash',
-        'healthIdHash',
-        'providerIdHash',
-        'taxIdHash',
-        'communityRegistrationNoHash',
-        'emailVerificationToken',
-        'passwordResetToken',
-        'twoFactorSecret',
-        'twoFactorBackupCodes',
-    ];
-
-    for (const field of sensitiveFields) {
-        if (Object.prototype.hasOwnProperty.call(safeUser, field)) {
-            delete safeUser[field];
-        }
+    const safeUser = {};
+    for (const field of CLIENT_USER_FIELDS) {
+        if (user[field] !== undefined) { safeUser[field] = user[field]; }
     }
-
+    for (const field of MASKED_USER_FIELDS) {
+        if (user[field] !== undefined) { safeUser[field] = maskThaiId(user[field]); }
+    }
     return safeUser;
 }
 

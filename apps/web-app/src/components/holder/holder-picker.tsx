@@ -22,6 +22,8 @@ export interface HolderPickerProps {
     value: string | null;
     onChange: (entityId: string) => void;
     purpose: HolderPurpose;
+    /** The filing already exists: its holder is fixed (spec §3.2), shown and not offered. */
+    locked?: boolean;
 }
 
 /** May the user act for this holder for this purpose? */
@@ -29,7 +31,7 @@ export function mayUseHolder(e: EntityMembership, purpose: HolderPurpose): boole
     return purpose === 'farm' ? e.can.createFarm : e.can.edit;
 }
 
-export function HolderPicker({ entities, value, onChange, purpose }: HolderPickerProps) {
+export function HolderPicker({ entities, value, onChange, purpose, locked = false }: HolderPickerProps) {
     const holders = orderHolders(entities);
     const usable = holders.filter((e) => mayUseHolder(e, purpose));
     const title = purpose === 'farm' ? HOLDER_COPY_TH.farmTitle : HOLDER_COPY_TH.title;
@@ -43,6 +45,22 @@ export function HolderPicker({ entities, value, onChange, purpose }: HolderPicke
         if (purpose === 'file' && !e.can.submit) { return HOLDER_COPY_TH.editNotSubmit; }
         return null;
     };
+
+    if (locked) {
+        const chosen = holders.find((e) => e.id === value);
+        return (
+            <section aria-label={title}>
+                <h3 className="mb-1 text-sm font-semibold text-foreground">{title}</h3>
+                <p className="mb-3 text-xs leading-relaxed text-muted-foreground">{help}</p>
+                {chosen && (
+                    <div className="rounded-xl border border-leaf-300 bg-leaf-soft px-4 py-3 text-sm text-foreground">
+                        <p className="font-semibold">{`${title} ${chosen.displayName}`}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{holderTypeLine(chosen)}</p>
+                    </div>
+                )}
+            </section>
+        );
+    }
 
     return (
         <section aria-label={title}>

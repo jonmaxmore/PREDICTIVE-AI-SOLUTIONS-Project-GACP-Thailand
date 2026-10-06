@@ -129,7 +129,11 @@ function createHealthAuthProfileHandlers({
 
                     await auditLogger.logMany(auditEvents);
 
-                    result.body.data.user = sanitizeUserPayload(user);
+                    // Neither the web nor the mobile register flow reads the user
+                    // (they check success and send the person to log in); the id
+                    // and the account state are all this door hands back.
+                    const { id, accountType, role, status } = user;
+                    result.body.data.user = { id, accountType, role, status };
                 }
 
                 if (result.status >= 400) {

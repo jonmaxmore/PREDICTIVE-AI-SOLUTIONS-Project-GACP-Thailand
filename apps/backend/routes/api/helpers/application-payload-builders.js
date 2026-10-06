@@ -82,6 +82,8 @@ function buildApplicationDetailPayload(application) {
         id: application.id,
         applicationId: application.id,
         applicationNumber: application.applicationNumber,
+        // The holder, fixed at create. The wizard resumes an existing draft's holder from here.
+        entityId: application.entityId ?? null,
         healthId: application.healthId,
         serviceType: application.serviceType,
         areaType: application.areaType,

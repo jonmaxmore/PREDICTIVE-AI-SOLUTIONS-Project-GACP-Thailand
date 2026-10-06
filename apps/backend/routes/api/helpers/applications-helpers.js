@@ -17,6 +17,8 @@ function mapHealthApplication(app) {
     return {
         id: app.id,
         applicationNumber: app.applicationNumber,
+        // The holder the filing is in the name of; the lists name it and filter by it.
+        entityId: app.entityId ?? null,
         plantName: app.plantName || (app.formData?.plantName),
         serviceType: app.serviceType,
         status: app.status,

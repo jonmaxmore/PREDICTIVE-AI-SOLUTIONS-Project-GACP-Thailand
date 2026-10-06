@@ -146,6 +146,17 @@ d('R2 Task 8: the holder is chosen explicitly (real Postgres, real server)', () 
             expect(invoiceIds(invoices)).toContain(fx.invoiceX);
         });
 
+        test('D1/D2 2026-10-06: every GET /applications/my row, and GET /applications/:id, carries the entityId of its filing', async () => {
+            const res = await request(app).get('/api/applications/my').set(auth('B'));
+            expect(res.status).toBe(200);
+            const holderOf = Object.fromEntries((res.body.data || []).map((r) => [r.id, r.entityId]));
+            expect(holderOf[fx.apps.X]).toBe(fx.entities.C);
+            expect(holderOf[fx.apps.D]).toBe(fx.entities.C);
+            const detail = await request(app).get(`/api/applications/${fx.apps.D}`).set(auth('B'));
+            expect(detail.status).toBe(200);
+            expect(detail.body.data.entityId).toBe(fx.entities.C);
+        });
+
         test('R2 task 15 fix 2: GET /farms/my is holder-scoped - B sees the farm A created for C, with its entityId; S does not', async () => {
             const b = await request(app).get('/api/farms/my').set(auth('B'));
             expect(b.status).toBe(200);
